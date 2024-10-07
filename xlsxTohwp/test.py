@@ -6,14 +6,29 @@ outputpath = r'C:\workspace\solution\xlsxTohwp\output\output.hwp'
 
 df = pd.read_excel('data/inputData.xlsx')  # 엑셀 파일 경로
 
-hwp = win32.Dispatch('HWPFrame.HwpObject')
-hwp.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule")
-hwp.XHwpWindows.Item(0).Visible = True  # 한글 창 보이기
-hwp.Open(filepath,"HWP","") # 기존 HWP 파일 열기
+HwpCtrl = win32.Dispatch('HWPFrame.HwpObject')
+HwpCtrl.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule")
+HwpCtrl.XHwpWindows.Item(0).Visible = True  # 한글 창 보이기
+HwpCtrl.Open(filepath,"HWP","") # 기존 HWP 파일 열기
 
-hwp.Run("TableCellBlock")
-hwp.Run("TableDeleteCell") 
-hwp.HAction.GetDefault("InsertText", hwp.HParameterSet.HInsertText.HSet)
-hwp.HParameterSet.HInsertText.Text = "tes"
-hwp.HAction.Execute("InsertText", hwp.HParameterSet.HInsertText.HSet)
-hwp.SaveAs(outputpath,"HWP","")
+HwpCtrl.SetPos(8,0,0) # 셀 위치 조정
+
+HwpCtrl.Run("SelectAll") # 셀 선택
+
+HwpCtrl.HAction.GetDefault("Delete", HwpCtrl.HParameterSet.HSelectionOpt.HSet)
+HwpCtrl.HAction.Execute("Delete", HwpCtrl.HParameterSet.HSelectionOpt.HSet)
+
+HwpCtrl.HAction.GetDefault("InsertText", HwpCtrl.HParameterSet.HInsertText.HSet)
+HwpCtrl.HParameterSet.HInsertText.Text = "Test insert 1"
+HwpCtrl.HAction.Execute("InsertText", HwpCtrl.HParameterSet.HInsertText.HSet)
+
+HwpCtrl.SetPos(10,0,0)
+
+HwpCtrl.Run("SelectAll")
+
+HwpCtrl.HAction.GetDefault("Delete", HwpCtrl.HParameterSet.HSelectionOpt.HSet)
+HwpCtrl.HAction.Execute("Delete", HwpCtrl.HParameterSet.HSelectionOpt.HSet)
+
+HwpCtrl.HAction.GetDefault("InsertText", HwpCtrl.HParameterSet.HInsertText.HSet)
+HwpCtrl.HParameterSet.HInsertText.Text = "Test insert 2"
+HwpCtrl.HAction.Execute("InsertText", HwpCtrl.HParameterSet.HInsertText.HSet)
