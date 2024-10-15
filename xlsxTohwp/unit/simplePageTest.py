@@ -1,7 +1,7 @@
 import win32com.client as win32
 import pandas as pd
 
-filepath = r'C:\workspace\solution\xlsxTohwp\data\inputTable.hwp'
+filepath = r'C:\workspace\solution\xlsxTohwp\data\inputTable_null.hwp'
 outputpath = r'C:\workspace\solution\xlsxTohwp\output\output.hwp'
 
 df = pd.read_excel('data/inputData.xlsx')  # 엑셀 파일 경로
@@ -22,11 +22,8 @@ for row in df[selected_columns].itertuples(index=True):
     if row.Index == 1 :
         break;
     #1
-    HwpCtrl.SetPos(8,0,0) # 셀 위치 조정
-    HwpCtrl.Run("SelectAll") # 셀 선택
-    HwpCtrl.HAction.GetDefault("Delete", HwpCtrl.HParameterSet.HSelectionOpt.HSet)
-    HwpCtrl.HAction.Execute("Delete", HwpCtrl.HParameterSet.HSelectionOpt.HSet)
-
+    HwpCtrl.SetPos(27,0,0) # 셀 위치 조정
+#[8, 10, 12, 14, 16, 18, 20, 24, 28]
     HwpCtrl.HAction.GetDefault("InsertText", HwpCtrl.HParameterSet.HInsertText.HSet)
     HwpCtrl.HParameterSet.HInsertText.Text = row.국가코드
     HwpCtrl.HAction.Execute("InsertText", HwpCtrl.HParameterSet.HInsertText.HSet)

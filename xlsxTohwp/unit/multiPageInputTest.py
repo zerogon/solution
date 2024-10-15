@@ -1,5 +1,6 @@
 import win32com.client as win32
 import pandas as pd
+import re
 
 # 파일 경로 설정
 filepath = r'C:\workspace\solution\xlsxTohwp\data\inputTable_null.hwp'
@@ -7,9 +8,41 @@ outputpath = r'C:\workspace\solution\xlsxTohwp\output\output.hwp'
 
 # 엑셀 데이터 불러오기
 df = pd.read_excel('data/inputData_3input.xlsx')
+dataCount = df.shape[0]
 
 # 필요한 칼럼 선택
-selected_columns = ['국가코드', '공개번호', '출원일', '출원인', '공개일', '법적상태', '특허인용 국가', '발명의 명칭', '독립항']
+selected_columns = (
+    ['국가코드', '공개번호', '출원일', '출원인', '공개일', 
+     '법적상태', 'keywert family 문헌번호', '발명의 명칭', '요약' ,'독립항'])
+
+# 패밀리 현황 추출함수
+def familyCode_extract(data):
+    data = data.replace(" ", "")
+    # 앞 두 글자 코드 추출
+    codes = [item[:2] for item in data.split(',')]
+    unique_codes = list(set(codes))
+    result = ', '.join(unique_codes)
+    return result
+
+# 청구항 삭제 함수
+def claimText_extract(data):
+    claim_text = ''
+    result = re.search(r"\[청구항\d+\](.*?)\[청구항\d+", data, re.DOTALL)
+    
+    if result:
+        claim_text = result.group(1).strip()  # 첫 번째 청구항 이후의 텍스트
+        claim_text = re.sub(r"\[청구항\d+\]", "", claim_text)  # 청구항 부분 제거
+    else:
+        # 청구항이 하나인 경우를 처리
+        single_claim = re.search(r"\[청구항\d+\](.*)", data, re.DOTALL)
+        if single_claim:
+            claim_text = single_claim.group(1).strip()
+        else:
+            print("청구항을 찾을 수 없습니다.")
+    return claim_text
+
+df['keywert family 문헌번호'] = df['keywert family 문헌번호'].apply(familyCode_extract)
+df['독립항'] = df['독립항'].apply(claimText_extract)
 
 # HWP 초기화 및 파일 열기
 def init_hwp(filepath):
@@ -17,13 +50,20 @@ def init_hwp(filepath):
     HwpCtrl.RegisterModule("FilePathCheckDLL", "FilePathCheckerModule")
     HwpCtrl.XHwpWindows.Item(0).Visible = True
     HwpCtrl.Open(filepath, "HWP", "")
-
-    
     return HwpCtrl
 
-# 셀의 위치 설정, 텍스트 입력 및 삭제 작업을 하나의 함수로 통합
+def copy_table(hwp, count):
+    hwp.HAction.GetDefault("Copy", hwp.HParameterSet.HSelectionOpt.HSet)
+    hwp.HAction.Execute("Copy", hwp.HParameterSet.HSelectionOpt.HSet)
+
+    for _ in range(count - 1):
+        hwp.HAction.GetDefault("SelectNextPage", hwp.HParameterSet.HSelectionOpt.HSet)
+        hwp.HAction.Execute("SelectNextPage", hwp.HParameterSet.HSelectionOpt.HSet)
+        hwp.HAction.GetDefault("Paste", hwp.HParameterSet.HSelectionOpt.HSet)
+        hwp.HAction.Execute("Paste", hwp.HParameterSet.HSelectionOpt.HSet)
+
+# 셀에 데이터 삽입
 def set_cell_text(hwp, cell_position, text):
-    print(cell_position)
     hwp.SetPos(cell_position, 0, 0)  # 셀 위치 조정
     hwp.HAction.GetDefault("InsertText", hwp.HParameterSet.HInsertText.HSet)
     hwp.HParameterSet.HInsertText.Text = text
@@ -43,6 +83,7 @@ def insert_data_into_hwp(hwp, df, selected_columns):
             start_position + 10,          # 18, 48, ...
             start_position + 12,          # 20, 50, ...
             start_position + 16,          # 24, 54, ...
+            start_position + 19,          # 27, 57, ...
             start_position + 20           # 28, 58, ...
         ]
         
@@ -55,6 +96,7 @@ def insert_data_into_hwp(hwp, df, selected_columns):
             row.법적상태,
             row[7],  # 띄어쓰기 있는 칼럼명
             row[8],
+            row.요약,
             row.독립항
         ]
         
@@ -62,18 +104,13 @@ def insert_data_into_hwp(hwp, df, selected_columns):
         for pos, data in zip(cell_positions, row_data):
             set_cell_text(hwp, pos, data)
 
+
 # HWP 객체 초기화
 hwp = init_hwp(filepath)
 
-hwp.HAction.GetDefault("Copy", hwp.HParameterSet.HSelectionOpt.HSet)
-hwp.HAction.Execute("Copy", hwp.HParameterSet.HSelectionOpt.HSet)
+# 엑셀 데이터 수 만큼 표 복사
+copy_table(hwp, dataCount)
 
-#100개 표 생성
-for _ in range(2):
-    hwp.HAction.GetDefault("SelectNextPage", hwp.HParameterSet.HSelectionOpt.HSet)
-    hwp.HAction.Execute("SelectNextPage", hwp.HParameterSet.HSelectionOpt.HSet)
-    hwp.HAction.GetDefault("Paste", hwp.HParameterSet.HSelectionOpt.HSet)
-    hwp.HAction.Execute("Paste", hwp.HParameterSet.HSelectionOpt.HSet)
-
+# 표에 데이터 삽입
 insert_data_into_hwp(hwp, df, selected_columns)
 
