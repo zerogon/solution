@@ -5,7 +5,7 @@ import time
 start_time = time.time()
 
 # 파일 경로 설정
-input_excel_path = 'data/inputData.xlsx'
+input_excel_path = 'data/inputData_3input.xlsx'
 hwp_file_path = r'C:\workspace\solution\xlsxTohwp\data\inputTable_null.hwp'
 output_hwp_path = r'C:\workspace\solution\xlsxTohwp\output\output.hwp'
 

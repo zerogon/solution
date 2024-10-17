@@ -1,4 +1,6 @@
 import win32com.client as win32
+import logging
+import os
 
 # HWP 초기화 및 파일 열기
 def init_hwp(filepath):
@@ -50,8 +52,8 @@ def insert_data_into_hwp(hwp, df, selected_columns):
             row.출원인,
             row.공개일,
             row.법적상태,
-            row[7],  # 띄어쓰기 있는 칼럼명
-            row[8],
+            row[7],  # 'keywert family 문헌번호',
+            row[8], #  '발명의 명칭'
             row.요약,
             row.독립항
         ]
@@ -59,3 +61,4 @@ def insert_data_into_hwp(hwp, df, selected_columns):
         # 각 셀에 데이터를 반복적으로 입력
         for pos, data in zip(cell_positions, row_data):
             set_cell_text(hwp, pos, data)
+
