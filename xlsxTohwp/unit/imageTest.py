@@ -2,14 +2,19 @@ import xlwings as xw
 import win32com.client as win32
 
 # 엑셀 파일 경로와 HWP 파일 경로 설정
-excel_file_path = 'data/inputData_3input.xlsx'
+excel_file_path = 'data/inputData_noimage.xlsx'
 hwp_file_path = r'C:\workspace\solution\xlsxTohwp\data\inputTable_null.hwp'
 output_hwp_path = r'C:\workspace\solution\xlsxTohwp\output\output.hwp'
 
 # 엑셀 파일 열기
 wb = xw.Book(excel_file_path)
 ws = wb.sheets[0]  # 첫 번째 시트 선택
+shapes = ws.shapes
+print(shapes[0].name)
 
+
+        # shapes[cpos]에서 도형의 위치한 셀 정보 가져오기
+        #cell_address = shapes[cpos].api.TopLeftCell.Address
 # HWP 초기화 및 파일 열기
 def init_hwp(filepath):
     hwp = win32.Dispatch('HWPFrame.HwpObject')
@@ -22,7 +27,7 @@ def init_hwp(filepath):
 def insert_image_to_hwp(hwp):
     # 특정 셀에서 그림 가져오기
     shapes = ws.shapes
-    shapes[1].api.Copy()
+    shapes[2].api.Copy()
     
     # HWP에 붙여넣기
     hwp.SetPos(27, 0, 0)
@@ -31,10 +36,10 @@ def insert_image_to_hwp(hwp):
 
 
 # HWP 객체 초기화
-hwp = init_hwp(hwp_file_path)
+#hwp = init_hwp(hwp_file_path)
 
 # HWP에 이미지 삽입
-insert_image_to_hwp(hwp)
+#insert_image_to_hwp(hwp)
 
 # HWP 파일 저장
-wb.close()
+#wb.close()

@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+import logging
 
 # 칼럼 리스트 
 def getColumnList() :
@@ -11,8 +12,12 @@ def getColumnList() :
 
 # 엑셀 데이터 불러오기
 def load_excel_data(file_path):
-    df = pd.read_excel(file_path)
-    return df
+    try:
+        df = pd.read_excel(file_path)
+        return df
+    except Exception as e:
+        logging.error("Failed to load Excel data from %s: %s", file_path, e)
+        raise  # 예외를 다시 발생시켜 상위에서 처리하도록 함
 
 # 필요한 칼럼 선택 및 데이터 처리
 def family_code_extract(data):
@@ -33,13 +38,17 @@ def claim_text_extract(data):
         if single_claim:
             claim_text = single_claim.group(1).strip()
         else:
-            print("청구항을 찾을 수 없습니다.")
+            logging.warning("Claim text not found in the data.")
     return claim_text
 
 def process_columns(df):
-    selected_columns = getColumnList()
-    
-    df['keywert family 문헌번호'] = df['keywert family 문헌번호'].apply(family_code_extract)
-    df['독립항'] = df['독립항'].apply(claim_text_extract)
-    
-    return df[selected_columns]
+    try:
+        selected_columns = getColumnList()
+        
+        df['keywert family 문헌번호'] = df['keywert family 문헌번호'].apply(family_code_extract)
+        df['독립항'] = df['독립항'].apply(claim_text_extract)
+        
+        return df[selected_columns]
+    except Exception as e:
+        logging.error("Failed to process columns: %s", e)
+        raise  # 예외를 다시 발생시켜 상위에서 처리하도록 함
