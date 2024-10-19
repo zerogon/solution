@@ -42,18 +42,27 @@ def insert_image_to_hwp(hwp, ws, cpos, pos):
     try:
         # 특정 셀에서 그림 가져오기
         shapes = ws.shapes
-
-        if cpos < len(shapes):
-            picture_num = int(shapes[cpos].name.split()[1])
-            picture_pos = 30*(picture_num - cpos - 1)
-            shapes[cpos].api.Copy()
-            hwp.SetPos(pos + picture_pos, 0, 0)
+        shape_found = False
+        
+        # 도형이 있는지 확인
+        for shape in shapes:
+            # 도형이 해당 셀에 속하는지 확인 (shape가 해당 셀의 좌상단에 있는지 확인)
+            adj_cpos = cpos + 2
+            if shape.api.TopLeftCell.Address[4:] == str(adj_cpos):
+                shape.api.Copy()  # 도형을 복사
+                shape_found = True
+                break
+        # 도형이 있으면 HWP에 붙여넣기
+        if shape_found:
+            hwp.SetPos(pos, 0, 0)
             hwp.HAction.GetDefault("Paste", hwp.HParameterSet.HSelectionOpt.HSet)
             hwp.HAction.Execute("Paste", hwp.HParameterSet.HSelectionOpt.HSet)
+        else:
+            logging.info(f"No shape found in cell position {cpos}, skipping image insertion.")
+    
     except Exception as e:
-        logging.error("Failed to set image in cell position %d: %s", pos, e)
-        raise  # 예외를 다시 발생시켜 상위에서 처리하도록 함
-
+        logging.error(f"Failed to set image in cell position {cpos}: {e}")
+        raise
 
 # HWP 파일에 데이터를 입력하는 함수
 def insert_data_into_hwp(hwp, df, ws,selected_columns):

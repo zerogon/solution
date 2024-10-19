@@ -28,3 +28,6 @@ def claimText_extract(data):
         else:
             print("청구항을 찾을 수 없습니다.")
     return claim_text
+from datetime import datetime
+
+print(f"{datetime.today().year}-{datetime.today().month}-{datetime.today().day}")

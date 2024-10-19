@@ -1,6 +1,29 @@
 import pandas as pd
 import re
 import logging
+import win32api
+import sys
+from tkinter import Tk
+from tkinter import filedialog
+
+def select_excel_file():
+    # Create a file dialog for the user to choose an Excel file
+    root = Tk()
+    root.withdraw()  # Hide the root window
+    file_path = filedialog.askopenfilename(
+        title="엑셀 파일 선택",
+        filetypes=[("Excel files", "*.xlsx *.xls")]
+    )
+    if not file_path:
+        win32api.MessageBox(0, "파일이 선택되지 않았습니다.\n\n작업을 종료합니다.", "Error", 16)
+        sys.exit(1)  # 파일이 선택되지 않았으면 프로세스 종료
+
+    if file_path and not file_path.lower().endswith(('.xlsx', '.xls')):
+        win32api.MessageBox(0, "잘못된 파일 형식입니다. 파일을 확인해 주세요.", "오류", 16)
+        return None
+    
+    # If a valid Excel file is selected, return its path
+    return file_path
 
 # 칼럼 리스트 
 def getColumnList() :
@@ -44,11 +67,28 @@ def claim_text_extract(data):
 def process_columns(df):
     try:
         selected_columns = getColumnList()
-        
+        check_missing_columns(selected_columns,df)
         df['keywert family 문헌번호'] = df['keywert family 문헌번호'].apply(family_code_extract)
         df['독립항'] = df['독립항'].apply(claim_text_extract)
         
         return df[selected_columns]
     except Exception as e:
         logging.error("Failed to process columns: %s", e)
+        raise  # 예외를 다시 발생시켜 상위에서 처리하도록 함
+
+    
+def check_missing_columns(selected_columns,df):
+    try:
+        # 존재하지 않는 컬럼 확인
+        missing_columns = [col for col in selected_columns if col not in df.columns]
+        
+        # 존재하지 않는 컬럼이 있으면 메시지 박스 출력
+        if missing_columns:
+            missing_cols_str = ', '.join(missing_columns)  # 리스트를 문자열로 변환
+            message = f"엑셀 파일을 확인해주세요.\n\n미존재 칼럼명: \n[{missing_cols_str}]"
+            win32api.MessageBox(0, message, "컬럼 확인", 64)
+            sys.exit(1)
+    except Exception as e:
+        # 예외 발생 시 메시지 박스로 오류 알림
+        logging.error("Failed to check_missing_columns : %s", e)
         raise  # 예외를 다시 발생시켜 상위에서 처리하도록 함

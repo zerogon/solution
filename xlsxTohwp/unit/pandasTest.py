@@ -40,6 +40,12 @@ df['독립항'] = df['독립항'].apply(claimText_extract)
 row_index = 0  # 첫 번째 행 선택
 row_data = df.loc[row_index, selected_columns]  # .loc는 레이블 기반으로 선택
 
+#missing_columns = [col for col in selected_columns if col not in df.columns]
+
+#if missing_columns:
+ #   print(f"다음 컬럼들이 존재하지 않습니다: {missing_columns}")
+#else:
+ #   print("모든 컬럼이 존재합니다.")
 # 하나씩 출력
 # itertuples() 사용하여 반복
 #for row in df[selected_columns].itertuples(index=True):

@@ -1,0 +1,2 @@
+2024-10-19 16:48:50,301:ERROR:Failed to load Excel data from : [Errno 2] No such file or directory: ''
+2024-10-19 16:48:50,301:ERROR:An error occurred in main.py: [Errno 2] No such file or directory: ''

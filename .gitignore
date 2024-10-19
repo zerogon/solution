@@ -1,2 +1,4 @@
 *.xlsx
 *.hwp
+xlsxTohwp/build/*
+xlsxTohwp/dist/*
