@@ -1,7 +1,7 @@
 import pandas as pd
 import re
-
-df = pd.read_excel('data/inputData_3input.xlsx')  # 엑셀 파일 경로
+import win32api
+df = pd.read_excel('data/inputData.xlsx')  # 엑셀 파일 경로
 
 selected_columns = (['국가코드', '공개번호', '출원일', '출원인','공개일', 
                      '법적상태', 'keywert family 문헌번호', '발명의 명칭', '독립항' ])
@@ -32,15 +32,17 @@ def claimText_extract(data):
             print("청구항을 찾을 수 없습니다.")
     return claim_text
 
+def inventionName_extract(data):
+    pattern = r"\([^\u3131-\u3163\uac00-\ud7a3]+\)$" 
+    # 정규식을 사용하여 괄호 안의 영어 텍스트 제거
+    cleaned_text = re.sub(pattern, "", data)
+    return cleaned_text
+
 # 출원인 칼럼에 변형 함수 적용
 df['keywert family 문헌번호'] = df['keywert family 문헌번호'].apply(familyCode_extract)
 df['독립항'] = df['독립항'].apply(claimText_extract)
+df['발명의 명칭'] = df['발명의 명칭'].apply(inventionName_extract)
 
-# 선택한 칼럼에서 특정 행 가져오기 (예: 첫 번째 행)
-row_index = 0  # 첫 번째 행 선택
-row_data = df.loc[row_index, selected_columns]  # .loc는 레이블 기반으로 선택
-
-#missing_columns = [col for col in selected_columns if col not in df.columns]
 
 #if missing_columns:
  #   print(f"다음 컬럼들이 존재하지 않습니다: {missing_columns}")
@@ -48,5 +50,7 @@ row_data = df.loc[row_index, selected_columns]  # .loc는 레이블 기반으로
  #   print("모든 컬럼이 존재합니다.")
 # 하나씩 출력
 # itertuples() 사용하여 반복
-#for row in df[selected_columns].itertuples(index=True):
-    #print(row[9])
+for row in df[selected_columns].itertuples(index=True):
+    print(row[8])
+
+#win32api.MessageBox(0, f"작업이 성공적으로 완료되었습니다.\n\n총 건수: 30, \n저장폴더: output\\", "end", 64)

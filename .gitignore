@@ -3,3 +3,4 @@
 *.log
 xlsxTohwp/build/*
 xlsxTohwp/dist/*
+xlsxTohwp/release_note.txt

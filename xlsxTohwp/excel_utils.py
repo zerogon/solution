@@ -92,3 +92,10 @@ def check_missing_columns(selected_columns,df):
         # 예외 발생 시 메시지 박스로 오류 알림
         logging.error("Failed to check_missing_columns : %s", e)
         raise  # 예외를 다시 발생시켜 상위에서 처리하도록 함
+
+    
+def inventionName_extract(data):
+    pattern = r"\([^\u3131-\u3163\uac00-\ud7a3]+\)" 
+    # 정규식을 사용하여 괄호 안의 영어 텍스트 제거
+    cleaned_text = re.sub(pattern, "", data)
+    return cleaned_text

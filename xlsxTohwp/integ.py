@@ -9,6 +9,7 @@ import sys
 from tkinter import Tk, filedialog
 import win32com.client as win32
 
+# ----------------HWP
 # HWP 초기화 및 파일 열기
 def init_hwp(filepath):
     try:
@@ -113,7 +114,7 @@ def insert_data_into_hwp(hwp, df, ws,selected_columns):
         logging.error("Failed to insert data into HWP: %s", e)
         raise  # 예외를 다시 발생시켜 상위에서 처리하도록 함
 
-
+# -------------- excel
 def select_excel_file():
     # Create a file dialog for the user to choose an Excel file
     root = Tk()
@@ -172,13 +173,19 @@ def claim_text_extract(data):
             logging.warning("Claim text not found in the data.")
     return claim_text
 
+def inventionName_extract(data):
+    pattern = r"\([^\u3131-\u3163\uac00-\ud7a3]+\)$" 
+    # 정규식을 사용하여 괄호 안의 영어 텍스트 제거
+    cleaned_text = re.sub(pattern, "", data)
+    return cleaned_text
+
 def process_columns(df):
     try:
         selected_columns = getColumnList()
         check_missing_columns(selected_columns,df)
         df['keywert family 문헌번호'] = df['keywert family 문헌번호'].apply(family_code_extract)
         df['독립항'] = df['독립항'].apply(claim_text_extract)
-        
+        df['발명의 명칭'] = df['발명의 명칭'].apply(inventionName_extract)
         return df[selected_columns]
     except Exception as e:
         logging.error("Failed to process columns: %s", e)
@@ -201,6 +208,8 @@ def check_missing_columns(selected_columns,df):
         logging.error("Failed to check_missing_columns : %s", e)
         raise  # 예외를 다시 발생시켜 상위에서 처리하도록 함
 
+
+#----------- main 
 def resource_path(relative_path):
     base_path = os.path.abspath('.')
     return os.path.join(base_path, relative_path)
@@ -238,10 +247,8 @@ try:
 
         # 작업 완료 후 저장 및 종료
         hwp.SaveAs(output_hwp_path, "HWP", "")
-        wb.close()
-        hwp.Quit()
 
 except Exception as e:
     logging.error("An error occurred: %s", e)
 
-win32api.MessageBox(0, f"작업이 성공적으로 완료되었습니다.\n\n총 건수: {data_count}", "end", 64)
+win32api.MessageBox(0, f"작업이 성공적으로 완료되었습니다.\n\n총 건수: {data_count}, \n저장폴더: output\\", "End", 64)
