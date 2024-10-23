@@ -1,6 +1,8 @@
 *.xlsx
 *.hwp
 *.log
+*.pptx
 xlsxTohwp/build/*
 xlsxTohwp/dist/*
 xlsxTohwp/release_note.txt
+xlsxTohwp/보안모듈(Automation)
