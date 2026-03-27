@@ -19,25 +19,12 @@ import { NormalizedRate } from './normalizer';
 type DbCategory = '인문' | '사회' | '자연' | '공학' | '의약' | '예체능' | '교육';
 
 const ETL_TO_DB_CATEGORY: Record<string, DbCategory> = {
-  'IT계열': '공학',
-  '전기전자계열': '공학',
-  '기계계열': '공학',
-  '건설계열': '공학',
-  '의학계열': '의약',
-  '의약계열': '의약',
-  '자연과학계열': '자연',
-  '자연계열': '자연',
-  '인문계열': '인문',
-  '사회계열': '사회',
-  '법학계열': '사회',
-  '상경계열': '사회',
-  '교육계열': '교육',
   '예체능계열': '예체능',
-  '기타': '자연', // 분류 불가 → 자연으로 fallback
+  '기타': '예체능', // 실용음악 전용 프로젝트이므로 예체능으로 fallback
 };
 
 export function mapToDbCategory(etlCategory: string): DbCategory {
-  return ETL_TO_DB_CATEGORY[etlCategory] ?? '자연';
+  return ETL_TO_DB_CATEGORY[etlCategory] ?? '예체능';
 }
 
 // ──────────────────────────────────────────────

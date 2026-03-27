@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(sqlite3 /Users/zerogon/tst/solution/uniRate/data/unirate.db \"SELECT COUNT\\(*\\) as university_count FROM universities; SELECT COUNT\\(*\\) as department_count FROM departments; SELECT COUNT\\(*\\) as admission_type_count FROM admission_types; SELECT COUNT\\(*\\) as competition_rate_count FROM competition_rates;\")",
+      "Bash(sqlite3:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

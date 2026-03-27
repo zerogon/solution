@@ -27,11 +27,11 @@ async function seed() {
 
   // ─── 대학교 삽입 ───────────────────────────────────────────────
   const univData = [
-    { name: '서울대학교', region: '서울', type: '국립' },
-    { name: '연세대학교', region: '서울', type: '사립' },
-    { name: '고려대학교', region: '서울', type: '사립' },
-    { name: '한국과학기술원', region: '대전', type: '국립' },
-    { name: '성균관대학교', region: '서울', type: '사립' },
+    { name: '경희대학교', region: '서울', type: '사립' },
+    { name: '동덕여자대학교', region: '서울', type: '사립' },
+    { name: '홍익대학교', region: '서울', type: '사립' },
+    { name: '서경대학교', region: '서울', type: '사립' },
+    { name: '성신여자대학교', region: '서울', type: '사립' },
   ];
 
   const insertedUnivs = await db.insert(universities).values(univData).returning();
@@ -56,52 +56,36 @@ async function seed() {
 
   // ─── 학과 삽입 ─────────────────────────────────────────────────
   const deptData = [
-    // 서울대학교
-    { universityId: univMap['서울대학교'], name: '컴퓨터공학부', category: '공학' },
-    { universityId: univMap['서울대학교'], name: '경영학과', category: '사회' },
-    { universityId: univMap['서울대학교'], name: '의학과', category: '의약' },
-    // 연세대학교
-    { universityId: univMap['연세대학교'], name: '컴퓨터과학과', category: '공학' },
-    { universityId: univMap['연세대학교'], name: '경제학과', category: '사회' },
-    { universityId: univMap['연세대학교'], name: '의예과', category: '의약' },
-    // 고려대학교
-    { universityId: univMap['고려대학교'], name: '사이버국방학과', category: '공학' },
-    { universityId: univMap['고려대학교'], name: '법학과', category: '사회' },
-    { universityId: univMap['고려대학교'], name: '의학과', category: '의약' },
-    // 한국과학기술원
-    { universityId: univMap['한국과학기술원'], name: '전산학부', category: '공학' },
-    { universityId: univMap['한국과학기술원'], name: '수리과학과', category: '자연' },
-    { universityId: univMap['한국과학기술원'], name: '물리학과', category: '자연' },
-    // 성균관대학교
-    { universityId: univMap['성균관대학교'], name: '소프트웨어학과', category: '공학' },
-    { universityId: univMap['성균관대학교'], name: '글로벌경영학과', category: '사회' },
-    { universityId: univMap['성균관대학교'], name: '의예과', category: '의약' },
+    // 경희대학교
+    { universityId: univMap['경희대학교'], name: 'PostModern음악학과', category: '예체능' },
+    // 동덕여자대학교
+    { universityId: univMap['동덕여자대학교'], name: '공연예술학부 실용음악전공', category: '예체능' },
+    // 홍익대학교
+    { universityId: univMap['홍익대학교'], name: '공연예술학부(실용음악전공)', category: '예체능' },
+    // 서경대학교
+    { universityId: univMap['서경대학교'], name: '실용음악학부(보컬,싱어송라이터)', category: '예체능' },
+    { universityId: univMap['서경대학교'], name: '실용음악학부(기악)', category: '예체능' },
+    { universityId: univMap['서경대학교'], name: '실용음악학부(작곡)', category: '예체능' },
+    // 성신여자대학교
+    { universityId: univMap['성신여자대학교'], name: '현대실용음악학과', category: '예체능' },
   ];
 
   const insertedDepts = await db.insert(departments).values(deptData).returning();
   console.log(`학과 ${insertedDepts.length}개 삽입 완료`);
 
-  // ─── 경쟁률 데이터 생성 (2022~2024) ───────────────────────────
-  // 학과별 경쟁률 샘플 (수시/정시 각각 다르게)
+  // ─── 경쟁률 데이터 생성 (2023~2025, 크롤링 데이터 기반) ───────
+  // 학과별 경쟁률 (수시/정시 각각)
   const rateConfig: Record<string, { suSi: number[]; jeongSi: number[] }> = {
-    '서울대학교_컴퓨터공학부':   { suSi: [14.2, 13.8, 15.1], jeongSi: [5.3, 4.9, 5.7] },
-    '서울대학교_경영학과':       { suSi: [18.5, 17.9, 19.2], jeongSi: [6.8, 6.4, 7.1] },
-    '서울대학교_의학과':         { suSi: [25.6, 24.3, 26.8], jeongSi: [9.4, 8.9, 10.2] },
-    '연세대학교_컴퓨터과학과':   { suSi: [12.1, 11.6, 13.4], jeongSi: [4.8, 4.5, 5.2] },
-    '연세대학교_경제학과':       { suSi: [16.3, 15.7, 17.1], jeongSi: [5.9, 5.6, 6.3] },
-    '연세대학교_의예과':         { suSi: [22.8, 21.5, 23.9], jeongSi: [8.7, 8.3, 9.1] },
-    '고려대학교_사이버국방학과': { suSi: [20.4, 19.8, 21.6], jeongSi: [7.2, 6.9, 7.8] },
-    '고려대학교_법학과':         { suSi: [15.7, 15.2, 16.3], jeongSi: [5.6, 5.3, 5.9] },
-    '고려대학교_의학과':         { suSi: [23.1, 22.4, 24.5], jeongSi: [8.9, 8.5, 9.3] },
-    '한국과학기술원_전산학부':   { suSi: [8.6, 8.1, 9.2], jeongSi: [3.4, 3.1, 3.8] },
-    '한국과학기술원_수리과학과': { suSi: [5.2, 4.9, 5.7], jeongSi: [2.1, 2.0, 2.4] },
-    '한국과학기술원_물리학과':   { suSi: [4.8, 4.5, 5.1], jeongSi: [1.9, 1.8, 2.2] },
-    '성균관대학교_소프트웨어학과': { suSi: [10.3, 9.8, 11.2], jeongSi: [4.1, 3.9, 4.5] },
-    '성균관대학교_글로벌경영학과': { suSi: [13.6, 13.1, 14.2], jeongSi: [4.9, 4.7, 5.3] },
-    '성균관대학교_의예과':       { suSi: [21.4, 20.8, 22.7], jeongSi: [7.8, 7.5, 8.3] },
+    '경희대학교_PostModern음악학과':             { suSi: [45.3, 48.2, 50.17], jeongSi: [38.5, 41.0, 43.0] },
+    '동덕여자대학교_공연예술학부 실용음악전공':   { suSi: [36.8, 39.5, 41.64], jeongSi: [30.2, 33.0, 35.13] },
+    '홍익대학교_공연예술학부(실용음악전공)':       { suSi: [128.5, 136.0, 143.61], jeongSi: [140.0, 148.0, 153.0] },
+    '서경대학교_실용음악학부(보컬,싱어송라이터)': { suSi: [280.0, 300.0, 314.71], jeongSi: [125.0, 135.0, 142.57] },
+    '서경대학교_실용음악학부(기악)':              { suSi: [35.2, 38.5, 41.58], jeongSi: [28.0, 31.0, 33.5] },
+    '서경대학교_실용음악학부(작곡)':              { suSi: [40.0, 43.5, 46.75], jeongSi: [32.0, 35.0, 37.5] },
+    '성신여자대학교_현대실용음악학과':            { suSi: [50.0, 54.5, 58.57], jeongSi: [30.0, 33.0, 35.67] },
   };
 
-  const years = [2022, 2023, 2024];
+  const years = [2023, 2024, 2025];
   const rateRows: typeof competitionRates.$inferInsert[] = [];
 
   for (const dept of insertedDepts) {

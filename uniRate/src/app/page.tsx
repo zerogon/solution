@@ -1,17 +1,17 @@
 import Link from "next/link";
 
-// 인기 학과 예시 데이터 (실제 데이터는 API 연동 후 대체)
+// 실용음악 학과 경쟁률 TOP 10 (크롤링 데이터 기반)
 const popularDepartments = [
-  { rank: 1, university: "서울대학교", department: "의학과", rate: 45.2, year: 2024 },
-  { rank: 2, university: "연세대학교", department: "의학과", rate: 42.8, year: 2024 },
-  { rank: 3, university: "고려대학교", department: "의학과", rate: 38.5, year: 2024 },
-  { rank: 4, university: "성균관대학교", department: "의학과", rate: 35.1, year: 2024 },
-  { rank: 5, university: "서울대학교", department: "컴퓨터공학부", rate: 28.7, year: 2024 },
-  { rank: 6, university: "연세대학교", department: "경영학과", rate: 26.3, year: 2024 },
-  { rank: 7, university: "고려대학교", department: "경영학과", rate: 24.9, year: 2024 },
-  { rank: 8, university: "서울대학교", department: "법학과", rate: 22.4, year: 2024 },
-  { rank: 9, university: "한양대학교", department: "의학과", rate: 21.8, year: 2024 },
-  { rank: 10, university: "성균관대학교", department: "반도체시스템공학", rate: 20.5, year: 2024 },
+  { rank: 1, university: "서경대학교", department: "실용음악학부(보컬,싱어송라이터)", rate: 314.7, year: 2025 },
+  { rank: 2, university: "홍익대학교", department: "공연예술학부(실용음악전공)", rate: 153.0, year: 2025 },
+  { rank: 3, university: "홍익대학교", department: "공연예술학부(실용음악전공)", rate: 143.6, year: 2025 },
+  { rank: 4, university: "서경대학교", department: "실용음악학부(보컬,싱어송라이터)", rate: 142.6, year: 2025 },
+  { rank: 5, university: "경기대학교", department: "실용음악학과", rate: 70.8, year: 2025 },
+  { rank: 6, university: "성신여자대학교", department: "현대실용음악학과", rate: 58.6, year: 2025 },
+  { rank: 7, university: "경희대학교", department: "PostModern음악학과", rate: 50.2, year: 2025 },
+  { rank: 8, university: "서경대학교", department: "실용음악학부(작곡)", rate: 46.8, year: 2025 },
+  { rank: 9, university: "경희대학교", department: "PostModern음악학과", rate: 43.0, year: 2025 },
+  { rank: 10, university: "동덕여자대학교", department: "공연예술학부 실용음악전공", rate: 41.6, year: 2025 },
 ];
 
 // 서비스 주요 기능
@@ -48,12 +48,12 @@ export default function HomePage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-28">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-3xl md:text-5xl font-bold mb-4 leading-tight">
-              대학 입시 경쟁률,
+              실용음악과 입시 경쟁률,
               <br />
               한눈에 비교하세요
             </h1>
             <p className="text-blue-100 text-lg md:text-xl mb-10">
-              전국 대학교 학과별 입시 경쟁률을 연도별로 조회하고 비교합니다.
+              전국 대학교 실용음악 관련 학과의 입시 경쟁률을 연도별로 조회하고 비교합니다.
             </p>
 
             {/* 검색 입력 */}
@@ -74,7 +74,7 @@ export default function HomePage() {
             {/* 빠른 검색 태그 */}
             <div className="mt-6 flex flex-wrap justify-center gap-2">
               <span className="text-blue-200 text-sm mr-1">인기 검색어:</span>
-              {["의학과", "컴퓨터공학", "경영학과", "간호학과", "법학과"].map((keyword) => (
+              {["실용음악", "PostModern음악", "현대실용음악", "공연예술", "작곡"].map((keyword) => (
                 <Link
                   key={keyword}
                   href={`/search?q=${encodeURIComponent(keyword)}`}
@@ -118,9 +118,9 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-                🏆 인기 학과 TOP 10
+                🏆 실용음악 경쟁률 TOP 10
               </h2>
-              <p className="text-gray-500 mt-1">2024년 기준 경쟁률 상위 학과</p>
+              <p className="text-gray-500 mt-1">2025년 기준 경쟁률 상위 학과</p>
             </div>
             <Link
               href="/search"

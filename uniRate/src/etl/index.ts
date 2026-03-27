@@ -35,3 +35,6 @@ export {
   initScheduler,
 } from './scheduler';
 export type { ScheduleConfig, RunMeta, AdmissionTypeFilter } from './scheduler';
+
+export { loadRates } from './loader';
+export type { RateRecord, LoadResult } from './loader';

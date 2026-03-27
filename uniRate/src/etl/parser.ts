@@ -32,12 +32,12 @@ export interface ParsedRate {
  *   </thead>
  *   <tbody>
  *     <tr>
- *       <td>서울대학교</td>
- *       <td>컴퓨터공학부</td>
+ *       <td>경희대학교</td>
+ *       <td>PostModern음악학과</td>
  *       <td>수시</td>
- *       <td>50</td>
- *       <td>320</td>
- *       <td>6.40</td>
+ *       <td>38</td>
+ *       <td>1906</td>
+ *       <td>50.17</td>
  *     </tr>
  *   </tbody>
  * </table>
