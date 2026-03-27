@@ -1,12 +1,12 @@
 import { defineConfig } from 'drizzle-kit';
-import path from 'path';
 
 export default defineConfig({
   schema: './src/db/schema.ts',
   out: './src/db/migrations',
-  dialect: 'sqlite',
+  dialect: 'turso',
   dbCredentials: {
-    url: path.join(process.cwd(), 'data', 'unirate.db'),
+    url: process.env.TURSO_DATABASE_URL!,
+    authToken: process.env.TURSO_AUTH_TOKEN,
   },
   verbose: true,
   strict: true,

@@ -1,29 +1,29 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { createClient } from '@libsql/client';
+import { drizzle } from 'drizzle-orm/libsql';
+import { migrate } from 'drizzle-orm/libsql/migrator';
 import path from 'path';
 import { universities, departments, admissionTypes, competitionRates } from './schema';
 
-const DB_PATH = path.join(process.cwd(), 'data', 'unirate.db');
 const MIGRATIONS_PATH = path.join(process.cwd(), 'src', 'db', 'migrations');
 
 async function seed() {
   // DB 연결
-  const sqlite = new Database(DB_PATH);
-  sqlite.pragma('journal_mode = WAL');
-  sqlite.pragma('foreign_keys = ON');
-  const db = drizzle(sqlite);
+  const client = createClient({
+    url: process.env.TURSO_DATABASE_URL!,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+  });
+  const db = drizzle(client);
 
   // 마이그레이션 실행
   console.log('마이그레이션 실행 중...');
-  migrate(db, { migrationsFolder: MIGRATIONS_PATH });
+  await migrate(db, { migrationsFolder: MIGRATIONS_PATH });
   console.log('마이그레이션 완료');
 
   // 기존 데이터 초기화
-  db.delete(competitionRates).run();
-  db.delete(departments).run();
-  db.delete(admissionTypes).run();
-  db.delete(universities).run();
+  await db.delete(competitionRates);
+  await db.delete(departments);
+  await db.delete(admissionTypes);
+  await db.delete(universities);
 
   // ─── 대학교 삽입 ───────────────────────────────────────────────
   const univData = [
@@ -34,7 +34,7 @@ async function seed() {
     { name: '성균관대학교', region: '서울', type: '사립' },
   ];
 
-  const insertedUnivs = db.insert(universities).values(univData).returning().all();
+  const insertedUnivs = await db.insert(universities).values(univData).returning();
   console.log(`대학교 ${insertedUnivs.length}개 삽입 완료`);
 
   const univMap: Record<string, number> = {};
@@ -48,7 +48,7 @@ async function seed() {
     { name: '정시' },
   ];
 
-  const insertedTypes = db.insert(admissionTypes).values(typeData).returning().all();
+  const insertedTypes = await db.insert(admissionTypes).values(typeData).returning();
   console.log(`입시유형 ${insertedTypes.length}개 삽입 완료`);
 
   const suSi = insertedTypes.find((t) => t.name === '수시')!.id;
@@ -78,7 +78,7 @@ async function seed() {
     { universityId: univMap['성균관대학교'], name: '의예과', category: '의약' },
   ];
 
-  const insertedDepts = db.insert(departments).values(deptData).returning().all();
+  const insertedDepts = await db.insert(departments).values(deptData).returning();
   console.log(`학과 ${insertedDepts.length}개 삽입 완료`);
 
   // ─── 경쟁률 데이터 생성 (2022~2024) ───────────────────────────
@@ -140,10 +140,10 @@ async function seed() {
     }
   }
 
-  db.insert(competitionRates).values(rateRows).run();
+  await db.insert(competitionRates).values(rateRows);
   console.log(`경쟁률 데이터 ${rateRows.length}건 삽입 완료`);
 
-  sqlite.close();
+  client.close();
   console.log('\n✅ 시드 완료!');
 }
 
