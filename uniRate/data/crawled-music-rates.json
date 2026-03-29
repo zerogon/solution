@@ -1,5 +1,53 @@
 [
   {
+    "universityName": "신한대학교",
+    "departmentName": "K-POP학과",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 68,
+    "accepted": 20,
+    "rate": 3.38,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "신한대학교",
+    "departmentName": "K-POP학과",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 63,
+    "accepted": 20,
+    "rate": 3.14,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "K-POP학과",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 177,
+    "accepted": 53,
+    "rate": 3.34,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "K-POP학과",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 80,
+    "accepted": 53,
+    "rate": 1.5,
+    "universityType": "사립"
+  },
+  {
     "universityName": "경희대학교",
     "departmentName": "PostModern음악학과",
     "campus": "본교",
@@ -8,7 +56,8 @@
     "admissionType": "수시",
     "applicants": 1906,
     "accepted": 38,
-    "rate": 50.17
+    "rate": 50.17,
+    "universityType": "사립"
   },
   {
     "universityName": "경희대학교",
@@ -19,7 +68,8 @@
     "admissionType": "정시",
     "applicants": 1634,
     "accepted": 38,
-    "rate": 43
+    "rate": 43,
+    "universityType": "사립"
   },
   {
     "universityName": "동덕여자대학교",
@@ -30,7 +80,8 @@
     "admissionType": "수시",
     "applicants": 1416,
     "accepted": 34,
-    "rate": 41.64
+    "rate": 41.64,
+    "universityType": "사립"
   },
   {
     "universityName": "동덕여자대학교",
@@ -41,7 +92,8 @@
     "admissionType": "정시",
     "applicants": 1194,
     "accepted": 34,
-    "rate": 35.13
+    "rate": 35.13,
+    "universityType": "사립"
   },
   {
     "universityName": "홍익대학교",
@@ -52,7 +104,8 @@
     "admissionType": "수시",
     "applicants": 4308,
     "accepted": 30,
-    "rate": 143.61
+    "rate": 143.61,
+    "universityType": "사립"
   },
   {
     "universityName": "홍익대학교",
@@ -63,7 +116,320 @@
     "admissionType": "정시",
     "applicants": 4590,
     "accepted": 30,
-    "rate": 153
+    "rate": 153,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호서대학교",
+    "departmentName": "공연예술학부(실용음악트랙)",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 239,
+    "accepted": 48,
+    "rate": 4.98,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호서대학교",
+    "departmentName": "공연예술학부(실용음악트랙)",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 329,
+    "accepted": 48,
+    "rate": 6.85,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대신대학교",
+    "departmentName": "교회실용음악학부",
+    "campus": "본교",
+    "region": "경북",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 28,
+    "accepted": 22,
+    "rate": 1.28,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대신대학교",
+    "departmentName": "교회실용음악학부",
+    "campus": "본교",
+    "region": "경북",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 35,
+    "accepted": 22,
+    "rate": 1.6,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중앙대학교",
+    "departmentName": "글로벌예술학부(실용음악전공)",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 29,
+    "accepted": 1,
+    "rate": 29,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "단국대학교",
+    "departmentName": "뉴뮤직학부 싱어송라이팅전공",
+    "campus": "제2캠퍼스",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 400,
+    "accepted": 30,
+    "rate": 13.33,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "단국대학교",
+    "departmentName": "뉴뮤직학부 싱어송라이팅전공",
+    "campus": "제2캠퍼스",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 340,
+    "accepted": 30,
+    "rate": 11.33,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "백석대학교",
+    "departmentName": "문화예술학부 실용음악전공",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 602,
+    "accepted": 100,
+    "rate": 6.02,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "백석대학교",
+    "departmentName": "문화예술학부 실용음악전공",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 1809,
+    "accepted": 100,
+    "rate": 18.09,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "동신대학교",
+    "departmentName": "뮤지컬ㆍ실용음악학과",
+    "campus": "본교",
+    "region": "전남",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 41,
+    "accepted": 30,
+    "rate": 1.37,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "동신대학교",
+    "departmentName": "뮤지컬ㆍ실용음악학과",
+    "campus": "본교",
+    "region": "전남",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 14,
+    "accepted": 30,
+    "rate": 0.45,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대구가톨릭대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경북",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 2,
+    "accepted": 1,
+    "rate": 2.3,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울신학대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 508,
+    "accepted": 28,
+    "rate": 18.15,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울신학대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 426,
+    "accepted": 28,
+    "rate": 15.2,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울장신대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 15,
+    "accepted": 18,
+    "rate": 0.86,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울장신대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 16,
+    "accepted": 18,
+    "rate": 0.88,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "용인대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 720,
+    "accepted": 33,
+    "rate": 21.81,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "용인대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 1243,
+    "accepted": 33,
+    "rate": 37.67,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "계명대학교",
+    "departmentName": "실용음악음향과",
+    "campus": "본교",
+    "region": "대구",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 109,
+    "accepted": 30,
+    "rate": 3.63,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "계명대학교",
+    "departmentName": "실용음악음향과",
+    "campus": "본교",
+    "region": "대구",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 240,
+    "accepted": 30,
+    "rate": 8,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "가톨릭관동대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "강원",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 26,
+    "accepted": 20,
+    "rate": 1.3,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "가톨릭관동대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "강원",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 16,
+    "accepted": 20,
+    "rate": 0.78,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "예원예술대학교",
+    "departmentName": "실용음악전공",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 24,
+    "accepted": 8,
+    "rate": 3,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "예원예술대학교",
+    "departmentName": "실용음악전공",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 12,
+    "accepted": 8,
+    "rate": 1.5,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "협성대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 4,
+    "accepted": 1,
+    "rate": 3.6,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "협성대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 4,
+    "accepted": 1,
+    "rate": 3.67,
+    "universityType": "사립"
   },
   {
     "universityName": "강서대학교",
@@ -74,7 +440,8 @@
     "admissionType": "수시",
     "applicants": 162,
     "accepted": 30,
-    "rate": 5.4
+    "rate": 5.4,
+    "universityType": "사립"
   },
   {
     "universityName": "강서대학교",
@@ -85,7 +452,8 @@
     "admissionType": "정시",
     "applicants": 197,
     "accepted": 30,
-    "rate": 6.56
+    "rate": 6.56,
+    "universityType": "사립"
   },
   {
     "universityName": "경기대학교",
@@ -96,7 +464,8 @@
     "admissionType": "수시",
     "applicants": 880,
     "accepted": 22,
-    "rate": 40
+    "rate": 40,
+    "universityType": "사립"
   },
   {
     "universityName": "경기대학교",
@@ -107,7 +476,140 @@
     "admissionType": "정시",
     "applicants": 1557,
     "accepted": 22,
-    "rate": 70.75
+    "rate": 70.75,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "나사렛대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 84,
+    "accepted": 45,
+    "rate": 1.86,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "나사렛대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 61,
+    "accepted": 45,
+    "rate": 1.36,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "남서울대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 162,
+    "accepted": 25,
+    "rate": 6.47,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "남서울대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 156,
+    "accepted": 25,
+    "rate": 6.22,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대진대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 31,
+    "accepted": 22,
+    "rate": 1.39,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대진대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 28,
+    "accepted": 22,
+    "rate": 1.27,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "평택대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 192,
+    "accepted": 26,
+    "rate": 7.4,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "평택대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 89,
+    "accepted": 26,
+    "rate": 3.42,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한양대학교(ERICA)",
+    "departmentName": "실용음악학과",
+    "campus": "분교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 3348,
+    "accepted": 25,
+    "rate": 133.92,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한일장신대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 6,
+    "accepted": 15,
+    "rate": 0.43,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한일장신대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 2,
+    "accepted": 15,
+    "rate": 0.15,
+    "universityType": "사립"
   },
   {
     "universityName": "경기대학교",
@@ -118,7 +620,8 @@
     "admissionType": "수시",
     "applicants": 8,
     "accepted": 1,
-    "rate": 7.57
+    "rate": 7.57,
+    "universityType": "사립"
   },
   {
     "universityName": "경기대학교",
@@ -129,7 +632,32 @@
     "admissionType": "정시",
     "applicants": 6,
     "accepted": 1,
-    "rate": 6.25
+    "rate": 6.25,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "목원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "대전",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 81,
+    "accepted": 30,
+    "rate": 2.7,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "목원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "대전",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 210,
+    "accepted": 30,
+    "rate": 7,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -140,7 +668,8 @@
     "admissionType": "수시",
     "applicants": 1081,
     "accepted": 26,
-    "rate": 41.58
+    "rate": 41.58,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -151,7 +680,8 @@
     "admissionType": "정시",
     "applicants": 842,
     "accepted": 26,
-    "rate": 32.38
+    "rate": 32.38,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -162,7 +692,8 @@
     "admissionType": "수시",
     "applicants": 4406,
     "accepted": 14,
-    "rate": 314.71
+    "rate": 314.71,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -173,7 +704,8 @@
     "admissionType": "정시",
     "applicants": 1996,
     "accepted": 14,
-    "rate": 142.57
+    "rate": 142.57,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -184,7 +716,8 @@
     "admissionType": "수시",
     "applicants": 187,
     "accepted": 4,
-    "rate": 46.75
+    "rate": 46.75,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -195,7 +728,56 @@
     "admissionType": "정시",
     "applicants": 150,
     "accepted": 4,
-    "rate": 37.5
+    "rate": 37.5,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한경국립대학교",
+    "departmentName": "실용음악학전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 45,
+    "accepted": 13,
+    "rate": 3.45,
+    "universityType": "국립"
+  },
+  {
+    "universityName": "한경국립대학교",
+    "departmentName": "실용음악학전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 13,
+    "accepted": 13,
+    "rate": 1,
+    "universityType": "국립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(보컬)",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "수시",
+    "applicants": 14,
+    "accepted": 1,
+    "rate": 14,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(보컬)",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2027,
+    "admissionType": "정시",
+    "applicants": 29,
+    "accepted": 1,
+    "rate": 28.67,
+    "universityType": "사립"
   },
   {
     "universityName": "성신여자대학교",
@@ -206,7 +788,8 @@
     "admissionType": "수시",
     "applicants": 1523,
     "accepted": 26,
-    "rate": 58.57
+    "rate": 58.57,
+    "universityType": "사립"
   },
   {
     "universityName": "성신여자대학교",
@@ -217,7 +800,56 @@
     "admissionType": "정시",
     "applicants": 927,
     "accepted": 26,
-    "rate": 35.67
+    "rate": 35.67,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "신한대학교",
+    "departmentName": "K-POP학과",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 68,
+    "accepted": 20,
+    "rate": 3.38,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "신한대학교",
+    "departmentName": "K-POP학과",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 63,
+    "accepted": 20,
+    "rate": 3.14,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "K-POP학과",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 167,
+    "accepted": 50,
+    "rate": 3.34,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "K-POP학과",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 75,
+    "accepted": 50,
+    "rate": 1.5,
+    "universityType": "사립"
   },
   {
     "universityName": "경희대학교",
@@ -228,7 +860,8 @@
     "admissionType": "수시",
     "applicants": 1906,
     "accepted": 38,
-    "rate": 50.17
+    "rate": 50.17,
+    "universityType": "사립"
   },
   {
     "universityName": "경희대학교",
@@ -239,7 +872,8 @@
     "admissionType": "정시",
     "applicants": 1634,
     "accepted": 38,
-    "rate": 43
+    "rate": 43,
+    "universityType": "사립"
   },
   {
     "universityName": "동덕여자대학교",
@@ -250,7 +884,8 @@
     "admissionType": "수시",
     "applicants": 1416,
     "accepted": 34,
-    "rate": 41.64
+    "rate": 41.64,
+    "universityType": "사립"
   },
   {
     "universityName": "동덕여자대학교",
@@ -261,7 +896,8 @@
     "admissionType": "정시",
     "applicants": 1194,
     "accepted": 34,
-    "rate": 35.13
+    "rate": 35.13,
+    "universityType": "사립"
   },
   {
     "universityName": "홍익대학교",
@@ -272,7 +908,8 @@
     "admissionType": "수시",
     "applicants": 4308,
     "accepted": 30,
-    "rate": 143.61
+    "rate": 143.61,
+    "universityType": "사립"
   },
   {
     "universityName": "홍익대학교",
@@ -283,7 +920,320 @@
     "admissionType": "정시",
     "applicants": 4590,
     "accepted": 30,
-    "rate": 153
+    "rate": 153,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호서대학교",
+    "departmentName": "공연예술학부(실용음악트랙)",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 214,
+    "accepted": 43,
+    "rate": 4.98,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호서대학교",
+    "departmentName": "공연예술학부(실용음악트랙)",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 295,
+    "accepted": 43,
+    "rate": 6.85,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대신대학교",
+    "departmentName": "교회실용음악학부",
+    "campus": "본교",
+    "region": "경북",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 33,
+    "accepted": 26,
+    "rate": 1.28,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대신대학교",
+    "departmentName": "교회실용음악학부",
+    "campus": "본교",
+    "region": "경북",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 42,
+    "accepted": 26,
+    "rate": 1.6,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중앙대학교",
+    "departmentName": "글로벌예술학부(실용음악전공)",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 29,
+    "accepted": 1,
+    "rate": 29,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "단국대학교",
+    "departmentName": "뉴뮤직학부 싱어송라이팅전공",
+    "campus": "제2캠퍼스",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 400,
+    "accepted": 30,
+    "rate": 13.33,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "단국대학교",
+    "departmentName": "뉴뮤직학부 싱어송라이팅전공",
+    "campus": "제2캠퍼스",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 340,
+    "accepted": 30,
+    "rate": 11.33,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "백석대학교",
+    "departmentName": "문화예술학부 실용음악전공",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 602,
+    "accepted": 100,
+    "rate": 6.02,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "백석대학교",
+    "departmentName": "문화예술학부 실용음악전공",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 1809,
+    "accepted": 100,
+    "rate": 18.09,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "동신대학교",
+    "departmentName": "뮤지컬ㆍ실용음악학과",
+    "campus": "본교",
+    "region": "전남",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 41,
+    "accepted": 30,
+    "rate": 1.37,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "동신대학교",
+    "departmentName": "뮤지컬ㆍ실용음악학과",
+    "campus": "본교",
+    "region": "전남",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 14,
+    "accepted": 30,
+    "rate": 0.45,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대구가톨릭대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경북",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 2,
+    "accepted": 1,
+    "rate": 2.3,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울신학대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 508,
+    "accepted": 28,
+    "rate": 18.15,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울신학대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 426,
+    "accepted": 28,
+    "rate": 15.2,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울장신대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 18,
+    "accepted": 21,
+    "rate": 0.86,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울장신대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 18,
+    "accepted": 21,
+    "rate": 0.88,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "용인대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 502,
+    "accepted": 23,
+    "rate": 21.81,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "용인대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 866,
+    "accepted": 23,
+    "rate": 37.67,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "계명대학교",
+    "departmentName": "실용음악음향과",
+    "campus": "본교",
+    "region": "대구",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 109,
+    "accepted": 30,
+    "rate": 3.63,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "계명대학교",
+    "departmentName": "실용음악음향과",
+    "campus": "본교",
+    "region": "대구",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 240,
+    "accepted": 30,
+    "rate": 8,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "가톨릭관동대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "강원",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 26,
+    "accepted": 20,
+    "rate": 1.3,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "가톨릭관동대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "강원",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 16,
+    "accepted": 20,
+    "rate": 0.78,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "예원예술대학교",
+    "departmentName": "실용음악전공",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 24,
+    "accepted": 8,
+    "rate": 3,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "예원예술대학교",
+    "departmentName": "실용음악전공",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 12,
+    "accepted": 8,
+    "rate": 1.5,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "협성대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 4,
+    "accepted": 1,
+    "rate": 3.6,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "협성대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 4,
+    "accepted": 1,
+    "rate": 3.67,
+    "universityType": "사립"
   },
   {
     "universityName": "강서대학교",
@@ -294,7 +1244,8 @@
     "admissionType": "수시",
     "applicants": 162,
     "accepted": 30,
-    "rate": 5.4
+    "rate": 5.4,
+    "universityType": "사립"
   },
   {
     "universityName": "강서대학교",
@@ -305,7 +1256,8 @@
     "admissionType": "정시",
     "applicants": 197,
     "accepted": 30,
-    "rate": 6.56
+    "rate": 6.56,
+    "universityType": "사립"
   },
   {
     "universityName": "경기대학교",
@@ -316,7 +1268,8 @@
     "admissionType": "수시",
     "applicants": 880,
     "accepted": 22,
-    "rate": 40
+    "rate": 40,
+    "universityType": "사립"
   },
   {
     "universityName": "경기대학교",
@@ -327,7 +1280,140 @@
     "admissionType": "정시",
     "applicants": 1557,
     "accepted": 22,
-    "rate": 70.75
+    "rate": 70.75,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "나사렛대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 56,
+    "accepted": 30,
+    "rate": 1.86,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "나사렛대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 41,
+    "accepted": 30,
+    "rate": 1.36,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "남서울대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 162,
+    "accepted": 25,
+    "rate": 6.47,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "남서울대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 156,
+    "accepted": 25,
+    "rate": 6.22,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대진대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 31,
+    "accepted": 22,
+    "rate": 1.39,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대진대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 28,
+    "accepted": 22,
+    "rate": 1.27,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "평택대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 192,
+    "accepted": 26,
+    "rate": 7.4,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "평택대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 89,
+    "accepted": 26,
+    "rate": 3.42,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한양대학교(ERICA)",
+    "departmentName": "실용음악학과",
+    "campus": "분교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 3348,
+    "accepted": 25,
+    "rate": 133.92,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한일장신대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 6,
+    "accepted": 15,
+    "rate": 0.43,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한일장신대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 2,
+    "accepted": 15,
+    "rate": 0.15,
+    "universityType": "사립"
   },
   {
     "universityName": "경기대학교",
@@ -338,7 +1424,8 @@
     "admissionType": "수시",
     "applicants": 8,
     "accepted": 1,
-    "rate": 7.57
+    "rate": 7.57,
+    "universityType": "사립"
   },
   {
     "universityName": "경기대학교",
@@ -349,7 +1436,56 @@
     "admissionType": "정시",
     "applicants": 6,
     "accepted": 1,
-    "rate": 6.25
+    "rate": 6.25,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "목원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "대전",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 81,
+    "accepted": 30,
+    "rate": 2.7,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "목원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "대전",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 210,
+    "accepted": 30,
+    "rate": 7,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 7819,
+    "accepted": 225,
+    "rate": 34.75,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "전북",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 6440,
+    "accepted": 225,
+    "rate": 28.62,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -360,7 +1496,8 @@
     "admissionType": "수시",
     "applicants": 1081,
     "accepted": 26,
-    "rate": 41.58
+    "rate": 41.58,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -371,7 +1508,8 @@
     "admissionType": "정시",
     "applicants": 842,
     "accepted": 26,
-    "rate": 32.38
+    "rate": 32.38,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -382,7 +1520,8 @@
     "admissionType": "수시",
     "applicants": 4406,
     "accepted": 14,
-    "rate": 314.71
+    "rate": 314.71,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -393,7 +1532,8 @@
     "admissionType": "정시",
     "applicants": 1996,
     "accepted": 14,
-    "rate": 142.57
+    "rate": 142.57,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -404,7 +1544,8 @@
     "admissionType": "수시",
     "applicants": 187,
     "accepted": 4,
-    "rate": 46.75
+    "rate": 46.75,
+    "universityType": "사립"
   },
   {
     "universityName": "서경대학교",
@@ -415,7 +1556,56 @@
     "admissionType": "정시",
     "applicants": 150,
     "accepted": 4,
-    "rate": 37.5
+    "rate": 37.5,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한경국립대학교",
+    "departmentName": "실용음악학전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 45,
+    "accepted": 13,
+    "rate": 3.45,
+    "universityType": "국립"
+  },
+  {
+    "universityName": "한경국립대학교",
+    "departmentName": "실용음악학전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 13,
+    "accepted": 13,
+    "rate": 1,
+    "universityType": "국립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(보컬)",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "수시",
+    "applicants": 14,
+    "accepted": 1,
+    "rate": 14,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(보컬)",
+    "campus": "본교",
+    "region": "충남",
+    "year": 2026,
+    "admissionType": "정시",
+    "applicants": 29,
+    "accepted": 1,
+    "rate": 28.67,
+    "universityType": "사립"
   },
   {
     "universityName": "성신여자대학교",
@@ -426,7 +1616,8 @@
     "admissionType": "수시",
     "applicants": 1523,
     "accepted": 26,
-    "rate": 58.57
+    "rate": 58.57,
+    "universityType": "사립"
   },
   {
     "universityName": "성신여자대학교",
@@ -437,7 +1628,80 @@
     "admissionType": "정시",
     "applicants": 927,
     "accepted": 26,
-    "rate": 35.67
+    "rate": 35.67,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "신한대학교",
+    "departmentName": "K-POP학과",
+    "campus": "제2캠퍼스",
+    "region": "경기(의정부시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 68,
+    "accepted": 20,
+    "rate": 3.38,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "신한대학교",
+    "departmentName": "K-POP학과",
+    "campus": "제2캠퍼스",
+    "region": "경기(의정부시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 63,
+    "accepted": 20,
+    "rate": 3.14,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "K-POP학과",
+    "campus": "본교",
+    "region": "전북(군산시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 177,
+    "accepted": 53,
+    "rate": 3.34,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "K-POP학과",
+    "campus": "본교",
+    "region": "전북(군산시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 80,
+    "accepted": 53,
+    "rate": 1.5,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "경희대학교",
+    "departmentName": "PostModern음악학과",
+    "campus": "본교",
+    "region": "경기(용인시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 1906,
+    "accepted": 38,
+    "rate": 50.17,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "경희대학교",
+    "departmentName": "PostModern음악학과",
+    "campus": "본교",
+    "region": "경기(용인시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 1634,
+    "accepted": 38,
+    "rate": 43,
+    "universityType": "사립"
   },
   {
     "universityName": "동덕여자대학교",
@@ -448,7 +1712,8 @@
     "admissionType": "수시",
     "applicants": 1416,
     "accepted": 34,
-    "rate": 41.64
+    "rate": 41.64,
+    "universityType": "사립"
   },
   {
     "universityName": "동덕여자대학교",
@@ -459,6 +1724,835 @@
     "admissionType": "정시",
     "applicants": 1194,
     "accepted": 34,
-    "rate": 35.13
+    "rate": 35.13,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "홍익대학교",
+    "departmentName": "공연예술학부(실용음악전공)",
+    "campus": "본교",
+    "region": "서울(마포구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 4308,
+    "accepted": 30,
+    "rate": 143.61,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "홍익대학교",
+    "departmentName": "공연예술학부(실용음악전공)",
+    "campus": "본교",
+    "region": "서울(마포구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 4590,
+    "accepted": 30,
+    "rate": 153,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호서대학교",
+    "departmentName": "공연예술학부(실용음악트랙)",
+    "campus": "본교",
+    "region": "충남(아산시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 239,
+    "accepted": 48,
+    "rate": 4.98,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호서대학교",
+    "departmentName": "공연예술학부(실용음악트랙)",
+    "campus": "본교",
+    "region": "충남(아산시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 329,
+    "accepted": 48,
+    "rate": 6.85,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대신대학교",
+    "departmentName": "교회실용음악학부",
+    "campus": "본교",
+    "region": "경북(경산시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 28,
+    "accepted": 22,
+    "rate": 1.28,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대신대학교",
+    "departmentName": "교회실용음악학부",
+    "campus": "본교",
+    "region": "경북(경산시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 35,
+    "accepted": 22,
+    "rate": 1.6,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중앙대학교",
+    "departmentName": "글로벌예술학부(실용음악전공)",
+    "campus": "제2캠퍼스",
+    "region": "경기(안성시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 29,
+    "accepted": 1,
+    "rate": 29,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "단국대학교",
+    "departmentName": "뉴뮤직학부 싱어송라이팅전공",
+    "campus": "제2캠퍼스",
+    "region": "충남(천안시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 400,
+    "accepted": 30,
+    "rate": 13.33,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "단국대학교",
+    "departmentName": "뉴뮤직학부 싱어송라이팅전공",
+    "campus": "제2캠퍼스",
+    "region": "충남(천안시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 340,
+    "accepted": 30,
+    "rate": 11.33,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "백석대학교",
+    "departmentName": "문화예술학부 실용음악전공",
+    "campus": "본교",
+    "region": "충남(천안시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 602,
+    "accepted": 100,
+    "rate": 6.02,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "백석대학교",
+    "departmentName": "문화예술학부 실용음악전공",
+    "campus": "본교",
+    "region": "충남(천안시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 1809,
+    "accepted": 100,
+    "rate": 18.09,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "동신대학교",
+    "departmentName": "뮤지컬ㆍ실용음악학과",
+    "campus": "본교",
+    "region": "전남(나주시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 41,
+    "accepted": 30,
+    "rate": 1.37,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "동신대학교",
+    "departmentName": "뮤지컬ㆍ실용음악학과",
+    "campus": "본교",
+    "region": "전남(나주시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 14,
+    "accepted": 30,
+    "rate": 0.45,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대구가톨릭대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경북(경산시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 2,
+    "accepted": 1,
+    "rate": 2.3,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울신학대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 508,
+    "accepted": 28,
+    "rate": 18.15,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울신학대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 426,
+    "accepted": 28,
+    "rate": 15.2,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울장신대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 18,
+    "accepted": 21,
+    "rate": 0.86,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서울장신대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 18,
+    "accepted": 21,
+    "rate": 0.88,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "성결대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기(안양시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 90,
+    "accepted": 28,
+    "rate": 3.2,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "성결대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기(안양시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 168,
+    "accepted": 28,
+    "rate": 6,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "용인대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기(용인시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 502,
+    "accepted": 23,
+    "rate": 21.81,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "용인대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "경기(용인시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 866,
+    "accepted": 23,
+    "rate": 37.67,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한서대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "충남(서산시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 6,
+    "accepted": 10,
+    "rate": 0.64,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한서대학교",
+    "departmentName": "실용음악과",
+    "campus": "본교",
+    "region": "충남(서산시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 2,
+    "accepted": 10,
+    "rate": 0.22,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "계명대학교",
+    "departmentName": "실용음악음향과",
+    "campus": "본교",
+    "region": "대구(달서구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 109,
+    "accepted": 30,
+    "rate": 3.63,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "계명대학교",
+    "departmentName": "실용음악음향과",
+    "campus": "본교",
+    "region": "대구(달서구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 240,
+    "accepted": 30,
+    "rate": 8,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "가톨릭관동대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "강원",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 26,
+    "accepted": 20,
+    "rate": 1.3,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "가톨릭관동대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "강원",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 16,
+    "accepted": 20,
+    "rate": 0.78,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "예원예술대학교",
+    "departmentName": "실용음악전공",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 24,
+    "accepted": 8,
+    "rate": 3,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "예원예술대학교",
+    "departmentName": "실용음악전공",
+    "campus": "제2캠퍼스",
+    "region": "경기",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 12,
+    "accepted": 8,
+    "rate": 1.5,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "협성대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "경기(화성시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 4,
+    "accepted": 1,
+    "rate": 3.6,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "협성대학교",
+    "departmentName": "실용음악전공",
+    "campus": "본교",
+    "region": "경기(화성시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 4,
+    "accepted": 1,
+    "rate": 3.67,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "강서대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "서울(강서구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 162,
+    "accepted": 30,
+    "rate": 5.4,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "강서대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "서울(강서구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 197,
+    "accepted": 30,
+    "rate": 6.56,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "경기대학교",
+    "departmentName": "실용음악학과",
+    "campus": "제2캠퍼스",
+    "region": "서울(서대문구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 40,
+    "accepted": 1,
+    "rate": 40,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "경기대학교",
+    "departmentName": "실용음악학과",
+    "campus": "제2캠퍼스",
+    "region": "서울(서대문구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 71,
+    "accepted": 1,
+    "rate": 70.75,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "나사렛대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남(천안시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 84,
+    "accepted": 45,
+    "rate": 1.86,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "나사렛대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남(천안시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 61,
+    "accepted": 45,
+    "rate": 1.36,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "남서울대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남(천안시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 162,
+    "accepted": 25,
+    "rate": 6.47,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "남서울대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "충남(천안시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 156,
+    "accepted": 25,
+    "rate": 6.22,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대진대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기(포천시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 31,
+    "accepted": 22,
+    "rate": 1.39,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "대진대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기(포천시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 28,
+    "accepted": 22,
+    "rate": 1.27,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "평택대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기(평택시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 192,
+    "accepted": 26,
+    "rate": 7.4,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "평택대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "경기(평택시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 89,
+    "accepted": 26,
+    "rate": 3.42,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한양대학교(ERICA)",
+    "departmentName": "실용음악학과",
+    "campus": "분교",
+    "region": "경기(안산시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 3348,
+    "accepted": 25,
+    "rate": 133.92,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한일장신대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "전북(완주군)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 6,
+    "accepted": 15,
+    "rate": 0.43,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한일장신대학교",
+    "departmentName": "실용음악학과",
+    "campus": "본교",
+    "region": "전북(완주군)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 2,
+    "accepted": 15,
+    "rate": 0.15,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "경기대학교",
+    "departmentName": "실용음악학과(작곡)",
+    "campus": "제2캠퍼스",
+    "region": "서울(서대문구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 8,
+    "accepted": 1,
+    "rate": 7.57,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "경기대학교",
+    "departmentName": "실용음악학과(작곡)",
+    "campus": "제2캠퍼스",
+    "region": "서울(서대문구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 6,
+    "accepted": 1,
+    "rate": 6.25,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "목원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "대전(서구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 73,
+    "accepted": 27,
+    "rate": 2.7,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "목원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "대전(서구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 189,
+    "accepted": 27,
+    "rate": 7,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "전북(군산시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 7819,
+    "accepted": 225,
+    "rate": 34.75,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "호원대학교",
+    "departmentName": "실용음악학부",
+    "campus": "본교",
+    "region": "전북(군산시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 6440,
+    "accepted": 225,
+    "rate": 28.62,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서경대학교",
+    "departmentName": "실용음악학부(기악)",
+    "campus": "본교",
+    "region": "서울(성북구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 1081,
+    "accepted": 26,
+    "rate": 41.58,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서경대학교",
+    "departmentName": "실용음악학부(기악)",
+    "campus": "본교",
+    "region": "서울(성북구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 842,
+    "accepted": 26,
+    "rate": 32.38,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서경대학교",
+    "departmentName": "실용음악학부(보컬,싱어송라이터)",
+    "campus": "본교",
+    "region": "서울(성북구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 4406,
+    "accepted": 14,
+    "rate": 314.71,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서경대학교",
+    "departmentName": "실용음악학부(보컬,싱어송라이터)",
+    "campus": "본교",
+    "region": "서울(성북구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 1996,
+    "accepted": 14,
+    "rate": 142.57,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서경대학교",
+    "departmentName": "실용음악학부(작곡)",
+    "campus": "본교",
+    "region": "서울(성북구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 187,
+    "accepted": 4,
+    "rate": 46.75,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "서경대학교",
+    "departmentName": "실용음악학부(작곡)",
+    "campus": "본교",
+    "region": "서울(성북구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 150,
+    "accepted": 4,
+    "rate": 37.5,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "한경국립대학교",
+    "departmentName": "실용음악학전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 45,
+    "accepted": 13,
+    "rate": 3.45,
+    "universityType": "국립"
+  },
+  {
+    "universityName": "한경국립대학교",
+    "departmentName": "실용음악학전공",
+    "campus": "본교",
+    "region": "경기",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 13,
+    "accepted": 13,
+    "rate": 1,
+    "universityType": "국립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(기악/음향)",
+    "campus": "본교",
+    "region": "경기(고양시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 10,
+    "accepted": 1,
+    "rate": 10.28,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(기악/음향)",
+    "campus": "본교",
+    "region": "경기(고양시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 18,
+    "accepted": 1,
+    "rate": 18,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(보컬)",
+    "campus": "본교",
+    "region": "경기(고양시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 14,
+    "accepted": 1,
+    "rate": 14,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(보컬)",
+    "campus": "본교",
+    "region": "경기(고양시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 29,
+    "accepted": 1,
+    "rate": 28.67,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(작곡)",
+    "campus": "본교",
+    "region": "경기(고양시)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 12,
+    "accepted": 1,
+    "rate": 12.17,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "중부대학교",
+    "departmentName": "실용음악학전공(작곡)",
+    "campus": "본교",
+    "region": "경기(고양시)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 13,
+    "accepted": 1,
+    "rate": 13,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "성신여자대학교",
+    "departmentName": "현대실용음악학과",
+    "campus": "본교",
+    "region": "서울(강북구)",
+    "year": 2025,
+    "admissionType": "수시",
+    "applicants": 1523,
+    "accepted": 26,
+    "rate": 58.57,
+    "universityType": "사립"
+  },
+  {
+    "universityName": "성신여자대학교",
+    "departmentName": "현대실용음악학과",
+    "campus": "본교",
+    "region": "서울(강북구)",
+    "year": 2025,
+    "admissionType": "정시",
+    "applicants": 927,
+    "accepted": 26,
+    "rate": 35.67,
+    "universityType": "사립"
   }
 ]

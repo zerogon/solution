@@ -17,6 +17,7 @@ export {
   normalizeRegion,
   normalizeUniversityType,
   classifyDepartmentCategory,
+  inferUniversityType,
 } from './normalizer';
 export type { NormalizedRate } from './normalizer';
 

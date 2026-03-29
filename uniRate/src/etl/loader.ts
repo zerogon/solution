@@ -179,7 +179,11 @@ export async function loadRates(records: RateRecord[]): Promise<LoadResult> {
   const typeCache = new Map<string, number>();
 
   try {
-    for (const record of records) {
+    for (let i = 0; i < records.length; i++) {
+      const record = records[i];
+      if (i > 0 && i % 100 === 0) {
+        console.log(`  진행: ${i}/${records.length}`);
+      }
       try {
         // 대학 upsert
         let univId = univCache.get(record.universityName);

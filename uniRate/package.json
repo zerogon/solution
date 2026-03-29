@@ -12,7 +12,9 @@
     "db:seed": "tsx --env-file=.env.local src/db/seed.ts",
     "etl:run": "tsx src/etl/scraper.ts",
     "etl:crawl:music": "tsx --env-file=.env.local src/etl/crawl-applied-music.ts",
-    "etl:load:music": "tsx --env-file=.env.local src/etl/load-crawled-data.ts"
+    "etl:load:music": "tsx --env-file=.env.local src/etl/load-crawled-data.ts",
+    "etl:crawl:academyinfo": "tsx --env-file=.env.local src/etl/crawl-academyinfo.ts",
+    "etl:load:academyinfo": "tsx --env-file=.env.local src/etl/load-academyinfo-data.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.17.2",
@@ -21,7 +23,8 @@
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "recharts": "^2.15.0"
+    "recharts": "^2.15.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

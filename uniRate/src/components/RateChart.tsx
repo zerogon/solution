@@ -38,13 +38,18 @@ interface Props {
   height?: number;
 }
 
-// 기본 색상 팔레트
+// 기본 색상 팔레트 (10색)
 const DEFAULT_COLORS = [
   "#2563eb", // blue-600
   "#16a34a", // green-600
   "#dc2626", // red-600
   "#d97706", // amber-600
   "#7c3aed", // violet-600
+  "#0891b2", // cyan-600
+  "#be185d", // pink-700
+  "#65a30d", // lime-600
+  "#ea580c", // orange-600
+  "#6366f1", // indigo-500
 ];
 
 /**

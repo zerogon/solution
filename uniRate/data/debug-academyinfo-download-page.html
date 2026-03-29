@@ -1,0 +1,1653 @@
+<!DOCTYPE html><html lang="ko" class="wf-inactive"><head>
+	<title>대학알리미</title>
+	
+    <meta charset="UTF-8">
+<!--     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=0"> -->
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <meta content="noindex" name="robots">
+    <meta name="description" content="">
+	<!-- Vendors CSS -->
+	<link rel="stylesheet" href="/vendors/swiper-4.1.6/css/swiper.css">
+	<link rel="stylesheet" href="/vendors/jquery-ui-1.12.1.custom/jquery-ui.structure.min.css">
+	<!-- // Vendors CSS -->
+
+    <link rel="stylesheet" href="/resources/css/reset.css">
+    <link rel="stylesheet" href="/resources/css/layout.css">
+    <link rel="stylesheet" href="/resources/css/ui.css">
+
+    <link rel="stylesheet" href="/resources/css/guide.css">
+
+	<!-- Vendors JS -->
+	<script src="https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js" type="text/javascript" async=""></script><script src="/vendors/jquery-3.3.1/jquery-3.3.1.min.js"></script>
+	<script src="/vendors/jquery-ui-1.12.1.custom/jquery-ui.min.js"></script>
+    <script src="/vendors/swiper-4.1.6/js/swiper.min.js"></script>
+	<!-- // Vendors JS -->
+
+	<script src="/resources/js/common_p.js"></script> 
+	
+	<script src="/js/common.js"></script>
+	<script type="text/javascript" src="/js/jquery.twbsPagination.js"></script>
+	
+    
+
+<script src="/resources/js/pubinfo.js"></script> 
+<!-- RealGrid JS 워터마크 없음 (운영용)-->
+	<script type="text/javascript" src="/scripts/realgridjs-lic.js"></script>
+	<script type="text/javascript" src="/scripts/realgridjs.1.1.32.min.js"></script>
+	<script type="text/javascript" src="/scripts/realgridjs-api.1.1.32.js"></script>
+	<script type="text/javascript" src="/scripts/jszip.min.js"></script>
+	<script type="text/javascript" src="/scripts/realgridWrapper.js"></script>
+	
+	
+	<!-- RealGrid JS 워터마크 있음 (개발용) 
+	<script type="text/javascript" src="/scripts/realgridjs-lic.js"></script>
+	<script type="text/javascript" src="/scripts/realgridjs_eval.1.1.32.min.js"></script>
+	<script type="text/javascript" src="/scripts/realgridjs-api.1.1.32.js"></script>
+	<script type="text/javascript" src="/scripts/jszip.min.js"></script>
+	<script type="text/javascript" src="/scripts/realgridWrapper.js"></script>
+	-->
+	<!-- // RealGrid JS -->
+<script type="text/javascript">
+    var ipn54cd = [];
+    var ipn54nm = [];
+    var ipn55cd = [];
+    var ipn55nm = [];
+    
+    gfn_Submission_Call ("/popup/main0810/selectIPN.do", "", function(data) {
+        if (data != null) {
+            if (data.M_CODE < 0) {
+                alert(data.M_RTME);
+            } else {
+                //console.log(data);
+                for(var i = 0; i < data.IPN54.length; i++) {
+                	ipn54cd[i] = data.IPN54[i].cd;
+                	ipn54nm[i] = data.IPN54[i].kor_cd_nm;
+                }
+                for(var i = 0; i < data.IPN55.length; i++) {
+                    ipn55cd[i] = data.IPN55[i].cd;
+                    ipn55nm[i] = data.IPN55[i].kor_cd_nm;
+                }
+            }
+        }
+    }, "JSON");
+    
+    // 리얼그리드용 필수변수 
+    var gridView;
+    var dataProvider;
+    var gridData;
+    var realGridWrapper;
+
+    // 필드 없이는 데이터 연결이 안됨
+    var fields = [
+                  { fieldName: "field1" } // 카테고리
+                  ,{ fieldName: "field2" } //공시항목1
+                  ,{ fieldName: "field3" } //
+                  ,{ fieldName: "field4" }
+                  ,{ fieldName: "field5" }
+                  ,{ fieldName: "field51" } // 출력구분배열
+                  ,{ fieldName: "field52" } // 출력구분개수
+                  ,{ fieldName: "field53" } // 출력구분코드
+                  ,{ fieldName: "field54" } // 출력구분ID
+                  ,{ fieldName: "field55" } // 출력라벨 필드
+                  ,{ fieldName: "field6" }  // 1번 체크박스 값 1,0
+                  ,{ fieldName: "field61" } // 1번 체크박스 라벨
+                  ,{ fieldName: "field7" }  // 2번 체크박스 값 1,0
+                  ,{ fieldName: "field71" } // 2번 체크박스 라벨
+                  ,{ fieldName: "field8" }  // 3번 체크박스 값 1,0
+                  ,{ fieldName: "field81" } // 3번 체크박스 라벨
+                  ,{ fieldName: "field9" }
+                  ,{ fieldName: "field10" } // 년도개수
+                  ,{ fieldName: "field11" }
+              ];
+    
+    var columns = [
+                    
+                    {  name: "col1",
+                       fieldName: "field1",
+                       header : { text: "카테고리" } //카테고리
+                       ,editable: false
+                       ,equalBlank: true
+                       ,width: 60
+                    }
+                    ,{
+                        type: "group",
+                        name: "공시항목", //공시항목1
+                        editable: false,
+                        width: 420,
+                        columns: [
+								{  name: "col2"
+								    ,fieldName: "field2"
+								    ,editable: false
+								    ,header : { text: "" } //공시항목1
+								    ,equalBlank: true
+								    ,width: 140
+								    ,styles: { textWrap: "normal" } // 글자 줄 넘기기
+								    
+								}
+								,{  name: "col3"
+								    ,fieldName: "field3"
+								    ,editable: false
+								    ,header : { text: "" } //공시항목2
+								    ,equalBlank: true
+								    ,width: 140
+								    ,styles: { textWrap: "normal" } // 글자 줄 넘기기
+								}
+								,{  name: "col4"
+								    ,fieldName: "field4"
+								    ,editable: false
+								    ,header : { text: "" }  //공시항목3
+								    ,equalBlank: true
+								    ,width: 140
+								    ,styles: { textWrap: "normal" } // 글자 줄 넘기기
+								} 
+                        ]
+                    }
+                   
+                    ,{  name: "col5",
+                        fieldName: "field5",
+                        header : { text: "출력구분" }  //출력구분
+                        ,styles: { "textAlignment": "center" ,"paddingLeft": "0"}
+                        ,lookupDisplay: true
+                        ,editable: true
+                        ,values: ["0", "1"]
+                        ,labels: ['학교별', '학과별']
+                        ,labelField: "field55"
+                        ,alwaysShowEditButton:true
+                        ,editor: {
+                            type: "dropDown",
+                        }
+                        ,width: 60
+                    }
+                    /*  ,{  name: "col51",
+                         fieldName: "field51",
+                         header : { text: "출력구분배열" }  //출력구분배열
+                         ,styles: { "textAlignment": "center" }
+                         //,readOnly: "true"
+                         //,width: 300
+                     }
+                    ,{  name: "col52",
+                        fieldName: "field52",
+                        header : { text: "출력구분개수" }  //출력구분개수
+                        ,styles: { "textAlignment": "center" }
+                        //,readOnly: "true"
+                        //,width: 300
+                    }*/
+//                     ,{  name: "col53",
+//                         fieldName: "field53",
+//                         header : { text: "출력구분값" }  //출력구분값
+//                         ,styles: { "textAlignment": "center" }
+//                         //,readOnly: "true"
+//                         //,width: 300
+//                     } 
+//                     ,{  name: "col54",
+//                         fieldName: "field54",
+//                         header : { text: "출력구분이름" }  //출력구분ID
+//                         ,styles: { "textAlignment": "center" }
+//                         //,readOnly: "true"
+//                         //,width: 300
+//                     } 
+                    
+                    ,{
+                        type: "group",
+                        name: "년도", //년도
+                        //orientation: "vertical",
+                        width: 120,
+                        columns: [
+                                {
+                                    name: "col6",
+                                    fieldName: "field6",
+                                    type: "data",
+                                    width: "40",
+                                    editable: false,
+                                    labelField: "field61",
+                                    lookupDisplay:true,
+                                    renderer: {
+                                        type: "check",
+                                        editable: true,
+                                        startEditOnClick: true,
+                                        trueValues: "1",
+                                        falseValues: "0",
+                                        labelPosition: "right"
+                                    },
+                                    styles: {
+                                        paddingLeft: 8,
+                                        textAlignment: "center",
+                                    },
+                                    header: {
+                                        text: "Check Edit",
+                                        styles: {
+                                            fontBold: false
+                                        }
+                                    }
+                                }
+                                ,{
+                                    name: "col7",
+                                    fieldName: "field7",
+                                    type: "data",
+                                    width: "40",
+                                    editable: false,
+                                    labelField: "field71",
+                                    lookupDisplay:true,
+                                    renderer: {
+                                        type: "check",
+                                        editable: true,
+                                        startEditOnClick: true,
+                                        trueValues: "1",
+                                        falseValues: "0",
+                                        labelPosition: "right"
+                                    },
+                                    styles: {
+                                        paddingLeft: 8,
+                                        textAlignment: "center",
+                                    },
+                                    header: {
+                                        text: "Check Edit",
+                                        styles: {
+                                            fontBold: true
+                                        }
+                                    }
+                                }
+                                ,{
+                                    name: "col8",
+                                    fieldName: "field8",
+                                    type: "data",
+                                    width: "40",
+                                    editable: false,
+                                    labelField: "field81",
+                                    lookupDisplay:true,
+                                    renderer: {
+                                        type: "check",
+                                        editable: true,
+                                        startEditOnClick: true,
+                                        trueValues: "1",
+                                        falseValues: "0",
+                                        labelPosition: "right"
+                                    },
+                                    styles: {
+                                        paddingLeft: 8,
+                                        textAlignment: "center",
+                                    },
+                                    header: {
+                                        text: "Check Edit",
+                                        styles: {
+                                            fontBold: true
+                                        }
+                                    }
+                                }
+                        ]
+                    }
+                   /*  ,{  name: "col10",
+                        fieldName: "field10",
+                        header : { text: "년도개수" }  //년도개수
+                        ,styles: { "textAlignment": "center" }
+                        //,readOnly: "true"
+                        ,width: 40
+                    } */
+                    ,{  name: "col9",
+                        fieldName: "field9",
+                        header : { text: " " }  //추가
+                        ,styles: { "textAlignment": "center","paddingLeft": "0" }
+                        ,readOnly: "true"
+                        ,editable: false
+                        ,width: 40
+                    },
+                    
+                    // item_id 추가
+                    {  name: "col11",
+                       fieldName: "field11",
+                       //header : { text: "item_id" } 
+                       //,styles: { "textAlignment": "center","paddingLeft": "0" }
+                       //,readOnly: "true"
+                       //,editable: false
+                       //,width: 40
+                       visible: false
+                    }
+                    
+                 ];
+    
+    // 리얼그리드용 필수변수 
+    var gridView2;
+    var dataProvider2;
+    var gridData2;
+    var realGridWrapper2;
+    
+ // 필드 없이는 데이터 연결이 안됨
+    var fields2 = [
+                  { fieldName: "field1" } //카테고리
+                  ,{ fieldName: "field2" } //공시항목1
+                  ,{ fieldName: "field3" } //공시항목2
+                  ,{ fieldName: "field4" } //공시항목2
+                  ,{ fieldName: "field5" } //출력구분
+                  ,{ fieldName: "field53" } // 출력구분코드
+                  ,{ fieldName: "field54" } // 출력구분년
+                  ,{ fieldName: "field6" }
+                  ,{ fieldName: "field7" } //삭제
+                  ,{ fieldName: "field11" } //item_id
+              ];
+    
+    var columns2 = [
+                    
+                    {  name: "col1",
+                        fieldName: "field1",
+                        header : { text: "카테고리" } //카테고리
+                      //  ,styles: { "textAlignment": "center" }
+                        ,equalBlank: true // 같은값 셀 생략하기
+                        ,editable: false   // 수정 금지
+                        //,readOnly: "true"
+                        ,width: 60
+                    }
+                    ,{
+                        type: "group",
+                        name: "공시항목", //공시항목1
+                        //orientation: "vertical",
+                        width: 420,
+                        columns: [
+                                {  name: "col2"
+                                    ,fieldName: "field2"
+                                    ,header : { text: "" } //공시항목1
+                                  //  ,styles: { "textAlignment": "center" }
+									,equalBlank: true // 같은값 셀 생략하기
+                                    ,editable: false   // 수정 금지
+                                    //,readOnly: "true"
+                                    ,width: 140
+                                }
+                                ,{  name: "col3"
+                                    ,fieldName: "field3"
+                                    ,header : { text: "" } //공시항목2
+                                  //  ,styles: { "textAlignment": "center" }
+                                    ,equalBlank: true // 같은값 셀 생략하기
+                                    ,editable: false   // 수정 금지
+                                    //,readOnly: "true"
+                                    ,width: 140
+                                }
+                                ,{  name: "col4",
+                                    fieldName: "field4",
+                                    header : { text: "" }  //공시항목3
+                                  //  ,styles: { "textAlignment": "center" }
+                                    ,equalBlank: true  // 같은값 셀 생략하기
+                                    ,editable: false   // 수정 금지
+                                    //,readOnly: "true"
+                                    ,width: 140
+                                } 
+                        ]
+                    }
+                   
+                    ,{  name: "col5",
+                        fieldName: "field5",
+                        header : { text: "출력구분" }  //출력구분
+                        ,styles: { "textAlignment": "center" ,"paddingLeft": "0"}
+                        ,lookupDisplay: true
+                        ,editable: false
+                        ,alwaysShowEditButton:false
+                        ,values: ["0", "1"]
+                        ,labels: ['학교별', '학과별']
+                        ,editor: {
+                            type: "dropDown",
+                            
+                        }
+                        //,readOnly: "true"
+                        ,width: 60
+                    }
+                    ,{  name: "col6",
+                        fieldName: "field6",
+                        header : { text: "년도" }  //년도
+                        ,styles: { "textAlignment": "center","paddingLeft": "0" }
+                        ,editable: false
+                        //,readOnly: "true"
+                        ,width: 40
+                    }
+                    ,{  name: "col7",
+                    	fieldName: "field7",
+                        header : { text: " " }  //삭제
+                        ,styles: { "textAlignment": "center","paddingLeft": "0" }
+                        ,editable: false
+                        //,readOnly: "true"
+                        ,width: 40
+                    }
+//                     ,{  name: "col8",
+//                         fieldName: "field54",
+//                         header : { text: " " }  //출력구분년
+//                         ,styles: { "textAlignment": "center","paddingLeft": "0" }
+//                         //,visible: false
+//                         //,readOnly: "true"
+//                         ,width: 40
+//                     }
+//                     ,{  name: "col9",
+//                         fieldName: "field53",
+//                         header : { text: " " }  //출력구분코드
+//                         ,styles: { "textAlignment": "center","paddingLeft": "0" }
+//                         //,visible: false
+//                         //,readOnly: "true"
+//                         ,width: 40
+//                     }
+                   ,{  name: "col11",
+                       fieldName: "field11",
+                       //header : { text: "item_id" }  
+                       //,styles: { "textAlignment": "center","paddingLeft": "0" }
+                       //,editable: false
+                       //,readOnly: "true"
+                       //,width: 40
+                       visible: false
+                    }
+                    
+                 ];
+    
+    // 공시항목 그리드1 설정
+    function setRealgrid(dataResultList){
+    	
+    	
+    	
+        realGridWrapper = new RealGridWrapper("realgrid", fields, columns, gridData);
+        gridView = realGridWrapper.getGridView();
+        dataProvider = realGridWrapper.getDataProvider();
+        
+        
+        gridView.setCheckBar({visible: false}); // 체크박스 바 숨기기
+        
+      //행 삽입과 행 추가, 행 삭제가 가능하도록 옵션 조정
+        gridView.setEditOptions({
+        //    insertable: true,
+         //   appendable: true,
+            editable: true ,
+            deletable: true,
+            deleteRowsConfirm : false  // false 지울때 확인 메세지 끄기
+        })
+
+        //데이터를 바로 삭제하지 않고 상태만 변경
+        dataProvider.setOptions({
+            softDeleting: false // false //바로 삭제
+        })
+        
+        gridView.setFooter({
+		    resizable: false,
+		    visible: false,
+		});
+
+        gridView.setPanel({visible:false}); // 그룹핑 패널 숨기기
+        gridView.setStateBar({visible: false }); // 상태바 숨기기
+        gridView.setDisplayOptions({
+        	rowHeight: 44,
+        	rowResizable: true,
+        	eachRowResizable: true
+        })
+        
+        //gridView.fitRowHeightAll();
+        
+        
+        dataProvider.setRows(dataResultList);   
+        //RealGridJS.setTrace(true);//그리드 내부에서 발생하는 각종 이벤트들의 log정보를 console창에 표시한다
+        
+        
+		grouping("공시항목",gridView);  // 그룹핑한 헤더 숨기기
+		grouping("년도",gridView);  // 그룹핑한 헤더 숨기기
+		
+			
+		gridView.onCurrentRowChanged =  function (grid, oldRow, newRow) {
+			// 출력 구분이 2개인 경우에만 클릭 가능하게 함
+// 		    if(dataProvider.getValue(newRow,6) == "2"){
+// 		        grid.setColumnProperty("col5","editable",true)
+// 			}else{
+// 				grid.setColumnProperty("col5","editable",false)
+// 			}
+			
+			// 출력구분을 동적으로 보여주기 위한 설정
+	        var col5_label_T = ['학교별', '학과별'] ;
+	        var col5_label_F = [ '학교별'];	
+	        var col5_values_T = ["0", "1"] ;
+	        var col5_values_F = ["0"];
+	        var column = gridView.columnByName("col5");
+			// 출력구분을 동적으로 보여줌	
+			if(dataProvider.getValue(newRow,"field52") == "2"){
+				column.labels = col5_label_T;
+				column.values = col5_values_T;
+	            console.log("col5_1");
+			}else{
+				column.labels = col5_label_F;
+				column.values = col5_values_F;
+	            console.log("col5_2");
+			}
+	        gridView.setColumn(column);
+			
+		     
+			
+			
+			// 년도 수정을 불가 하기 위한 설정
+            var ren_T = {
+                type: "check",
+                editable: true,
+                startEditOnClick: true,
+                trueValues: "1",
+                falseValues: "0",
+                labelPosition: "right"
+            };
+            
+            var ren_F = {
+                    type: "check",
+                    editable: false,
+                    startEditOnClick: true,
+                    trueValues: "1",
+                    falseValues: "0",
+                    labelPosition: "right"
+                };
+            
+            // 첫번째 년도 클릭
+             if(dataProvider.getValue(newRow,"field10") > "0"){
+                grid.setColumnProperty("col6","renderer",ren_T);
+            }else{
+                grid.setColumnProperty("col6","renderer",ren_F);
+            }
+            // 두번째 년도 클릭
+            if(dataProvider.getValue(newRow,"field10") > "1"){
+                grid.setColumnProperty("col7","renderer",ren_T);
+            }else{
+                grid.setColumnProperty("col7","renderer",ren_F);
+            }
+            // 세번째 년도 클릭
+            if(dataProvider.getValue(newRow,"field10") > "2"){
+                grid.setColumnProperty("col8","renderer",ren_T);
+            }else{
+                grid.setColumnProperty("col8","renderer",ren_F);
+            } 
+//             console.log("8:" + dataProvider.getValue(newRow,8));
+            
+		};	
+		
+		// 추가 버튼 및 클릭 기능
+		gridView.onDataCellClicked = function (grid, index) {
+            // 추가 클릭
+            if( index.column == "col9"){
+            //	gridView.commit(false);
+            	 
+                var count = dataProvider.getValue(index.dataRow,"field10"); // "field10" 년도개수
+                if( count > 0 ){
+                	switch(Number(count)){
+                    case 1:
+                    	if( dataProvider.getValue(index.dataRow,"field6") == false  ){
+                            alert("추가할 년도를 선택해 주세요"); // 추가할 년도를 선택해 주세요.
+                            return;
+                        }
+                        break;
+                    case 2:
+                    	if( dataProvider.getValue(index.dataRow,"field6") == false && dataProvider.getValue(index.dataRow,"field7") == false ){
+                            alert("추가할 년도를 선택해 주세요"); // 추가할 년도를 선택해 주세요.
+                            return;
+                        }
+                        break;
+                    case 3:
+                    	if( dataProvider.getValue(index.dataRow,"field6") == false && dataProvider.getValue(index.dataRow,"field7") == false && dataProvider.getValue(index.dataRow,"field8") == false){
+                            alert("추가할 년도를 선택해 주세요"); // 추가할 년도를 선택해 주세요.
+                            return;
+                        }
+                        break;
+                    }
+                	
+                }
+                
+                for( var i =0; i < count ; i++){
+                	
+                	var rowcount = gridView2.getItemCount();
+                    if( rowcount >= 10){
+                        // 최대 다운로드 개수는 10개입니다.
+                        alert("최대 다운로드 개수는 10개입니다"); // 최대 다운로드 개수는 10개입니다.
+                        return;
+                    }  
+                    
+                    // 체크여부 확인
+                    var dataTF = "";
+                    switch(i){
+                    case 0:
+                        dataTF = dataProvider.getValue(index.dataRow,"field6"); // 첫번째 년도 체크여부
+                        break;
+                    case 1:
+                        dataTF = dataProvider.getValue(index.dataRow,"field7"); // 두번째 년도 체크여부
+                        break;
+                    case 2:
+                        dataTF = dataProvider.getValue(index.dataRow,"field8"); // 세번째 년도 체크여부
+                        break;
+                    }
+                    
+                    if( dataTF == false){
+                        continue;
+                    }
+                    
+                    //년도 데이터 얻기
+                    var year = "";
+                    switch(i){
+                    case 0:
+                        year = dataProvider.getValue(index.dataRow,"field61"); // 년도1 라벨
+                        break;
+                    case 1:
+                        year = dataProvider.getValue(index.dataRow,"field71"); // 년도2 라벨
+                        break;
+                    case 2:
+                        year = dataProvider.getValue(index.dataRow,"field81"); // 년도3 라벨
+                        break;
+                    }
+                    
+                    var field53 = dataProvider.getValue(index.dataRow,"field53"); // 출력년도
+                    var field54 = dataProvider.getValue(index.dataRow,"field54") + "^^" + year; // 출력코드
+                    
+                    
+                    // 동일한 코드가 있는지 비교한다.
+                    var options = {
+                            parentId: 0,
+                            startIndex: 0,
+                            fields: ['field53', 'field54'],
+                            values: [field53, field54]
+                        }
+                    var dataRow = dataProvider2.searchDataRow(options);
+                    if( dataRow != -1){
+                    	continue;
+                    }
+                    
+                    gridView2.setEditOptions({
+                        insertable: true,
+                        appendable: true,
+                        deletable: true,
+                        deleteRowsConfirm : false  // false 지울때 확인 메세지 끄기
+                    })
+                	
+                	gridView2.beginAppendRow();
+                    current = gridView2.getCurrent();
+                    var row = current.itemIndex ;
+                    var field = current.fieldIndex;
+
+                    var value = "Cell (" + field + ", " + row + ")";
+                    gridView2.setValue(row, 0, dataProvider.getValue(index.dataRow,0));
+                    gridView2.setValue(row, 1, dataProvider.getValue(index.dataRow,1));
+                    gridView2.setValue(row, 2, dataProvider.getValue(index.dataRow,2));
+                    gridView2.setValue(row, 3, dataProvider.getValue(index.dataRow,3));
+                    gridView2.setValue(row, 4, dataProvider.getValue(index.dataRow,4));
+                    
+                    gridView2.setValue(row, "field6", year); // 년도1 라벨
+                    gridView2.setValue(row, "field7", "[" +"삭제" + "]");  //삭제
+                    gridView2.commit(false);
+//                     gridView2.setValue(row, "field53", dataProvider.getValue(index.dataRow,"field53") );  // 출력구분값
+//                     gridView2.setValue(row, "field54", dataProvider.getValue(index.dataRow,"field54") + "^^" + year);  // 출력구분값
+                    dataProvider2.setValue(row, "field53", field53 );  // 출력구분값
+                    dataProvider2.setValue(row, "field54", field54);  // 출력구분값
+                    
+                    //item_id
+                    var field11 = dataProvider.getValue(index.dataRow,"field11");
+                    dataProvider2.setValue(row, "field11", field11);
+                    
+                    gridView2.setEditOptions({
+                        insertable: true,
+                        appendable: false,
+                        deletable: true,
+                        deleteRowsConfirm : false  // false 지울때 확인 메세지 끄기
+                    })
+                    
+                }
+            }
+			//console.log(index);
+            
+		};
+		
+// 		// 출력구분 값 변경시 적용
+// 		gridView.onGetEditValue = function (grid, index, editResult) {
+// 		    console.log(editResult.text) 
+// 		    gridView.setValue(index.itemIndex, "field55", editResult.text);
+// 		    gridView.commit(false);
+		    
+// 		}
+		
+		// 출력구분이 변경시 출력값 변경
+		gridView.onCellEdited = function (grid, itemIndex, dataRow, field) {
+		    var v = grid.getValue(itemIndex, field);
+		    //console.log("grid.onCellEdited, edited value=" + v);
+		    if( field == 4){
+		    	
+		    	// 라벨 변경
+		    	if( v == "0"){
+		    		gridView.setValue(itemIndex, "field55", '학교별')		
+		    	}else{
+		    		gridView.setValue(itemIndex, "field55", '학과별')
+		    	}
+		    	
+		    	// 코드 변경
+		    	var v = grid.getValue(itemIndex, field);
+                var option = grid.getValue(itemIndex, 5);
+                var code =  option.split(",");
+                var codevalue = code[Number(v)];
+                gridView.setValue(itemIndex, 7, codevalue);
+                
+		    }
+            gridView.commit(false);
+		    
+		};
+    }
+    
+    
+    
+    // 그룹핑한 헤더 숨기기
+    function grouping(colName,gridView){
+        var group = colName ? gridView.columnByName(colName) : null;
+        if (group) {
+            var hide = !gridView.getColumnProperty(group, "hideChildHeaders");
+            gridView.setColumnProperty(group, "hideChildHeaders", hide);
+        }
+    }
+    
+    // 선택항목 그리드2 설정
+    function setRealgrid2(dataResultList){
+        
+        realGridWrapper2 = new RealGridWrapper("realgrid2", fields2, columns2, gridData2);
+        gridView2 = realGridWrapper2.getGridView();
+        dataProvider2 = realGridWrapper2.getDataProvider();
+        
+        
+        gridView2.setCheckBar({visible: false}); // 체크박스 바 숨기기
+
+        
+      //행 삽입과 행 추가, 행 삭제가 가능하도록 옵션 조정
+        gridView2.setEditOptions({
+            insertable: true,
+            appendable: false,
+            deletable: true,
+            deleteRowsConfirm : false  // false 지울때 확인 메세지 끄기
+        })
+
+        //데이터를 바로 삭제하지 않고 상태만 변경
+        dataProvider2.setOptions({
+            softDeleting: false // false //바로 삭제
+        })
+        
+        //푸터
+        gridView2.setFooter({ visible: false, resizable: false });
+        gridView2.setPanel({visible:false});                        // 그룹핑 패널 숨기기
+        gridView2.setStateBar({visible: false });                   // 상태바 숨기기
+        
+        grouping("공시항목",gridView2);  // 그룹핑한 헤더 숨기기
+        grouping("년도",gridView2);  // 그룹핑한 헤더 숨기기
+        
+        gridView2.setDisplayOptions({
+            showEmptyMessage    : false,
+            emptyMessage        : "선택한 데이터가 없습니다.",
+            
+            //셀 크기 자동 조절 X
+            //fitStyle            : "none"
+        });
+        
+        dataProvider2.setRows(dataResultList);   
+        
+        
+        // 삭제 버튼 및 클릭 기능
+        gridView2.onDataCellClicked = function (grid, index) {
+        	
+            // 삭제 클릭
+            if( index.column == "col7"){
+            	dataProvider2.removeRow(index.dataRow);
+            }
+        };
+    }
+ 
+       $(document).ready(function() { 
+	    	$("#id8_Detail").hide();
+	   		$("#rsn7_detail").hide();
+	   		
+	   		$("input:radio[name=dwldUsrDivCd]").click(function(){
+	   	        if($("input[name=dwldUsrDivCd]:checked").val() == "008"){
+	   	            $("#id8_Detail").show();
+	   	        }else{
+	   	        	$("#id8_Detail").val('');
+	   	            $("#id8_Detail").hide();
+	   	        }
+	   	    });
+	   		
+	   	    $("input:radio[name=dwldPrpsCd]").click(function(){
+	   	        if($("input[name=dwldPrpsCd]:checked").val() == "007"){
+	   	            $("#rsn7_detail").show();
+	   	        }else{
+	   	        	$("#rsn7_detail").val('');
+	   	            $("#rsn7_detail").hide();
+	   	        }
+	   	    });
+     
+     });
+
+</script>
+
+
+<script type="text/javascript">
+	var messageArr = ["학생","교육여건"
+					 ,"교육연구성과","대학재정/교육비"
+					 ,"대학운영","전체목록"
+					 ];
+	var itemIdxArr = ["01","04","02","03","05","all"];
+	var arrNum	   = 0;
+
+	$(document).ready(function() {
+		fn_search();
+	});
+	
+	var dataResultList = [];
+	
+	//항목 검색
+    function fn_search_item(){
+    	  
+//     	//데이터 초기화
+//         dataProvider.clearRows();
+
+//         //grid, provider 초기화
+//         gridView.destroy();
+//         dataProvider.destroy();
+
+//         //LocalDataProvider와 GridView 객체 초기화
+//         gridView = null;
+//         dataProvider = null;
+        
+//         //데이터 초기화
+//         dataProvider2.clearRows();
+
+//         //grid, provider 초기화
+//         gridView2.destroy();
+//         dataProvider2.destroy();
+
+//         //LocalDataProvider와 GridView 객체 초기화
+//         gridView2 = null;
+//         dataProvider2 = null;
+        
+//         arrNum = 0;
+//         $("#tbResult").html("");
+//         dataResultList = [];
+//     	fn_search();
+
+        gridView.setOptions({filterOr:true});  // OR 조건 켬
+
+        var searchKeyword = $("#search-keyword").val();
+        if( searchKeyword == ""){
+        	gridView.clearColumnFilters("col2");
+        	gridView.clearColumnFilters("col3");
+        	gridView.clearColumnFilters("col4");
+        	return;
+        }
+
+    	var filters = [{
+    	    name: "VICTE",
+    	    //criteria: "value =" + searchKeyword,
+    	    criteria: "value like '%" + searchKeyword + "%'",
+    	    active: true
+    	}];
+    	var overwrite = true; // false면 기존에 같은 이름의 필터가 있을 때 예외 발생.
+    	gridView.addColumnFilters('col2', filters, overwrite);
+    	gridView.addColumnFilters('col3', filters, overwrite);
+    	gridView.addColumnFilters('col4', filters, overwrite);
+        
+    }
+	
+	function fn_search(){
+		
+		if(arrNum < messageArr.length-1){
+			var message = messageArr[arrNum];
+			var itemDivCd = itemIdxArr[arrNum];
+			$("#itemDivCd").val(itemDivCd);
+			var searchKeyword = $("#search-keyword").val();
+	         $("#searchValue").val( searchKeyword);
+			gfn_Submission_Call("/popup/main0810/selectDataList.do", $("#frm").serialize(), function(data){
+				if(data != null){
+					// 공통 에러 메시지 처리
+					if( data.M_CODE < 0 ){
+						alert(data.M_RTME);
+					}else{
+						//console.log(data);
+						var data2=fn_makeResult(message,data,dataResultList);
+						
+						// 콤보박스 호출 후 체크
+						uiFront.setUISelect();
+						arrNum=1+arrNum;
+						fn_search();
+					}
+				}
+			},'json');
+		}else{
+      //  console.log(dataResultList);
+		setRealgrid(dataResultList);  // 2019 고도화 PIK
+		setRealgrid2("");  // 2019 고도화 PIK
+		
+		
+		}
+	}
+	
+	// 2019 고도화 PIK 출력구분 설정
+	function fn_makeComboResult(eraList,kndList,resultList){
+		var option = [];
+		var optionValue = new Object();
+//         var rtnHtml ="";
+        var firstValue = 0;
+        for(var i=0; i<eraList.length; i++){
+            var eraObj=eraList[i];
+            if( eraObj.item_id == resultList.item_id && resultList.pgm_clft_cd == "P" ){    
+                for(var j=0;j<kndList.length;j++) {
+                    var kndObj=kndList[j];
+                    if(kndObj.item_id == resultList.item_id) {
+                        optionValue.code = resultList.item_id+'^^'+kndObj.acif_dta_rqst_knd_cd;
+                        optionValue.id = resultList.item_id;
+                        if(kndObj.acif_dta_rqst_knd_cd == '10') {
+                        	optionValue.name = "학교별";
+                        } else {
+                        	optionValue.name = "학과별";
+                        }
+                        if( firstValue == 0){
+                        	optionValue.firstValue = optionValue.name;
+                        	firstValue++;
+                        }
+                        option.push(optionValue);
+                        optionValue = new Object();
+                    }
+                } 
+                return option;
+            }
+        } 
+
+        return "";
+    }
+	
+	// 2019 고도화 PIK
+	function fn_makeChkResult(eraList,resultList){
+		var option = [];
+        var optionValue = new Object();
+        for(var i=0; i<eraList.length; i++){
+            var eraObj =eraList[i];
+            if( eraObj.item_id == resultList.item_id && resultList.pgm_clft_cd == "P" ){
+                optionValue.year = eraObj.svy_yr;
+                optionValue.value = resultList.item_id+'^^'+eraObj.svy_yr;
+                option.push(optionValue);
+                optionValue = new Object();
+            }
+        } //for end
+        return option;
+    }   
+	
+	function fn_makeGridData(yearList,message,pgm_estn_nm0,pgm_estn_nm1,pgm_estn_nm2,optionValue,item_id){
+		var data2 = new Object();
+		var yearCnt = 0;
+        if( yearList != "" ){
+            yearList.forEach(function(i) {
+                switch(yearCnt){
+                case 0:
+                    data2.field6 = 0;
+                    data2.field61 = i.year;
+                    break;
+                case 1:
+                    data2.field7 = 0;
+                    data2.field71 = i.year;
+                    break;
+                case 2:
+                    data2.field8 = 0;
+                    data2.field81 = i.year;
+                    break;
+                }
+                yearCnt++;
+             });
+        }else{
+                data2.field6 = "";
+                data2.field61 = "";
+                data2.field7 = "";
+                data2.field71 = "";
+                data2.field8 = "";
+                data2.field81 = "";
+        }
+        data2.field10 = yearCnt; 
+        
+        
+        data2.field1 = message;
+        data2.field2 = pgm_estn_nm0;
+        data2.field3 = pgm_estn_nm1;
+        data2.field4 = pgm_estn_nm2;
+        var optionList = "";
+        if( optionValue != "" ){
+            //data2.field5 = optionValue[0].firstValue; // 출력구분
+            data2.field5 = "0"; // 출력구분 
+            optionValue.forEach(function(ii) { 
+                if( optionList == ""){
+                    optionList += ii.code;
+                }else{
+                    optionList += "," + ii.code;  
+                }
+            });
+            data2.field51 = optionList;
+            data2.field52 = optionValue.length;
+            data2.field53 = optionValue[0].code;
+            data2.field54 = optionValue[0].id;
+            data2.field55 = '학교별';
+            optionList = "";
+            var optionList2 = []; 
+            optionValue.forEach(function(ii) { 
+                optionList2.push(ii.name);
+                
+            });
+            //data2.field54 = optionList2;
+        }
+        if( yearCnt < 1){
+            data2.field9 = ""; // 추가 버튼 없음  
+        }else{
+            data2.field9 = "[" + "추가" + "]"; // 추가
+        }
+        
+        data2.field11 = item_id;
+        return data2;
+	}
+	
+	function fn_makeResult(message,data,data1){
+		var optionValue = "";
+		var yearList = "";
+		var yearCnt = 0;
+		var data2 = new Object();
+		
+        var detailItemList2 = data.ajaxList2;
+        var detailItemList3 = data.ajaxList3;
+        var detailItemList4 = data.ajaxList4;   
+        var eraList         = data.ajaxList5;
+        var kndList         = data.ajaxList6;
+        var divYN           = true;
+
+        for(var i=0; i<detailItemList2.length; i++){    
+            var resultList2  = detailItemList2[i];
+            var count        = 0;
+            
+            optionValue = fn_makeComboResult(eraList,kndList,resultList2); 
+            yearList = fn_makeChkResult(eraList,resultList2);  
+            
+            
+            for(var j=0; j<detailItemList3.length; j++){
+    
+                    var resultList3 = detailItemList3[j];
+                    var pgm_estn_nm;
+                    
+                    if( resultList3.pgm_estn_nm == null ){
+                        pgm_estn_nm = ["",""];
+                    }else{
+                        pgm_estn_nm= resultList3.pgm_estn_nm.split(".")
+                    }
+                    
+                    if (resultList2.pgm_id == resultList3.uppr_pgm_id){
+                        count   = count+1;                                                      
+                        optionValue = fn_makeComboResult(eraList,kndList,resultList3); 
+                        yearList = fn_makeChkResult(eraList,resultList3);    
+                        
+                        var count2 =0;          
+                        for(var k=0; k<detailItemList4.length; k++){
+                            var resultList4 = detailItemList4[k];
+                            var pgm_estn_nm2;
+                            
+                            if( resultList4.pgm_estn_nm == null ){
+                                pgm_estn_nm2 = ["",""];
+                            }else{
+                                pgm_estn_nm2= resultList4.pgm_estn_nm.split(".")
+                            }                           
+                            
+                            if(resultList3.pgm_id == resultList4.uppr_pgm_id){
+                                count2=count2 + 1;
+                                optionValue = fn_makeComboResult(eraList,kndList,resultList4); 
+                                yearList = fn_makeChkResult(eraList,resultList4); 
+                                data2 = fn_makeGridData(yearList,message,resultList2.pgm_estn_nm,pgm_estn_nm[1],pgm_estn_nm2[1],optionValue, resultList4.item_id);
+                                data1.push(data2);
+                                data2 = new Object();
+                                optionValue = "";
+                            }
+
+                        }// for k end
+                        
+                        if( count2 == 0 ){
+                        	data2 = fn_makeGridData(yearList,message,resultList2.pgm_estn_nm,pgm_estn_nm[1],"",optionValue, resultList3.item_id);
+                            data1.push(data2);
+                            data2 = new Object();
+                            optionValue = "";
+                        }
+                    }
+            } // j end
+            
+			// 2020.05.08 정래경 수정, 출력구분에 데이터가 없는 것은 목록에서 제외한다.
+			// SR 2872번, 9-가. 등록금 산정 근거의 하위 메뉴는 모두 PDF 이므로 해당 디렉토리는 목록에서 제외되어야함
+			// 쿼리에서 고치려고 하였지만, 수정하는데 복잡하여 화면에서 출력구분이 없는 경우 목록에서 제외하기로 함
+        	if( optionValue != "" ){
+            	data2 = fn_makeGridData(yearList,message,resultList2.pgm_estn_nm,"","",optionValue,resultList2.item_id);
+                data1.push(data2);
+                data2 = new Object();
+        	}
+  
+        }// i end   
+        
+        return data1;
+    }
+	
+	
+	
+	
+	
+	
+	$(function() {
+		var svyYr="";
+		
+		// 다운로드 클릭
+		$("#dnlZip1,#dnlZip2").each(function(){
+			$(this).click(function(){
+				
+				//gridView.checkAll(true);
+				//var data = gridView.getCheckedItems(true);
+				
+				var dwldUsrDivCd = $('input[name=dwldUsrDivCd]:checked').val();
+				var dwldEtcUsrNm = $('input[name=dwldEtcUsrNm]').val();
+				var dwldPrpsCd = $('input[name=dwldPrpsCd]:checked').val();
+				var dwldEtcPrpsCtnt = $('input[name=dwldEtcPrpsCtnt]').val();
+				var dwldDtlCtnt = $('#dwldDtlCtnt').val();
+				
+				var count = gridView2.getItemCount();
+				if( count <= 0 ){
+                    alert("요청항목이 하나 이상 있어야 합니다."); //요청항목이 하나 이상 있어야 합니다
+                    return;
+                } 
+				
+				for(var i = 0; i < count; i++){
+					if(dwldUsrDivCd == '008'){
+						if(dwldEtcUsrNm == undefined || dwldEtcUsrNm == null || dwldEtcUsrNm == ''){
+							alert("사용자, 다운로드목적 및 상세내용을  입력해야 합니다."); //사용자, 다운로드목적 및 상세내용을  입력해야 합니다.
+							return;
+						}
+					}
+					
+					if(dwldPrpsCd == '007'){
+						if(dwldEtcPrpsCtnt == undefined || dwldEtcPrpsCtnt == null || dwldEtcPrpsCtnt == ''){
+							alert("사용자, 다운로드목적 및 상세내용을  입력해야 합니다."); //사용자, 다운로드목적 및 상세내용을  입력해야 합니다.
+							return;
+						}
+					}
+					
+					if(dwldDtlCtnt == undefined || dwldDtlCtnt == null || dwldDtlCtnt == ''){
+						alert("사용자, 다운로드목적 및 상세내용을  입력해야 합니다."); //사용자, 다운로드목적 및 상세내용을  입력해야 합니다.
+						return;
+					}
+				}
+				
+				var field53 = ""; // 출력년도
+                var field54 = ""; // 출력코드
+                var param = "";
+				for(var i = 0; i <count ; i++){
+					 field53 = dataProvider2.getValue(i,"field53"); // 출력년도
+					 field54 = dataProvider2.getValue(i,"field54"); // 출력코드
+					 param += "&all=" + field53 + "&all=" +  field54;
+				}
+				
+				var data = "schlDivCd=02&itemDivCd=01&svyYr=&all=02&fp=&fn=&sn=" + param;
+				
+				$('#schlDivCds').val("02");
+				//gfn_Submission_Call("/popup/main0810/selectReqList.do", $("#frm").serialize(), function(data){
+				gfn_Submission_Call("/popup/main0810/selectReqList.do", data, function(data){
+					if(data != null){
+						// 공통 에러 메시지 처리
+						if( data.M_CODE < 0 ){
+							alert(data.M_RTME);
+						}else{
+							var fl = data.resultList1;
+							
+							if(fl.length > 10) {
+								alert("파일은 10개까지만 선택할 수 있습니다.");
+								return false;
+							}
+							
+							if(fl != "") {
+								for(var i=0; i<fl.length;i++) {	
+									if(fl[i].colvalue12 != null && fl[i].colvalue12 != "") {
+										if(fl[i].colvalue13 != null && fl[i].colvalue13 != "") {
+											fn_dashMap(fl[i].colvalue2,"sel",fl[i].colvalue2+"^^"+fl[i].colvalue12+"^^"+fl[i].colvalue13);
+										} 
+									}	
+								}
+							}
+
+							
+							gfn_Submission_Call("/popup/main0810/selectReqRst.do", $("#frm").serialize(), function(data){
+							//gfn_Submission_Call("/popup/main0810/selectReqRst.do", data, function(data){
+								if(data != null){
+									// 공통 에러 메시지 처리
+									if( data.M_CODE < 0 ){
+										alert(data.M_RTME);
+									}else{
+										if(parseInt(data.resultList.exist)) {
+											$('#fp').val(data.resultList.fp);
+											$('#fn').val(data.resultList.fn);
+											$('#sn').val(data.resultList.sn);
+											
+								 	       	$("#frm").attr("method","post");
+								 	       	$("#frm").attr("action","/popup/main0810/download.do");
+								 	       	$("#frm").attr("onsubmit","true");
+								 	       	$("#frm").submit();
+								 	       	
+								 	       	var downList = dataProvider2.getJsonRows();
+											var downListSerialize = "";
+											
+											/*var dwldUsrDivCd = "";
+											var dwldEtcUsrNm = "";
+											var dwldPrpsCd = "";
+											var dwldEtcPrpsCtnt = "";
+											var dwldDtlCtnt = "";*/
+											
+											if(downList != "") {
+												for(var i=0; i<downList.length;i++) {	
+													
+													/*dwldUsrDivCd = $('input[name=dwldUsrDivCd]:checked').val();
+													dwldEtcUsrNm = $('input[name=dwldEtcUsrNm]').val();
+													dwldPrpsCd = $('input[name=dwldPrpsCd]:checked').val();
+													dwldEtcPrpsCtnt = $('input[name=dwldEtcPrpsCtnt]').val();
+													dwldDtlCtnt = $('#dwldDtlCtnt').val();*/
+													
+													downListSerialize += "svyYr"+i+"="+downList[i].field6+"&"; 		  //조사년도
+													downListSerialize += "itemId"+i+"="+downList[i].field11+"&"; 	  //항목ID
+													downListSerialize += "schlDivCd"+i+"=02&"; 	  //학교구분코드
+													downListSerialize += "dwldUsrDivCd"+i+"="+dwldUsrDivCd+"&"; //다운로드 사용자 구분코드
+													
+													//다운로드 기타 사용자명
+													if(dwldEtcUsrNm == undefined){
+														downListSerialize += "dwldEtcUsrNm"+i+"=&"; 		
+													}else{
+														downListSerialize += "dwldEtcUsrNm"+i+"="+dwldEtcUsrNm+"&";
+													}
+													
+													downListSerialize += "dwldPrpsCd"+i+"="+dwldPrpsCd+"&";   //다운로드 목적 코드
+													
+													//다운로드 기타 목적내용
+													if(dwldEtcPrpsCtnt == undefined){
+														downListSerialize += "dwldEtcPrpsCtnt"+i+"=&"; 		
+													}else{
+														downListSerialize += "dwldEtcPrpsCtnt"+i+"="+dwldEtcPrpsCtnt+"&";
+													}
+													
+													//다운로드 상세내용
+													if(dwldDtlCtnt == undefined){
+														downListSerialize += "dwldDtlCtnt"+i+"="; 		
+													}else{
+														downListSerialize += "dwldDtlCtnt"+i+"="+dwldDtlCtnt; 
+													}
+													
+													if(i != downList.length-1){
+														downListSerialize += "&";
+													}
+													
+												}
+											}
+											
+											gfn_Submission_Call("/popup/main0810/fileInsert.do", downListSerialize, function(data){
+												if(data.M_CODE < 0) {
+			                                        alert(data.M_RTME);
+			                                    } else {
+			                                        //console.log(data);
+			                                    }
+											},'json');
+								 	       	
+										} else {
+											alert("파일이 존재하지 않습니다.");
+										}
+										
+									}
+								}
+							},'json');	
+							//
+							if(fl != "") {
+								for(var i=0; i<fl.length;i++) {
+									if(fl[i].colvalue12 != null && fl[i].colvalue12 != "") {
+										if(fl[i].colvalue13 != null && fl[i].colvalue13 != "") {
+											fn_dashUnMap(fl[i].colvalue2,"sel",fl[i].colvalue2+"^^"+fl[i].colvalue12+"^^"+fl[i].colvalue13);
+										}
+									}	
+								}
+							}							
+							//
+						}
+					}
+				},'json');
+			});
+		});		
+		
+		$('#movePage').click(function(){
+			var schlDivCd = "02";
+			var svyYr = "";
+			var url	   = "/popup/main0820/list.do?schlDivCd="+schlDivCd+"&svyYr="+svyYr+"";
+	 		window.location.href=url;	 		
+		});
+		
+		$('#comboSelRst').selectmenu({
+			change: function(event, ui) {
+	 			$("#schlDivCd").val($('#comboSelRst').val());
+	 			var schlDivCd = $("#schlDivCd").val();
+	 			
+	 			var searchKeyword = $("#search-keyword").val();
+	             $("#searchValue").val( searchKeyword);
+	 			
+	 	       	$("#frm").attr("method","get");
+	 	       	$("#frm").attr("action","/popup/main0810/list.do");
+	 	       	$("#frm").attr("onsubmit","true");
+	 	       	$("#frm").submit();		 			
+			}
+		});	
+		
+
+        $("#search-keyword").keypress(function(e) { 
+            if(e.which == 13) {
+                fn_search_item(); 
+                } 
+        }); 
+	
+	});
+			
+	function winPopup(url, customWidth, customHeight) {
+		var popWidth, popHeight, option;
+		popWidth = screen.availWidth - 30;
+		popHeight = screen.availHeight - 80;
+		if (customWidth !== undefined && customWidth !== null && !isNaN(customWidth) && customWidth > 0) {
+			popWidth = customWidth;
+			//console.log(customWidth);
+		}
+		if (customHeight !== undefined && customHeight !== null && !isNaN(customHeight) && customHeight > 0) {
+			popHeight = customHeight;
+			//console.log(customHeight);
+		}
+		option = "resizable=yes,scrollbars=yes,status=no,left=0,top=0,width=" + popWidth + ", height=" + popHeight;
+		window.open(url, "", option);
+	}
+	
+</script>
+
+	
+</head>
+<body>    
+
+		
+	<form id="frm" name="frm" action="/popup/main0810/list.do" method="post" onsubmit="return false;">
+        <input type="hidden" id="schlDivCd" name="schlDivCd" value="02">
+        <input type="hidden" id="itemDivCd" name="itemDivCd" value="05">           
+        <input type="hidden" id="svyYr" name="svyYr" value="">
+        <input type="hidden" id="schlDivCds" name="all" value="">
+        
+        <input type="hidden" id="fp" name="fp" value="">
+        <input type="hidden" id="fn" name="fn" value="">
+        <input type="hidden" id="sn" name="sn" value="">
+        <input type="hidden" name="searchValue" id="searchValue" value="">
+        
+	<div class="app win-popup content-width">
+		<div class="header-wrap popup-header">
+			<div class="inner-wrap">
+				<h2 class="page-title">공시DATA 다운로드</h2> 
+            </div>
+        </div>
+        <div id="contentsWrap" class="contents-wrap">
+            <div class="contents-inner-wrap">
+                <div class="inner-wrap">
+                    <div class="has-download-btn-wrap">                 
+                        <span class="notice-text">최대 10개 까지 선택하여 공시 데이터를 다운로드 하실 수 있습니다. 요청 항목, 연도에 따라 다운로드 로딩 시간이 소요 됩니다.</span>
+                    </div>
+                    
+                    <div class="search-gray-wrap">
+                         <button type="button" class="btn btn-md-sel" id="movePage">이전 자료 요청</button> 
+                         <button title="새창 열림" type="button" class="btn btn-md-sel" onclick="window.open('/main/main0830/main0830.do')">공시데이터 추이</button> 
+                         <!-- 230223 김태욱 추가 - 통폐합 정보를 조회하기 위한 버튼 추가. -->
+                         <button type="button" class="btn btn-md-sel" onclick="winPopup('/popup/main0811.do','1180')">통폐합 대학 정보</button>
+ <!--  2020년 4월 공시에 공시데이터 추이 안내 오픈                     <button type="button" class="btn btn-md-sel"  onclick="alert('연도별 주요 공시데이터 추이 서비스를 준비 중입니다.')" >공시데이터 추이</button> -->
+                        
+                         
+
+                         <div class="right-box">
+                            <span class="ui-select-wrap">
+                                <label for="comboSelRst-button">학교종류</label>                                                    
+                                <select id="comboSelRst" class="ui-select" style="display: none;">
+                                    <option value="01">전문대학</option>
+                                    <option value="02" selected="">대학</option>                                    
+                                    <option value="03">대학원</option>
+                                    <option value="04">대학원대학</option> 
+                                </select><span tabindex="0" id="comboSelRst-button" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-owns="comboSelRst-menu" aria-haspopup="true" class="ui-selectmenu-button ui-selectmenu-button-closed ui-corner-all ui-button ui-widget"><span class="ui-selectmenu-icon ui-icon ui-icon-triangle-1-s"></span><span class="ui-selectmenu-text">대학</span></span>
+                            </span>
+                            
+                             <span class="ui-select-wrap">
+                                <label for="uiSelect2-button">항목명</label> <!-- 항목명 -->
+                                <input type="text" id="search-keyword" title="항목명입력" style="width: 200px;"> 
+                             </span>
+                             <button type="button" class="btn btn-md-sel btn-primary-bg" onclick="fn_search_item();">검색</button>
+                         </div>
+                     </div>
+                     <h3 class="group-title">공시항목</h3> <!--공시항목 -->
+                        <div id="realgrid" class="grid-box grid-10" style="height:260px"><div style="position: relative; width: 100%; height: 100%; border-style: none; border-width: 0px; overflow: hidden; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"><canvas width="1100" height="260" tabindex="0" role="application" style="position: absolute; left: 0px; top: 0px; background: rgb(255, 255, 255); border-style: none; border-width: 0px; cursor: auto;">Your browser does not support HTML5 Canvas.</canvas><div spellcheck="false" aria-hidden="true" style="outline: none; position: absolute; z-index: 2000; box-sizing: border-box; overflow: hidden; border: none; width: 1px; height: 1px; padding: 0px; margin: 0px; box-shadow: none; resize: none;"><input aria-hidden="true" autocomplete="off" tabindex="0" id="realgrid_line" style="position: absolute; margin: 0px; padding: 0px; font-family: Tahoma; font-style: normal; font-variant: normal; font-weight: normal; font-size: 10pt; line-height: normal; overflow-wrap: normal; overflow: hidden; resize: none; border: none; outline: none; text-align: left; color: rgb(68, 84, 106); left: 0px; top: 0px; width: 100%; height: 100%; cursor: text; -webkit-user-modify: read-write-plaintext-only; white-space: pre-wrap; transform: translateZ(0px);"></div></div></div>
+                     <h3 class="group-title">선택항목</h3> <!--선택항목 -->
+                        <div id="realgrid2" class="grid-box grid-10" style="height:270px"><div style="position: relative; width: 100%; height: 100%; border-style: none; border-width: 0px; overflow: hidden; user-select: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);"><canvas width="1100" height="270" tabindex="0" role="application" style="position: absolute; left: 0px; top: 0px; background: rgb(255, 255, 255); border-style: none; border-width: 0px; cursor: auto;">Your browser does not support HTML5 Canvas.</canvas><div spellcheck="false" aria-hidden="true" style="outline: none; position: absolute; z-index: 2000; box-sizing: border-box; overflow: hidden; border: none; width: 1px; height: 1px; padding: 0px; margin: 0px; box-shadow: none; resize: none;"><input aria-hidden="true" autocomplete="off" tabindex="0" id="realgrid2_line" style="position: absolute; margin: 0px; padding: 0px; font-family: Tahoma; font-style: normal; font-variant: normal; font-weight: normal; font-size: 10pt; line-height: normal; overflow-wrap: normal; overflow: hidden; resize: none; border: none; outline: none; text-align: left; color: rgb(68, 84, 106); left: 0px; top: 0px; width: 100%; height: 100%; cursor: text; -webkit-user-modify: read-write-plaintext-only; white-space: pre-wrap; transform: translateZ(0px);"></div></div></div>
+                     
+                     <div class="grid-box" style="margin-top:30px;">
+					 	<div class="tbl-wrap">
+					 		<table class="tbl-row">
+					 			<caption>이전자료 요청 목록 테이블 목록이며 사용자, 다운로드목적, 상세내용을(를) 나타낸 표입니다.</caption>
+					 			<colgroup>
+					 				<col class="tbl-row-th-width">
+					 				<col>
+					 			</colgroup>
+					 			<tbody>
+					 			<tr>
+					 				<th scope="row">사용자</th>
+					 				<td>
+					 					
+											
+										
+											
+												
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldUsrDivCd" id="id1" value="001" checked="">
+							                            	<label for="id1">대학교원/직원</label>
+														</span>
+													
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldUsrDivCd" id="id2" value="002">
+							                            	<label for="id2">정부/공공기관</label>
+							                            </span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldUsrDivCd" id="id3" value="003">
+							                            	<label for="id3">대학(원)생</label>
+							                            </span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldUsrDivCd" id="id4" value="004">
+							                            	<label for="id4">일반인</label>
+							                            </span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldUsrDivCd" id="id5" value="005">
+							                            	<label for="id5">교직원(고등학교이하)</label>
+							                            </span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldUsrDivCd" id="id6" value="006">
+							                            	<label for="id6">학생(고등학교이하)</label>
+							                            </span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldUsrDivCd" id="id7" value="007">
+							                            	<label for="id7">기업 담당자</label>
+							                            </span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldUsrDivCd" id="id8" value="008">
+							                            	<label for="id8">기타(직접입력가능)</label>
+							                            </span>
+													
+												
+											
+										
+					 					<span class="radio-check-wrap">
+					 						<input type="text" id="id8_Detail" name="dwldEtcUsrNm" title="" style="width: 480px; margin-left: -40px; display: none;" class="txt-other1">
+					 					</span>
+					 				</td>
+					 			</tr>
+					 			<tr>
+					 				<th scope="row">다운로드목적</th>
+					 				<td>
+					 					
+											
+										
+											
+												
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldPrpsCd" id="rsn1" value="001" checked="">
+							                            	<label for="rsn1">대학정보공시 정보비교 및 관심</label>
+														</span>
+													
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldPrpsCd" id="rsn2" value="002">
+							                            	<label for="rsn2">학술연구</label>
+														</span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldPrpsCd" id="rsn3" value="003">
+							                            	<label for="rsn3">데이터 활용</label>
+														</span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldPrpsCd" id="rsn4" value="004">
+							                            	<label for="rsn4">정책입안·행정업무</label>
+														</span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldPrpsCd" id="rsn5" value="005">
+							                            	<label for="rsn5">민원</label>
+														</span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldPrpsCd" id="rsn6" value="006">
+							                            	<label for="rsn6">언론보도</label>
+														</span>
+													
+												
+											
+										
+											
+												
+													
+													
+														<span class="radio-check-wrap">
+															<input type="radio" name="dwldPrpsCd" id="rsn7" value="007">
+							                            	<label for="rsn7">기타(직접입력가능)</label>
+														</span>
+													
+												
+											
+										
+					 					<input type="text" id="rsn7_detail" name="dwldEtcPrpsCtnt" title="" style="width: 480px; margin-left: -40px; display: none;" class="txt-other2">
+					 				</td>
+					 			</tr>
+					 			<tr>
+					 				<th scope="row">상세내용</th>
+					 				<td>
+					 					<div class="textarea-wrap">
+					 						<textarea title="" id="dwldDtlCtnt" name="dwldDtlCtnt" style="width: 890px; min-width: 480px; height: 100px; min-height: 100px;"></textarea>
+					 					</div>
+					 				</td>
+					 			</tr>
+					 			</tbody>
+					 		</table>
+					 	</div>
+					 </div>
+                     <!-- 공공누리배너 -->
+					 <div class="kogl">
+					     <span class="img1"><img src="/resources/images/main/kogl_mark.jpg" alt="공공누리"></span>
+					     <span class="txt1">공공저작물 자유이용허락 인증 마크인 공공누리, 여러분의 많은 참여 바랍니다.</span>
+					 </div>
+                     <div class="btn-wrap text-center">
+                         <button type="button" class="btn btn-lg btn-primary-bg" id="dnlZip1">다운로드</button>
+                     </div>
+                     
+
+                </div>
+            </div>
+        </div>
+    </div>
+					
+     </form> 
+	
+		
+	
+
+<div class="ui-selectmenu-menu ui-front"><ul aria-hidden="true" aria-labelledby="comboSelRst-button" id="comboSelRst-menu" role="listbox" tabindex="0" class="ui-menu ui-corner-bottom ui-widget ui-widget-content"></ul></div></body></html>

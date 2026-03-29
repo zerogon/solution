@@ -1,5 +1,5 @@
 /**
- * 서울 4년제 실용음악 경쟁률 크롤러
+ * 전국 4년제 실용음악 경쟁률 크롤러
  * 대학어디가(adiga.kr) AJAX API를 활용하여 데이터 수집
  *
  * 실행: pnpm etl:crawl:music
@@ -8,6 +8,7 @@
 import { chromium, Page } from 'playwright';
 import { writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { inferUniversityType } from './normalizer';
 
 const DATA_DIR = join(process.cwd(), 'data');
 
@@ -43,6 +44,7 @@ interface CompetitionRateData {
   applicants: number;
   accepted: number;
   rate: number;
+  universityType: string; // 국립 | 사립
 }
 
 // ── HTML 파싱 ──
@@ -139,7 +141,7 @@ function parseChartData(jsonStr: string): Array<{ year: number; susiRate: number
 // ── 메인 크롤러 ──
 
 async function main() {
-  console.log('=== 서울 4년제 실용음악 경쟁률 크롤러 ===\n');
+  console.log('=== 전국 4년제 실용음악 경쟁률 크롤러 ===\n');
   mkdirSync(DATA_DIR, { recursive: true });
 
   const browser = await chromium.launch({ headless: true });
@@ -183,15 +185,13 @@ async function main() {
   const allDepts = parseDepartmentList(allDeptHtml);
   console.log(`  전체 학과: ${allDepts.length}개`);
 
-  // 서울 + 실용음악 필터
-  const seoulMusicDepts = allDepts.filter((d) => {
-    const isSeoul = d.region === '서울';
-    const isMusic = MUSIC_KEYWORDS.some((kw) => d.departmentName.includes(kw));
-    return isSeoul && isMusic;
+  // 실용음악 필터 (전국)
+  const musicDepts = allDepts.filter((d) => {
+    return MUSIC_KEYWORDS.some((kw) => d.departmentName.includes(kw));
   });
 
-  console.log(`  서울 실용음악: ${seoulMusicDepts.length}개`);
-  for (const d of seoulMusicDepts) {
+  console.log(`  전국 실용음악: ${musicDepts.length}개`);
+  for (const d of musicDepts) {
     console.log(`    ${d.universityName} | ${d.departmentName} | unvCd=${d.unvCd} ruCd=${d.ruCd}`);
   }
 
@@ -200,7 +200,7 @@ async function main() {
 
   const allRates: CompetitionRateData[] = [];
 
-  for (const dept of seoulMusicDepts) {
+  for (const dept of musicDepts) {
     console.log(`\n  ── ${dept.universityName} ${dept.departmentName} ──`);
 
     if (!dept.unvCd || !dept.ruCd) {
@@ -337,14 +337,12 @@ async function main() {
 
     const yearDepts = parseDepartmentList(yearHtml);
 
-    // 서울 실용음악 필터
+    // 실용음악 필터 (전국)
     const yearMusicDepts = yearDepts.filter((d) => {
-      const isSeoul = d.region === '서울';
-      const isMusic = MUSIC_KEYWORDS.some((kw) => d.departmentName.includes(kw));
-      return isSeoul && isMusic;
+      return MUSIC_KEYWORDS.some((kw) => d.departmentName.includes(kw));
     });
 
-    console.log(`  서울 실용음악: ${yearMusicDepts.length}개`);
+    console.log(`  전국 실용음악: ${yearMusicDepts.length}개`);
 
     // 경쟁률 데이터 추출 (목록 페이지의 수시/정시)
     // 목록 HTML에서 직접 경쟁률 파싱
@@ -369,7 +367,6 @@ async function main() {
 
         const univRaw = cells[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
         const region = cells[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-        if (region !== '서울') continue;
 
         const campusMatch = univRaw.match(/\[([^\]]+)\]/);
         const universityName = univRaw.replace(/\[.*?\]/, '').trim();
@@ -385,6 +382,8 @@ async function main() {
         const capacityRaw = cells[4].replace(/<[^>]+>/g, '').replace(/,/g, '').trim();
         const capacity = parseInt(capacityRaw, 10) || 0;
 
+        const univType = inferUniversityType(universityName);
+
         // 수시 데이터
         if (susiRate > 0) {
           allRates.push({
@@ -397,6 +396,7 @@ async function main() {
             applicants: Math.round(susiRate * capacity) || Math.round(susiRate), // 경쟁률 * 모집인원 = 지원자수 (근사)
             accepted: capacity || 1,
             rate: susiRate,
+            universityType: univType,
           });
         }
 
@@ -412,6 +412,7 @@ async function main() {
             applicants: Math.round(jeongsiRate * capacity) || Math.round(jeongsiRate),
             accepted: capacity || 1,
             rate: jeongsiRate,
+            universityType: univType,
           });
         }
 
