@@ -145,8 +145,9 @@ export default function CharacterDetailPage() {
                 src={character.imageUrl}
                 alt={character.name}
                 fill
+                unoptimized={character.imageUrl.startsWith("/uploads/")}
                 className="object-cover"
-                sizes="192px"
+                sizes="(max-width: 640px) 100vw, 192px"
               />
             ) : (
               <div className="flex h-full items-center justify-center">

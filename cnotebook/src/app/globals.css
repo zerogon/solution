@@ -54,11 +54,14 @@
   --shadow-card-hover: 0 4px 12px oklch(0 0 0 / 0.08), 0 2px 4px oklch(0 0 0 / 0.04);
   --shadow-modal: 0 20px 60px oklch(0 0 0 / 0.15), 0 8px 20px oklch(0 0 0 / 0.10);
   --shadow-fab: 0 6px 20px oklch(0 0 0 / 0.15), 0 2px 6px oklch(0 0 0 / 0.10);
+  --shadow-card-lg: 0 8px 24px oklch(0 0 0 / 0.06), 0 4px 8px oklch(0 0 0 / 0.04);
+  --shadow-inner-soft: inset 0 2px 4px oklch(0 0 0 / 0.04);
 
   /* Animations */
   --animate-fade-in: fade-in 0.2s ease-out;
   --animate-slide-up: slide-up 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --animate-skeleton: skeleton 1.5s ease-in-out infinite;
+  --animate-float: float 6s ease-in-out infinite;
 }
 
 @keyframes fade-in {
@@ -74,6 +77,12 @@
 @keyframes skeleton {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  33% { transform: translateY(-8px) rotate(1deg); }
+  66% { transform: translateY(4px) rotate(-1deg); }
 }
 
 html {
@@ -135,6 +144,8 @@ html {
   --shadow-card-hover: 0 4px 12px oklch(0 0 0 / 0.30), 0 2px 4px oklch(0 0 0 / 0.20);
   --shadow-modal: 0 20px 60px oklch(0 0 0 / 0.40), 0 8px 20px oklch(0 0 0 / 0.30);
   --shadow-fab: 0 6px 20px oklch(0 0 0 / 0.35), 0 2px 6px oklch(0 0 0 / 0.25);
+  --shadow-card-lg: 0 8px 24px oklch(0 0 0 / 0.20), 0 4px 8px oklch(0 0 0 / 0.15);
+  --shadow-inner-soft: inset 0 2px 4px oklch(0 0 0 / 0.10);
 }
 
 .dark *:focus-visible {

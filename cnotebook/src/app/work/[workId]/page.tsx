@@ -435,6 +435,7 @@ export default function WorkPage() {
                         src={char.imageUrl}
                         alt={char.name}
                         fill
+                        unoptimized={char.imageUrl.startsWith("/uploads/")}
                         className="object-cover transition-transform duration-200 group-hover:scale-105"
                         sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                       />

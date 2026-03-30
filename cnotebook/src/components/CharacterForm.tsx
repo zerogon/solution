@@ -285,6 +285,7 @@ export default function CharacterForm({ initialData, onSubmit, submitLabel }: Pr
                 src={data.imageUrl}
                 alt="캐릭터 이미지"
                 fill
+                unoptimized={data.imageUrl.startsWith("/uploads/")}
                 className="object-cover"
                 sizes="128px"
               />
