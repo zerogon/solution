@@ -1,1 +1,142 @@
 @import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* Primary - warm amber/bronze tone */
+  --color-primary-50: oklch(0.98 0.015 75);
+  --color-primary-100: oklch(0.95 0.035 75);
+  --color-primary-200: oklch(0.90 0.065 70);
+  --color-primary-300: oklch(0.82 0.10 65);
+  --color-primary-400: oklch(0.72 0.13 60);
+  --color-primary-500: oklch(0.63 0.15 55);
+  --color-primary-600: oklch(0.55 0.14 50);
+  --color-primary-700: oklch(0.48 0.12 50);
+  --color-primary-800: oklch(0.40 0.10 50);
+  --color-primary-900: oklch(0.33 0.08 50);
+
+  /* Surface - warm neutral gray */
+  --color-surface-50: oklch(0.985 0.003 80);
+  --color-surface-100: oklch(0.97 0.005 80);
+  --color-surface-200: oklch(0.93 0.007 80);
+  --color-surface-300: oklch(0.87 0.008 80);
+  --color-surface-400: oklch(0.70 0.010 80);
+  --color-surface-500: oklch(0.55 0.010 80);
+  --color-surface-600: oklch(0.44 0.010 80);
+  --color-surface-700: oklch(0.36 0.008 80);
+  --color-surface-800: oklch(0.27 0.006 80);
+  --color-surface-900: oklch(0.20 0.005 80);
+
+  /* Danger - red */
+  --color-danger-50: oklch(0.97 0.015 25);
+  --color-danger-100: oklch(0.93 0.04 25);
+  --color-danger-500: oklch(0.58 0.22 25);
+  --color-danger-600: oklch(0.50 0.20 25);
+
+  /* Success - green */
+  --color-success-500: oklch(0.62 0.17 145);
+  --color-success-600: oklch(0.55 0.16 145);
+
+  /* Card */
+  --color-card: oklch(1 0 0);
+
+  /* Overlay - modal/dialog backdrop */
+  --color-overlay: oklch(0.20 0.005 80 / 0.40);
+
+  /* Tooltip - dark chip background for toast/tooltip */
+  --color-tooltip: oklch(0.27 0.006 80);
+
+  /* Font */
+  --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.04), 0 1px 2px oklch(0 0 0 / 0.06);
+  --shadow-card-hover: 0 4px 12px oklch(0 0 0 / 0.08), 0 2px 4px oklch(0 0 0 / 0.04);
+  --shadow-modal: 0 20px 60px oklch(0 0 0 / 0.15), 0 8px 20px oklch(0 0 0 / 0.10);
+  --shadow-fab: 0 6px 20px oklch(0 0 0 / 0.15), 0 2px 6px oklch(0 0 0 / 0.10);
+
+  /* Animations */
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-slide-up: slide-up 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --animate-skeleton: skeleton 1.5s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes skeleton {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+*:focus-visible {
+  outline: 2px solid oklch(0.72 0.13 60);
+  outline-offset: 2px;
+}
+
+/* Dark mode overrides */
+.dark {
+  /* Primary - subtle adjustments for dark backgrounds, NOT inverted */
+  --color-primary-50: oklch(0.22 0.02 60);
+  --color-primary-100: oklch(0.28 0.04 60);
+  --color-primary-200: oklch(0.35 0.06 60);
+  --color-primary-300: oklch(0.48 0.10 60);
+  --color-primary-400: oklch(0.65 0.14 58);
+  --color-primary-500: oklch(0.58 0.15 55);
+  --color-primary-600: oklch(0.52 0.14 50);
+  --color-primary-700: oklch(0.65 0.14 55);
+  --color-primary-800: oklch(0.75 0.12 55);
+  --color-primary-900: oklch(0.85 0.08 55);
+
+  /* Surface - inverted lightness, high contrast for readability */
+  --color-surface-50: oklch(0.16 0.003 80);
+  --color-surface-100: oklch(0.20 0.005 80);
+  --color-surface-200: oklch(0.28 0.007 80);
+  --color-surface-300: oklch(0.38 0.008 80);
+  --color-surface-400: oklch(0.63 0.008 80);
+  --color-surface-500: oklch(0.72 0.008 80);
+  --color-surface-600: oklch(0.80 0.006 80);
+  --color-surface-700: oklch(0.87 0.005 80);
+  --color-surface-800: oklch(0.92 0.004 80);
+  --color-surface-900: oklch(0.95 0.003 80);
+
+  /* Card */
+  --color-card: oklch(0.22 0.005 80);
+
+  /* Overlay */
+  --color-overlay: oklch(0 0 0 / 0.60);
+
+  /* Tooltip - stays dark for white text contrast */
+  --color-tooltip: oklch(0.35 0.008 80);
+
+  /* Danger */
+  --color-danger-50: oklch(0.22 0.015 25);
+  --color-danger-100: oklch(0.28 0.04 25);
+  --color-danger-500: oklch(0.62 0.22 25);
+  --color-danger-600: oklch(0.50 0.20 25);
+
+  /* Success */
+  --color-success-500: oklch(0.62 0.17 145);
+  --color-success-600: oklch(0.55 0.16 145);
+
+  /* Shadows */
+  --shadow-card: 0 1px 3px oklch(0 0 0 / 0.20), 0 1px 2px oklch(0 0 0 / 0.15);
+  --shadow-card-hover: 0 4px 12px oklch(0 0 0 / 0.30), 0 2px 4px oklch(0 0 0 / 0.20);
+  --shadow-modal: 0 20px 60px oklch(0 0 0 / 0.40), 0 8px 20px oklch(0 0 0 / 0.30);
+  --shadow-fab: 0 6px 20px oklch(0 0 0 / 0.35), 0 2px 6px oklch(0 0 0 / 0.25);
+}
+
+.dark *:focus-visible {
+  outline-color: oklch(0.65 0.15 55);
+}

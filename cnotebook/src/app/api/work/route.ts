@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 export async function GET() {
   try {
     const works = await prisma.work.findMany({
+      where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { characters: true } },

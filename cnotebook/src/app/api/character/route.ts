@@ -90,6 +90,8 @@ export async function POST(request: NextRequest) {
         hairColor: rest.hairColor || null,
         hairStyle: rest.hairStyle || null,
         eyeColor: rest.eyeColor || null,
+        hairColorHex: rest.hairColorHex || null,
+        eyeColorHex: rest.eyeColorHex || null,
         personality: rest.personality || null,
         features: rest.features || null,
         region: rest.region || null,

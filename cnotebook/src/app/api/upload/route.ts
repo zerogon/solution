@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { writeFileSync, mkdirSync, existsSync } from "fs";
+import path from "path";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -30,11 +32,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const blob = await put(`characters/${Date.now()}-${file.name}`, file, {
-      access: "public",
-    });
+    let url: string;
 
-    return NextResponse.json({ url: blob.url }, { status: 201 });
+    if (process.env.BLOB_READ_WRITE_TOKEN) {
+      const blob = await put(`characters/${Date.now()}-${file.name}`, file, {
+        access: "public",
+      });
+      url = blob.url;
+    } else {
+      const uploadDir = path.join(process.cwd(), "public", "uploads");
+      if (!existsSync(uploadDir)) {
+        mkdirSync(uploadDir, { recursive: true });
+      }
+      const filename = `${Date.now()}-${file.name}`;
+      const buffer = Buffer.from(await file.arrayBuffer());
+      writeFileSync(path.join(uploadDir, filename), buffer);
+      url = `/uploads/${filename}`;
+    }
+
+    return NextResponse.json({ url }, { status: 201 });
   } catch (error) {
     console.error("POST /api/upload error:", error);
     return NextResponse.json(

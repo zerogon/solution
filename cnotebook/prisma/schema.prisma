@@ -11,6 +11,7 @@ model Work {
   id         String      @id @default(uuid())
   title      String
   createdAt  DateTime    @default(now()) @map("created_at")
+  deletedAt  DateTime?   @map("deleted_at")
   characters Character[]
   folders    Folder[]
 
@@ -30,6 +31,8 @@ model Character {
   hairColor     String?           @map("hair_color")
   hairStyle     String?           @map("hair_style")
   eyeColor      String?           @map("eye_color")
+  hairColorHex  String?           @map("hair_color_hex")
+  eyeColorHex   String?           @map("eye_color_hex")
   personality   String?
   features      String?
   region        String?
