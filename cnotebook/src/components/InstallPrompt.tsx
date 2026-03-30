@@ -52,6 +52,7 @@ export default function InstallPrompt() {
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
       deferredPromptRef.current = e as BeforeInstallPromptEvent;
+      if (isDismissedToday()) return;
       setPlatform("android");
       setVisible(true);
     };

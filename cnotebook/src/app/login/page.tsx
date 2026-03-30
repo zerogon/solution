@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { loginAction } from "./actions";
+import InstallPrompt from "@/components/InstallPrompt";
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +24,8 @@ export default function LoginPage() {
   };
 
   return (
+    <>
+    <InstallPrompt />
     <div className="relative flex min-h-[65vh] items-center justify-center">
       {/* Decorative background elements */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -84,5 +87,6 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -6,7 +6,7 @@ import Providers from "@/components/Providers";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
-import InstallPrompt from "@/components/InstallPrompt";
+
 import { verifySessionToken, AUTH_COOKIE_NAME } from "@/lib/auth";
 
 export const viewport: Viewport = {
@@ -55,7 +55,6 @@ export default async function RootLayout({
       </head>
       <body className="bg-surface-50 text-surface-900 antialiased">
         <ServiceWorkerRegister />
-        <InstallPrompt />
         <Providers>
           <header className="sticky top-0 z-40 border-b border-surface-200 bg-card/80 backdrop-blur-md">
             <div className="mx-auto flex h-14 max-w-6xl items-center px-4 sm:px-6">

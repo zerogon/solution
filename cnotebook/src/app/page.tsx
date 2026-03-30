@@ -56,8 +56,8 @@ export default function Home() {
       <div className="flex items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-surface-900">내 작품</h1>
-          <p className="mt-1 truncate text-sm text-surface-400">
-            작품 속 캐릭터를 한곳에서 관리하세요
+          <p className="mt-1 hidden text-sm text-surface-400 sm:block">
+            캐릭터를 한곳에서 관리하세요
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
