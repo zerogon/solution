@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Work {
+  id         String      @id @default(uuid())
+  title      String
+  createdAt  DateTime    @default(now()) @map("created_at")
+  characters Character[]
+  folders    Folder[]
+
+  @@map("works")
+}
+
+model Character {
+  id            String            @id @default(uuid())
+  workId        String            @map("work_id")
+  name          String
+  role          String?
+  gender        String?
+  birthday      String?
+  age           Int?
+  height        Int?
+  weight        Int?
+  hairColor     String?           @map("hair_color")
+  hairStyle     String?           @map("hair_style")
+  eyeColor      String?           @map("eye_color")
+  personality   String?
+  features      String?
+  region        String?
+  affiliation   String?
+  foreshadowing String?
+  death         String?
+  notes         String?
+  imageUrl      String?           @map("image_url")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  work    Work              @relation(fields: [workId], references: [id], onDelete: Cascade)
+  folders FolderCharacter[]
+
+  @@map("characters")
+}
+
+model Folder {
+  id        String            @id @default(uuid())
+  workId    String            @map("work_id")
+  name      String
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  work       Work              @relation(fields: [workId], references: [id], onDelete: Cascade)
+  characters FolderCharacter[]
+
+  @@map("folders")
+}
+
+model FolderCharacter {
+  folderId    String @map("folder_id")
+  characterId String @map("character_id")
+
+  folder    Folder    @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  character Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@id([folderId, characterId])
+  @@map("folder_characters")
+}
