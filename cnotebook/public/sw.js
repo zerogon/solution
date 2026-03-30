@@ -1,4 +1,4 @@
-const CACHE_NAME = "cnote-v1";
+const CACHE_NAME = "cnote-v2";
 const OFFLINE_URL = "/offline.html";
 
 const PRECACHE_ASSETS = ["/", "/offline.html"];
@@ -78,10 +78,16 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Navigation requests: NetworkFirst with offline fallback
+  // Navigation requests: NetworkFirst with cache fallback, then offline page
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request).catch(() => caches.match(OFFLINE_URL))
+      fetch(request)
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+          return response;
+        })
+        .catch(() => caches.match(request).then((cached) => cached || caches.match(OFFLINE_URL)))
     );
     return;
   }

@@ -2,6 +2,7 @@
   "name": "Character Notebook",
   "short_name": "CNote",
   "description": "작가용 캐릭터 관리 서비스",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
