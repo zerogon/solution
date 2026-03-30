@@ -30,6 +30,7 @@ interface CharacterDetail {
   foreshadowing: string | null;
   death: string | null;
   notes: string | null;
+  aliases: string | null;
   imageUrl: string | null;
   work: { id: string; title: string };
 }
@@ -159,6 +160,18 @@ export default function CharacterDetailPage() {
             <h1 className="text-2xl font-bold text-surface-900">{character.name}</h1>
             {character.role && (
               <p className="mt-1.5 text-sm text-surface-500">{character.role}</p>
+            )}
+            {character.aliases && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {character.aliases.split(",").map((alias, i) => (
+                  <span
+                    key={i}
+                    className="rounded-full bg-surface-100 px-2.5 py-0.5 text-xs font-medium text-surface-600"
+                  >
+                    {alias.trim()}
+                  </span>
+                ))}
+              </div>
             )}
             <div className="mt-5 flex flex-wrap gap-2">
               <Link

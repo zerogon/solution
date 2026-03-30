@@ -25,6 +25,7 @@ export interface CharacterData {
   foreshadowing: string;
   death: string;
   notes: string;
+  aliases: string;
   imageUrl: string;
 }
 
@@ -48,6 +49,7 @@ const INITIAL_DATA: CharacterData = {
   foreshadowing: "",
   death: "",
   notes: "",
+  aliases: "",
   imageUrl: "",
 };
 
@@ -324,6 +326,16 @@ export default function CharacterForm({ initialData, onSubmit, submitLabel }: Pr
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField label="이름" value={data.name} onChange={update("name")} required />
           <TextField label="배역" value={data.role} onChange={update("role")} />
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium text-surface-600">별칭</label>
+            <input
+              type="text"
+              value={data.aliases}
+              onChange={(e) => update("aliases")(e.target.value)}
+              placeholder="쉼표로 구분 (예: 수현이, 현이, 대장)"
+              className="mt-1.5 w-full rounded-lg border border-surface-300 bg-card px-3 py-2 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
+            />
+          </div>
           <SelectField
             label="성별"
             value={data.gender}

@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
         foreshadowing: rest.foreshadowing || null,
         death: rest.death || null,
         notes: rest.notes || null,
+        aliases: rest.aliases || null,
         imageUrl: rest.imageUrl || null,
       },
     });

@@ -57,6 +57,7 @@ export default function EditCharacterPage() {
           foreshadowing: data.foreshadowing || "",
           death: data.death || "",
           notes: data.notes || "",
+          aliases: data.aliases || "",
           imageUrl: data.imageUrl || "",
         });
         setLoading(false);

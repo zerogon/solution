@@ -12,8 +12,9 @@ model Work {
   title      String
   createdAt  DateTime    @default(now()) @map("created_at")
   deletedAt  DateTime?   @map("deleted_at")
-  characters Character[]
-  folders    Folder[]
+  characters  Character[]
+  folders     Folder[]
+  manuscripts Manuscript[]
 
   @@map("works")
 }
@@ -40,6 +41,7 @@ model Character {
   foreshadowing String?
   death         String?
   notes         String?
+  aliases       String?
   imageUrl      String?           @map("image_url")
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
@@ -71,4 +73,18 @@ model FolderCharacter {
 
   @@id([folderId, characterId])
   @@map("folder_characters")
+}
+
+model Manuscript {
+  id        String   @id @default(uuid())
+  workId    String   @map("work_id")
+  title     String
+  content   String   @default("") @db.Text
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@map("manuscripts")
 }

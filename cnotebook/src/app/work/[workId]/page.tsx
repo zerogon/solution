@@ -19,6 +19,7 @@ import {
   PencilIcon,
   TrashIcon,
   CheckIcon,
+  FileTextIcon,
 } from "@/components/Icons";
 
 interface Character {
@@ -287,6 +288,14 @@ export default function WorkPage() {
 
       {/* Controls */}
       <div className="mt-4 flex flex-wrap items-center gap-3">
+        <Link
+          href={`/work/${workId}/writing`}
+          className="flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-100"
+        >
+          <FileTextIcon size={16} />
+          글쓰기
+        </Link>
+
         <button
           onClick={() => setShowFolderSidebar(!showFolderSidebar)}
           className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors ${
