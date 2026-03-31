@@ -40,7 +40,7 @@ export function TodayStats() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.3, duration: 0.5 }}
+      transition={{ delay: 0.8 }}
       className="w-full max-w-sm mt-4"
     >
       <Card className="border-none shadow-sm">
@@ -55,7 +55,7 @@ export function TodayStats() {
               key={s.word}
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 + i * 0.1 }}
+              transition={{ delay: 1.0 + i * 0.2 }}
               className="flex items-center gap-3 rounded-lg bg-muted/50 px-4 py-3"
             >
               <Badge variant={badgeVariants[i]} className="text-xs">
@@ -68,7 +68,7 @@ export function TodayStats() {
                     className="h-full bg-primary rounded-full"
                     initial={{ width: 0 }}
                     animate={{ width: `${s.percentage}%` }}
-                    transition={{ delay: 0.6 + i * 0.1, duration: 0.5 }}
+                    transition={{ delay: 1.2 + i * 0.2, duration: 0.6 }}
                   />
                 </div>
                 <span className="text-xs text-muted-foreground w-8 text-right">

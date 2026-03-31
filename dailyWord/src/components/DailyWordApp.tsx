@@ -74,7 +74,7 @@ export function DailyWordApp() {
       setSelectedIndex(wordIndex);
       setState("animating");
 
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, 150));
 
       const res = await fetch("/api/select", {
         method: "POST",
@@ -138,11 +138,11 @@ export function DailyWordApp() {
 
   if (state === "loading") {
     return (
-      <div className="flex flex-col items-center gap-6 w-full max-w-xs">
+      <div className="flex flex-col items-center gap-6 w-full max-w-sm">
         <Skeleton className="h-7 w-32 rounded-lg" />
-        <div className="grid grid-cols-3 gap-3 w-full">
+        <div className="grid grid-cols-3 gap-2.5 w-full">
           {Array.from({ length: 9 }).map((_, i) => (
-            <Skeleton key={i} className="aspect-square rounded-xl" />
+            <Skeleton key={i} className="aspect-square rounded-2xl" />
           ))}
         </div>
         <Skeleton className="h-4 w-48 rounded-md" />
@@ -164,6 +164,9 @@ export function DailyWordApp() {
         {state === "result" && result ? (
           <motion.div
             key="result"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
             className="flex flex-col items-center w-full"
           >
             <ResultCard word={result.word} message={result.message} />
@@ -173,8 +176,8 @@ export function DailyWordApp() {
         ) : (
           <motion.div
             key="grid"
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.3 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.4 }}
             className="w-full flex justify-center"
           >
             <WordGrid

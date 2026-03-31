@@ -29,11 +29,12 @@ export function WordGrid({
   const hasSelection = selectedIndex !== null;
 
   return (
-    <div className={cn("grid grid-cols-3 gap-3 w-full max-w-xs")}>
+    <div className={cn("grid grid-cols-3 gap-2.5 w-full max-w-sm")}>
       {words.map((w, i) => (
         <WordCard
           key={w.id}
           word={w.word}
+          index={i}
           isHighlighted={highlightedIndex === i}
           isSelected={selectedIndex === i}
           isFaded={hasSelection && selectedIndex !== i}
@@ -42,6 +43,7 @@ export function WordGrid({
         />
       ))}
       <RandomCard
+        index={words.length}
         isHighlighted={highlightedIndex === words.length}
         isFaded={hasSelection}
         disabled={disabled}
