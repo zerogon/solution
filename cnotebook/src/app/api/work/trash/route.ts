@@ -16,7 +16,7 @@ export async function GET() {
       where: { deletedAt: { not: null } },
       orderBy: { deletedAt: "desc" },
       include: {
-        _count: { select: { characters: true } },
+        _count: { select: { characters: true, manuscripts: true } },
       },
     });
 

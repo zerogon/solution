@@ -7,7 +7,7 @@ export async function GET() {
       where: { deletedAt: null },
       orderBy: { createdAt: "desc" },
       include: {
-        _count: { select: { characters: true } },
+        _count: { select: { characters: true, manuscripts: true } },
       },
     });
     return NextResponse.json(works);

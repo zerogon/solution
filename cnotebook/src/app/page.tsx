@@ -10,7 +10,7 @@ interface Work {
   id: string;
   title: string;
   createdAt: string;
-  _count: { characters: number };
+  _count: { characters: number; manuscripts: number };
 }
 
 export default function Home() {
@@ -116,9 +116,14 @@ export default function Home() {
                 {work.title}
               </h2>
               <div className="mt-3 flex items-center justify-between">
-                <span className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-700">
-                  캐릭터 {work._count.characters}명
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-700">
+                    캐릭터 {work._count.characters}명
+                  </span>
+                  <span className="inline-flex items-center rounded-full bg-accent-50 px-2.5 py-0.5 text-xs font-medium text-accent-700">
+                    원고 {work._count.manuscripts}편
+                  </span>
+                </div>
                 <span className="text-xs text-surface-400">
                   {new Date(work.createdAt).toLocaleDateString("ko-KR")}
                 </span>

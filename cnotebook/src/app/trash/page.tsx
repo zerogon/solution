@@ -11,7 +11,7 @@ interface TrashedWork {
   id: string;
   title: string;
   deletedAt: string;
-  _count: { characters: number };
+  _count: { characters: number; manuscripts: number };
 }
 
 function getRemainingDays(deletedAt: string): number {
@@ -133,6 +133,7 @@ export default function TrashPage() {
                   </h3>
                   <div className="mt-1 flex items-center gap-3 text-xs text-surface-400">
                     <span>캐릭터 {work._count.characters}명</span>
+                    <span>원고 {work._count.manuscripts}편</span>
                     <span>
                       {new Date(work.deletedAt).toLocaleDateString("ko-KR")}{" "}
                       삭제
