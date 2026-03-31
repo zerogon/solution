@@ -1,0 +1,3 @@
+export const ROULETTE_INITIAL_INTERVAL = 60;
+export const ROULETTE_MULTIPLIER = 1.15;
+export const ROULETTE_MAX_INTERVAL = 400;
