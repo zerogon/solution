@@ -62,7 +62,7 @@ export function TodayStats() {
                 {medals[i]}
               </Badge>
               <span className="flex-1 font-medium">{s.word}</span>
-              <div className="flex items-center gap-2 w-24">
+              <div className="flex items-center gap-2 w-36">
                 <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                   <motion.div
                     className="h-full bg-primary rounded-full"
@@ -71,8 +71,8 @@ export function TodayStats() {
                     transition={{ delay: 1.2 + i * 0.2, duration: 0.6 }}
                   />
                 </div>
-                <span className="text-xs text-muted-foreground w-8 text-right">
-                  {s.percentage}%
+                <span className="text-xs text-muted-foreground text-right whitespace-nowrap">
+                  {s.percentage}% ({s.count}명)
                 </span>
               </div>
             </motion.div>

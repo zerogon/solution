@@ -23,6 +23,14 @@ export const messages = pgTable("messages", {
   message: text("message").notNull(),
 });
 
+export const fortunes = pgTable("fortunes", {
+  id: serial("id").primaryKey(),
+  wordId: integer("word_id")
+    .notNull()
+    .references(() => words.id),
+  fortune: text("fortune").notNull(),
+});
+
 export const visits = pgTable(
   "visits",
   {
@@ -52,5 +60,6 @@ export const selections = pgTable(
 
 export type Word = typeof words.$inferSelect;
 export type Message = typeof messages.$inferSelect;
+export type Fortune = typeof fortunes.$inferSelect;
 export type Visit = typeof visits.$inferSelect;
 export type Selection = typeof selections.$inferSelect;

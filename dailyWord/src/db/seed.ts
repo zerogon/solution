@@ -1,6 +1,6 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { words, messages, selections, visits } from "./schema";
+import { words, messages, fortunes, selections, visits } from "./schema";
 
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
@@ -59,12 +59,56 @@ const MESSAGES: Record<string, string[]> = {
   ],
 };
 
+const FORTUNES: Record<string, string[]> = {
+  행복: [
+    "오늘 뜻밖의 기쁜 소식이 당신을 찾아올 것입니다.",
+    "작은 행운이 연달아 찾아오는 하루가 될 것입니다.",
+    "오늘 만나는 사람이 당신에게 따뜻한 웃음을 선물할 것입니다.",
+  ],
+  자유: [
+    "오늘 마음의 짐을 내려놓을 수 있는 계기가 생길 것입니다.",
+    "새로운 가능성의 문이 당신 앞에 열릴 것입니다.",
+    "오래된 고민에서 벗어나는 실마리를 발견하게 될 것입니다.",
+  ],
+  성장: [
+    "오늘 배운 것이 미래의 큰 자산이 될 것입니다.",
+    "예상치 못한 경험이 당신을 한 단계 성장시킬 것입니다.",
+    "오늘의 노력이 곧 눈에 보이는 결실로 돌아올 것입니다.",
+  ],
+  희망: [
+    "막혀있던 일이 풀리기 시작하는 하루가 될 것입니다.",
+    "오늘 당신에게 희망의 빛이 되는 소식이 찾아올 것입니다.",
+    "좋은 기운이 모여 뜻깊은 하루를 만들어 줄 것입니다.",
+  ],
+  용기: [
+    "오늘 내린 결단이 좋은 결과로 이어질 것입니다.",
+    "두려웠던 일에 도전하면 뜻밖의 성과를 얻게 될 것입니다.",
+    "당신의 용기 있는 한마디가 주변을 변화시킬 것입니다.",
+  ],
+  사랑: [
+    "오늘 소중한 사람과의 관계가 더욱 깊어질 것입니다.",
+    "따뜻한 인연이 당신을 찾아오는 하루가 될 것입니다.",
+    "당신이 건넨 작은 친절이 큰 감동으로 돌아올 것입니다.",
+  ],
+  도전: [
+    "오늘 시작한 일이 예상보다 순조롭게 풀릴 것입니다.",
+    "새로운 시도가 뜻밖의 행운을 가져다줄 것입니다.",
+    "망설이던 일을 실행에 옮기면 좋은 결과가 기다리고 있을 것입니다.",
+  ],
+  발전: [
+    "오늘 얻는 깨달음이 앞으로의 방향을 밝혀줄 것입니다.",
+    "꾸준히 해온 일에서 의미 있는 진전이 나타날 것입니다.",
+    "당신의 성실함이 주변의 인정을 받는 하루가 될 것입니다.",
+  ],
+};
+
 async function seed() {
   console.log("Seeding database...");
 
   // 기존 데이터 삭제 (FK 순서)
   await db.delete(selections);
   await db.delete(visits);
+  await db.delete(fortunes);
   await db.delete(messages);
   await db.delete(words);
 
@@ -85,6 +129,20 @@ async function seed() {
     .values(messageValues)
     .returning();
   console.log(`Inserted ${insertedMessages.length} messages`);
+
+  // 운세 삽입
+  const fortuneValues = insertedWords.flatMap((w) =>
+    (FORTUNES[w.word] ?? []).map((fort) => ({
+      wordId: w.id,
+      fortune: fort,
+    }))
+  );
+
+  const insertedFortunes = await db
+    .insert(fortunes)
+    .values(fortuneValues)
+    .returning();
+  console.log(`Inserted ${insertedFortunes.length} fortunes`);
 
   console.log("Seed completed!");
 }

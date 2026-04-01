@@ -1,5 +1,5 @@
 import { getDb } from "./index";
-import { words, messages, visits, selections } from "./schema";
+import { words, fortunes, visits, selections } from "./schema";
 import { eq, sql, and, gte, asc, desc } from "drizzle-orm";
 
 function todayKST(): Date {
@@ -23,11 +23,11 @@ export async function getSessionSelection(sessionId: string) {
     .select({
       wordId: selections.wordId,
       word: words.word,
-      message: messages.message,
+      fortune: fortunes.fortune,
     })
     .from(selections)
     .innerJoin(words, eq(selections.wordId, words.id))
-    .innerJoin(messages, eq(messages.wordId, words.id))
+    .innerJoin(fortunes, eq(fortunes.wordId, words.id))
     .where(
       and(eq(selections.sessionId, sessionId), gte(selections.selectedAt, today))
     )
@@ -58,22 +58,34 @@ export async function recordSelection(sessionId: string, wordId: number) {
 
   await getDb().insert(selections).values({ sessionId, wordId });
 
-  // 랜덤 메시지 선택
-  const msgs = await getDb()
-    .select({ message: messages.message })
-    .from(messages)
-    .where(eq(messages.wordId, wordId));
-
   const word = await getDb()
     .select({ word: words.word })
     .from(words)
     .where(eq(words.id, wordId))
     .limit(1);
 
-  if (msgs.length === 0 || word.length === 0) return null;
+  // 랜덤 운세 선택
+  const forts = await getDb()
+    .select({ fortune: fortunes.fortune })
+    .from(fortunes)
+    .where(eq(fortunes.wordId, wordId));
 
-  const randomMsg = msgs[Math.floor(Math.random() * msgs.length)];
-  return { word: word[0].word, message: randomMsg.message };
+  if (word.length === 0) return null;
+
+  const randomFortune = forts[Math.floor(Math.random() * forts.length)];
+  return {
+    word: word[0].word,
+    fortune: randomFortune?.fortune ?? null,
+  };
+}
+
+export async function deleteSessionSelection(sessionId: string) {
+  const today = todayKST();
+  await getDb()
+    .delete(selections)
+    .where(
+      and(eq(selections.sessionId, sessionId), gte(selections.selectedAt, today))
+    );
 }
 
 export async function getTodayStats() {

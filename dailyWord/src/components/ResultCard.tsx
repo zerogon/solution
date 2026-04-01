@@ -5,10 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 
 interface ResultCardProps {
   word: string;
-  message: string;
+  fortune: string | null;
 }
 
-export function ResultCard({ word, message }: ResultCardProps) {
+export function ResultCard({ word, fortune }: ResultCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 30, scale: 0.95 }}
@@ -18,30 +18,27 @@ export function ResultCard({ word, message }: ResultCardProps) {
     >
       <Card className="border-none shadow-lg text-center">
         <CardContent className="pt-8 pb-8">
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
-            className="text-sm text-muted-foreground mb-4"
-          >
-            오늘의 단어
-          </motion.p>
           <motion.h2
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
             className="text-3xl font-bold text-primary mb-6"
           >
-            {word}
+            &ldquo;{word}&rdquo;
           </motion.h2>
-          <motion.p
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="text-base text-foreground/80 leading-relaxed"
-          >
-            &ldquo;{message}&rdquo;
-          </motion.p>
+          {fortune && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.6 }}
+            >
+              <div className="w-1/3 mx-auto border-t border-border/40 mb-5" />
+              <p className="text-xs text-muted-foreground mb-2">오늘의 운세</p>
+              <p className="text-base text-foreground/80 leading-relaxed">
+                {fortune}
+              </p>
+            </motion.div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
