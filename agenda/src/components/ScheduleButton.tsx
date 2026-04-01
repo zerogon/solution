@@ -32,7 +32,7 @@ export function ScheduleButton({
             render={
               <Button
                 size="lg"
-                className="w-full rounded-full shadow-lg shadow-primary/25 gap-2 h-12"
+                className="w-full rounded-full shadow-lg gap-2 h-12"
               />
             }
           >

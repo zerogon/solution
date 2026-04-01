@@ -6,17 +6,6 @@ import { TrackBadge } from "@/components/TrackBadge";
 import { Session } from "@/types/agenda";
 import { cn } from "@/lib/utils";
 
-const trackLeftBorder: Record<number, string> = {
-  1: "border-l-blue-500",
-  2: "border-l-emerald-500",
-  3: "border-l-purple-500",
-};
-
-const trackSelectedBg: Record<number, string> = {
-  1: "bg-blue-500/5 dark:bg-blue-500/10",
-  2: "bg-emerald-500/5 dark:bg-emerald-500/10",
-  3: "bg-purple-500/5 dark:bg-purple-500/10",
-};
 
 interface AgendaCardProps {
   session: Session;
@@ -40,14 +29,10 @@ export function AgendaCard({ session, selected, onToggle }: AgendaCardProps) {
     <Card
       size="sm"
       className={cn(
-        "cursor-pointer transition-all duration-150 border-l-[3px]",
+        "cursor-pointer transition-all duration-150 border-l-[3px] border-l-transparent",
         "active:scale-[0.98] active:transition-none",
-        trackLeftBorder[session.track],
         selected
-          ? cn(
-              "ring-1 ring-primary/30 border-l-primary shadow-sm",
-              trackSelectedBg[session.track]
-            )
+          ? "ring-1 ring-primary/20 border-l-primary bg-primary/[0.03] shadow-sm"
           : "hover:shadow-sm hover:ring-1 hover:ring-foreground/5"
       )}
       onClick={() => onToggle(session.id)}

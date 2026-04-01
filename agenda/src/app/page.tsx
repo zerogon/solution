@@ -32,10 +32,10 @@ export default function HomePage() {
   return (
     <main className="flex-1 max-w-lg mx-auto w-full px-4 py-6 pb-28">
       {selectedCount === 0 && (
-        <section className="mb-8 rounded-xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-5 border border-primary/10">
+        <section className="mb-8 rounded-xl bg-muted/50 p-5 border border-border">
           <div className="flex items-start gap-3">
-            <div className="rounded-lg bg-primary/10 p-2 flex-shrink-0">
-              <Sparkles className="size-5 text-primary" />
+            <div className="rounded-lg bg-muted p-2 flex-shrink-0">
+              <Sparkles className="size-5 text-muted-foreground" />
             </div>
             <div>
               <h2 className="text-sm font-bold mb-1">
