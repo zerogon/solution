@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRightIcon, HomeIcon } from "./Icons";
+import { ChevronRight, Home } from "lucide-react";
 
 interface BreadcrumbItem {
   label: string;
@@ -8,22 +8,29 @@ interface BreadcrumbItem {
 
 export default function Breadcrumb({ items }: { items: BreadcrumbItem[] }) {
   return (
-    <nav className="flex items-center gap-1.5 text-sm text-surface-400">
-      <Link href="/" className="transition-colors hover:text-primary-600">
-        <HomeIcon size={16} />
+    <nav
+      aria-label="breadcrumb"
+      className="flex items-center gap-1.5 text-[13px] text-muted-foreground tracking-[0.01em]"
+    >
+      <Link
+        href="/"
+        className="transition-colors hover:text-foreground"
+        aria-label="홈"
+      >
+        <Home className="size-3.5" />
       </Link>
       {items.map((item, i) => (
         <span key={i} className="flex items-center gap-1.5">
-          <ChevronRightIcon size={14} />
+          <ChevronRight className="size-3 text-muted-foreground/60" />
           {item.href ? (
             <Link
               href={item.href}
-              className="transition-colors hover:text-primary-600"
+              className="transition-colors hover:text-foreground"
             >
               {item.label}
             </Link>
           ) : (
-            <span className="font-medium text-surface-700">{item.label}</span>
+            <span className="font-medium text-foreground">{item.label}</span>
           )}
         </span>
       ))}

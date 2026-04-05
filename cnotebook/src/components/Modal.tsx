@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { XIcon } from "./Icons";
+// Compatibility shim: existing call sites use
+//   <Modal open={...} onClose={...} title="...">{children}</Modal>
+// Internally we delegate to shadcn's Dialog (Base UI under the hood).
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 
 interface ModalProps {
   open: boolean;
@@ -12,50 +15,21 @@ interface ModalProps {
 }
 
 export default function Modal({ open, onClose, title, children, size = "md" }: ModalProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [open, onClose]);
-
-  if (!open) return null;
-
-  const maxWidth = size === "sm" ? "max-w-sm" : "max-w-md";
-
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm animate-fade-in"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={panelRef}
-        className={`w-full ${maxWidth} mx-4 rounded-2xl bg-card p-6 shadow-modal animate-slide-up`}
+    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+      <DialogContent
+        className={cn(
+          "sm:max-w-md",
+          size === "sm" && "sm:max-w-sm"
+        )}
       >
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-surface-900">{title}</h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 text-surface-400 transition-colors hover:bg-surface-100 hover:text-surface-600"
-          >
-            <XIcon size={20} />
-          </button>
-        </div>
-        <div className="mt-4">{children}</div>
-      </div>
-    </div>
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold tracking-tight">
+            {title}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="mt-1">{children}</div>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import CharacterDetectionPanel, {
   type DetectedCharacter,
 } from "./CharacterDetectionPanel";
-import { CheckIcon, LoaderIcon } from "./Icons";
+import { Check, Loader } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
 
 type SaveStatus = "saved" | "saving" | "unsaved" | "error";
 
@@ -215,35 +216,37 @@ export default function WritingEditor({
         value={title}
         onChange={handleTitleChange}
         placeholder="제목을 입력하세요"
-        className="border-b border-surface-200 bg-transparent px-1 py-3 text-xl font-bold text-surface-900 transition-colors focus:border-primary-400 focus:outline-none"
+        className="border-0 border-b border-border bg-transparent px-1 py-3 text-[1.75rem] font-semibold tracking-[-0.02em] leading-[1.2] text-foreground placeholder:text-muted-foreground/60 focus:border-primary/60 focus:outline-none"
       />
 
       {/* Editor */}
       <textarea
         value={content}
         onChange={handleContentChange}
-        placeholder="여기에 글을 쓰세요..."
-        className="mt-4 min-h-[calc(100vh-300px)] w-full resize-none bg-transparent text-lg leading-relaxed text-surface-800 focus:outline-none"
+        placeholder="여기에 글을 쓰세요…"
+        className="mt-6 min-h-[calc(100vh-320px)] w-full resize-none bg-transparent px-1 text-[17px] leading-[1.85] text-foreground placeholder:text-muted-foreground/60 focus:outline-none"
+        style={{ fontFamily: "var(--font-sans)" }}
       />
 
       {/* Status bar */}
-      <div className="mt-2 flex items-center justify-between border-t border-surface-100 pt-2 text-xs text-surface-400">
+      <Separator className="mt-4" />
+      <div className="mt-2 flex items-center justify-between text-xs tabular-nums text-muted-foreground">
         <div className="flex items-center gap-1.5">
           {saveStatus === "saved" && (
             <>
-              <CheckIcon size={14} className="text-success-500" />
+              <Check className="size-3 text-success-500" />
               <span>저장됨</span>
             </>
           )}
           {saveStatus === "saving" && (
             <>
-              <LoaderIcon size={14} className="animate-spin" />
-              <span>저장 중...</span>
+              <Loader className="size-3 animate-spin" />
+              <span>저장 중…</span>
             </>
           )}
-          {saveStatus === "unsaved" && <span>저장 대기중</span>}
+          {saveStatus === "unsaved" && <span>저장 대기</span>}
           {saveStatus === "error" && (
-            <span className="text-danger-500">저장 실패</span>
+            <span className="text-destructive">저장 실패</span>
           )}
         </div>
         <span>{content.length.toLocaleString()}자</span>

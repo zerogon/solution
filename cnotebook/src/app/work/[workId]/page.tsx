@@ -4,23 +4,37 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
+import { motion, useReducedMotion } from "framer-motion";
+import {
+  Folder,
+  Search,
+  X,
+  Plus,
+  User,
+  Sparkles,
+  Pencil,
+  Trash2,
+  Check,
+  FileText,
+  ArrowLeft,
+} from "lucide-react";
 import Breadcrumb from "@/components/Breadcrumb";
 import Modal from "@/components/Modal";
 import { SkeletonCharacterCard } from "@/components/Skeleton";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  FolderIcon,
-  SearchIcon,
-  XIcon,
-  PlusIcon,
-  UserIcon,
-  SparklesIcon,
-  PencilIcon,
-  TrashIcon,
-  CheckIcon,
-  FileTextIcon,
-} from "@/components/Icons";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { cn } from "@/lib/utils";
 
 interface Character {
   id: string;
@@ -46,6 +60,7 @@ export default function WorkPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const workId = params.workId as string;
+  const reduce = useReducedMotion();
   const { confirm } = useConfirm();
   const { toast } = useToast();
 
@@ -70,25 +85,25 @@ export default function WorkPage() {
 
   const updateParams = useCallback(
     (updates: Record<string, string>) => {
-      const params = new URLSearchParams(searchParams.toString());
+      const qp = new URLSearchParams(searchParams.toString());
       Object.entries(updates).forEach(([key, value]) => {
-        if (value) params.set(key, value);
-        else params.delete(key);
+        if (value) qp.set(key, value);
+        else qp.delete(key);
       });
-      router.push(`/work/${workId}?${params.toString()}`);
+      router.push(`/work/${workId}?${qp.toString()}`);
     },
     [searchParams, router, workId]
   );
 
   const fetchCharacters = useCallback(async () => {
-    const params = new URLSearchParams({ workId });
-    if (search) params.set("search", search);
-    if (sort) params.set("sort", sort);
-    if (order) params.set("order", order);
-    if (folderId) params.set("folderId", folderId);
+    const qp = new URLSearchParams({ workId });
+    if (search) qp.set("search", search);
+    if (sort) qp.set("sort", sort);
+    if (order) qp.set("order", order);
+    if (folderId) qp.set("folderId", folderId);
 
     try {
-      const res = await fetch(`/api/character?${params.toString()}`);
+      const res = await fetch(`/api/character?${qp.toString()}`);
       const data = await res.json();
       setCharacters(Array.isArray(data) ? data : []);
     } catch {
@@ -231,190 +246,226 @@ export default function WorkPage() {
     setShowAddToFolder(true);
   };
 
+  const sortValue = `${sort}-${order}`;
+
   return (
-    <div className="relative animate-fade-in">
-      {/* Breadcrumb */}
-      <Breadcrumb items={[{ label: workTitle || "..." }]} />
+    <div className="space-y-8">
+      <div className="space-y-5">
+        <div className="flex items-center justify-between gap-4">
+          <Breadcrumb items={[{ label: workTitle || "..." }]} />
+          <Link
+            href="/"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="size-3" />
+            서재로
+          </Link>
+        </div>
 
-      {/* Title */}
-      <div className="mt-3 flex items-center gap-2">
-        {isEditingTitle ? (
-          <>
-            <input
-              type="text"
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveTitle();
-                if (e.key === "Escape") setIsEditingTitle(false);
-              }}
-              autoFocus
-              className="rounded-lg border border-primary-300 bg-card px-3 py-1.5 text-2xl font-bold text-surface-900 focus:ring-2 focus:ring-primary-100 focus:outline-none"
-            />
-            <button
-              onClick={handleSaveTitle}
-              className="rounded-lg p-1.5 text-primary-600 transition-colors hover:bg-primary-50"
-            >
-              <CheckIcon size={20} />
-            </button>
-            <button
-              onClick={() => setIsEditingTitle(false)}
-              className="rounded-lg p-1.5 text-surface-400 transition-colors hover:bg-surface-100"
-            >
-              <XIcon size={20} />
-            </button>
-          </>
-        ) : (
-          <>
-            <h1 className="text-2xl font-bold text-surface-900">{workTitle}</h1>
-            <button
-              onClick={() => {
-                setEditTitle(workTitle);
-                setIsEditingTitle(true);
-              }}
-              className="rounded-lg p-1.5 text-surface-400 transition-colors hover:text-surface-600"
-            >
-              <PencilIcon size={18} />
-            </button>
-            <button
-              onClick={handleSoftDelete}
-              className="rounded-lg p-1.5 text-surface-400 transition-colors hover:text-danger-500"
-            >
-              <TrashIcon size={18} />
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Controls */}
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Link
-          href={`/work/${workId}/writing`}
-          className="flex items-center gap-1.5 rounded-lg border border-primary-300 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-100"
-        >
-          <FileTextIcon size={16} />
-          글쓰기
-        </Link>
-
-        <button
-          onClick={() => setShowFolderSidebar(!showFolderSidebar)}
-          className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm transition-colors ${
-            showFolderSidebar
-              ? "border-primary-300 bg-primary-50 text-primary-700"
-              : "border-surface-300 text-surface-600 hover:bg-surface-100"
-          }`}
-        >
-          <FolderIcon size={16} />
-          폴더
-        </button>
-
-        <div className="relative flex-1">
-          <SearchIcon
-            size={16}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-surface-400"
-          />
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="캐릭터 검색..."
-            className="w-full rounded-lg border border-surface-300 bg-card py-2 pl-9 pr-9 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
-          />
-          {searchInput && (
-            <button
-              onClick={() => {
-                setSearchInput("");
-                updateParams({ search: "" });
-              }}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-surface-400 transition-colors hover:text-surface-600"
-            >
-              <XIcon size={16} />
-            </button>
+        {/* Title */}
+        <div className="flex flex-wrap items-center gap-2">
+          {isEditingTitle ? (
+            <>
+              <Input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSaveTitle();
+                  if (e.key === "Escape") setIsEditingTitle(false);
+                }}
+                autoFocus
+                className="h-auto max-w-md px-3 py-1.5 text-[1.75rem] font-semibold tracking-[-0.02em]"
+              />
+              <Button variant="ghost" size="icon-sm" onClick={handleSaveTitle}>
+                <Check className="size-4 text-primary" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setIsEditingTitle(false)}
+              >
+                <X className="size-4" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <h1 className="text-[1.75rem] font-semibold tracking-[-0.02em] leading-[1.22] text-foreground sm:text-[1.875rem]">
+                {workTitle}
+              </h1>
+              <div className="flex items-center gap-0.5 opacity-60 transition-opacity hover:opacity-100">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => {
+                    setEditTitle(workTitle);
+                    setIsEditingTitle(true);
+                  }}
+                  aria-label="작품명 수정"
+                >
+                  <Pencil className="size-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={handleSoftDelete}
+                  aria-label="작품 삭제"
+                  className="hover:text-destructive"
+                >
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </div>
+            </>
           )}
         </div>
 
-        <select
-          value={`${sort}-${order}`}
-          onChange={(e) => {
-            const [s, o] = e.target.value.split("-");
-            updateParams({ sort: s, order: o });
-          }}
-          className="rounded-lg border border-surface-300 bg-card px-3 py-2 text-sm text-surface-600 transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
-        >
-          <option value="name-asc">이름 오름차순</option>
-          <option value="name-desc">이름 내림차순</option>
-          <option value="age-asc">나이 오름차순</option>
-          <option value="age-desc">나이 내림차순</option>
-          <option value="gender-asc">성별 오름차순</option>
-          <option value="gender-desc">성별 내림차순</option>
-        </select>
-      </div>
+        {/* Controls */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <Link
+            href={`/work/${workId}/writing`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+          >
+            <FileText className="size-3.5" />
+            글쓰기
+          </Link>
+          <Button
+            variant={showFolderSidebar ? "secondary" : "outline"}
+            size="sm"
+            onClick={() => setShowFolderSidebar(!showFolderSidebar)}
+          >
+            <Folder className="size-3.5" />
+            폴더
+          </Button>
 
-      <div className="mt-4 flex gap-4">
-        {/* Folder Sidebar */}
-        {showFolderSidebar && (
-          <div className="w-56 shrink-0 animate-fade-in rounded-xl border border-surface-200 bg-card p-4 shadow-card">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-surface-700">폴더</h3>
+          <div className="relative min-w-[200px] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="캐릭터 검색…"
+              className="h-9 pl-8 pr-8"
+            />
+            {searchInput && (
               <button
-                onClick={() => setShowFolderModal(true)}
-                className="flex items-center gap-0.5 text-xs font-medium text-primary-600 transition-colors hover:text-primary-700"
+                onClick={() => {
+                  setSearchInput("");
+                  updateParams({ search: "" });
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground transition-colors hover:text-foreground"
+                aria-label="검색 초기화"
               >
-                <PlusIcon size={14} />
-                추가
-              </button>
-            </div>
-            <ul className="mt-3 space-y-0.5">
-              <li>
-                <button
-                  onClick={() => updateParams({ folderId: "" })}
-                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                    !folderId
-                      ? "border-l-2 border-l-primary-500 bg-primary-50 font-medium text-primary-700"
-                      : "hover:bg-surface-50"
-                  }`}
-                >
-                  전체
-                </button>
-              </li>
-              {folders.map((folder) => (
-                <li key={folder.id} className="flex items-center">
-                  <button
-                    onClick={() => updateParams({ folderId: folder.id })}
-                    className={`flex-1 rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                      folderId === folder.id
-                        ? "border-l-2 border-l-primary-500 bg-primary-50 font-medium text-primary-700"
-                        : "hover:bg-surface-50"
-                    }`}
-                  >
-                    {folder.name}
-                    <span className="ml-1.5 text-xs text-surface-400">
-                      ({folder._count.characters})
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => handleDeleteFolder(folder.id)}
-                    className="rounded p-1 text-surface-300 transition-colors hover:text-danger-500"
-                  >
-                    <XIcon size={14} />
-                  </button>
-                </li>
-              ))}
-            </ul>
-            {folderId && (
-              <button
-                onClick={openAddToFolder}
-                className="mt-3 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-surface-300 px-3 py-2 text-xs text-surface-500 transition-colors hover:border-primary-400 hover:text-primary-600"
-              >
-                <PlusIcon size={14} />
-                폴더에 캐릭터 추가
+                <X className="size-3.5" />
               </button>
             )}
           </div>
+
+          <Select
+            value={sortValue}
+            onValueChange={(v) => {
+              if (!v) return;
+              const [s, o] = v.split("-");
+              updateParams({ sort: s, order: o });
+            }}
+          >
+            <SelectTrigger size="sm" className="h-9 min-w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name-asc">이름 오름차순</SelectItem>
+              <SelectItem value="name-desc">이름 내림차순</SelectItem>
+              <SelectItem value="age-asc">나이 오름차순</SelectItem>
+              <SelectItem value="age-desc">나이 내림차순</SelectItem>
+              <SelectItem value="gender-asc">성별 오름차순</SelectItem>
+              <SelectItem value="gender-desc">성별 내림차순</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="flex gap-6">
+        {/* Folder Sidebar */}
+        {showFolderSidebar && (
+          <motion.aside
+            initial={reduce ? { opacity: 0 } : { opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            className="hidden w-56 shrink-0 md:block"
+          >
+            <div className="rounded-xl border border-border bg-card p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  폴더
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setShowFolderModal(true)}
+                  className="text-primary"
+                >
+                  <Plus className="size-3" />
+                  추가
+                </Button>
+              </div>
+              <Separator className="my-3" />
+              <ul className="space-y-0.5">
+                <li>
+                  <button
+                    onClick={() => updateParams({ folderId: "" })}
+                    className={cn(
+                      "w-full rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors",
+                      !folderId
+                        ? "bg-primary/10 font-medium text-primary"
+                        : "text-foreground/80 hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    전체
+                  </button>
+                </li>
+                {folders.map((folder) => (
+                  <li key={folder.id} className="group/folder flex items-center gap-1">
+                    <button
+                      onClick={() => updateParams({ folderId: folder.id })}
+                      className={cn(
+                        "flex-1 truncate rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors",
+                        folderId === folder.id
+                          ? "bg-primary/10 font-medium text-primary"
+                          : "text-foreground/80 hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      {folder.name}
+                      <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">
+                        {folder._count.characters}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteFolder(folder.id)}
+                      className="rounded p-1 text-muted-foreground/50 opacity-0 transition-all hover:text-destructive group-hover/folder:opacity-100"
+                      aria-label="폴더 삭제"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {folderId && (
+                <button
+                  onClick={openAddToFolder}
+                  className="mt-3 flex w-full items-center justify-center gap-1 rounded-md border border-dashed border-border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                >
+                  <Plus className="size-3" />
+                  캐릭터 추가
+                </button>
+              )}
+            </div>
+          </motion.aside>
         )}
 
         {/* Character Grid */}
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           {loading ? (
             <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
               {Array.from({ length: 8 }).map((_, i) => (
@@ -422,88 +473,130 @@ export default function WorkPage() {
               ))}
             </div>
           ) : characters.length === 0 ? (
-            <div className="flex flex-col items-center py-16">
-              <div className="rounded-2xl bg-surface-100 p-4">
-                <SparklesIcon size={28} className="text-surface-400" />
+            <div className="flex flex-col items-center px-6 py-20 text-center">
+              <div className="flex size-14 items-center justify-center rounded-full bg-gradient-to-br from-muted via-muted to-accent/30 text-muted-foreground ring-1 ring-border">
+                <Sparkles className="size-6" strokeWidth={1.8} />
               </div>
-              <p className="mt-3 text-sm text-surface-400">
+              <p className="mt-5 text-[14.5px] font-medium text-foreground">
                 {search ? "검색 결과가 없습니다" : "등록된 캐릭터가 없습니다"}
               </p>
+              {!search && (
+                <p className="mt-1 text-[13px] text-muted-foreground">
+                  우측 하단의 + 버튼으로 첫 캐릭터를 추가해보세요.
+                </p>
+              )}
             </div>
           ) : (
-            <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+            <motion.div
+              className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4"
+              initial="hidden"
+              animate="show"
+              variants={{
+                hidden: { opacity: 1 },
+                show: {
+                  opacity: 1,
+                  transition: {
+                    staggerChildren: reduce ? 0 : 0.03,
+                    delayChildren: 0.02,
+                  },
+                },
+              }}
+            >
               {characters.map((char) => (
-                <Link
+                <motion.div
                   key={char.id}
-                  href={`/work/${workId}/character/${char.id}`}
-                  className="group rounded-xl border border-surface-200 bg-card p-3 shadow-card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover"
+                  variants={{
+                    hidden: reduce ? { opacity: 0 } : { opacity: 0, y: 6 },
+                    show: {
+                      opacity: 1,
+                      y: 0,
+                      transition: {
+                        duration: 0.22,
+                        ease: [0.22, 1, 0.36, 1],
+                      },
+                    },
+                  }}
+                  whileHover={reduce ? undefined : { y: -2 }}
                 >
-                  <div className="relative aspect-square overflow-hidden rounded-lg bg-surface-100">
-                    {char.imageUrl ? (
-                      <Image
-                        src={char.imageUrl}
-                        alt={char.name}
-                        fill
-                        unoptimized={char.imageUrl.startsWith("/uploads/")}
-                        className="object-cover transition-transform duration-200 group-hover:scale-105"
-                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center">
-                        <UserIcon size={36} className="text-surface-300" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-2 space-y-0.5 text-center">
-                    <p className="truncate text-sm font-medium text-surface-700 dark:text-surface-900 transition-colors group-hover:text-primary-700">
-                      {char.name}
-                    </p>
-                    {char.role && (
-                      <p className="truncate text-xs text-surface-400 dark:text-surface-600">{char.role}</p>
-                    )}
-                    {(char.gender || char.age) && (
-                      <p className="text-xs text-surface-500 dark:text-surface-600">
-                        {[char.gender, char.age ? `${char.age}세` : null]
-                          .filter(Boolean)
-                          .join(" · ")}
+                  <Link
+                    href={`/work/${workId}/character/${char.id}`}
+                    className="group block rounded-xl border border-border bg-card p-3 transition-all hover:border-primary/40 hover:bg-gradient-to-b hover:from-primary/[0.03] hover:to-transparent"
+                  >
+                    <div className="relative aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-border/60">
+                      {char.imageUrl ? (
+                        <Image
+                          src={char.imageUrl}
+                          alt={char.name}
+                          fill
+                          unoptimized={char.imageUrl.startsWith("/uploads/")}
+                          className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center">
+                          <User className="size-9 text-muted-foreground/50" strokeWidth={1.4} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 space-y-0.5 text-center">
+                      <p className="truncate text-sm font-semibold tracking-[-0.005em] text-foreground transition-colors group-hover:text-primary">
+                        {char.name}
                       </p>
-                    )}
-                    {(char.hairColorHex || char.eyeColorHex) && (
-                      <div className="flex items-center justify-center gap-1.5 pt-0.5">
-                        {char.hairColorHex && (
-                          <span
-                            title={char.hairColor || "머리색"}
-                            className="inline-block h-3.5 w-3.5 rounded-full border border-surface-200"
-                            style={{ backgroundColor: char.hairColorHex }}
-                          />
-                        )}
-                        {char.eyeColorHex && (
-                          <span
-                            title={char.eyeColor || "눈색"}
-                            className="inline-block h-3.5 w-3.5 rounded-full border border-surface-200"
-                            style={{ backgroundColor: char.eyeColorHex }}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </Link>
+                      {char.role && (
+                        <p className="truncate text-xs text-muted-foreground">
+                          {char.role}
+                        </p>
+                      )}
+                      {(char.gender || char.age) && (
+                        <p className="text-xs tabular-nums text-muted-foreground/80">
+                          {[char.gender, char.age ? `${char.age}세` : null]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </p>
+                      )}
+                      {(char.hairColorHex || char.eyeColorHex) && (
+                        <div className="flex items-center justify-center gap-1.5 pt-1">
+                          {char.hairColorHex && (
+                            <span
+                              title={char.hairColor || "머리색"}
+                              className="inline-block size-3 rounded-full ring-1 ring-border"
+                              style={{ backgroundColor: char.hairColorHex }}
+                            />
+                          )}
+                          {char.eyeColorHex && (
+                            <span
+                              title={char.eyeColor || "눈색"}
+                              className="inline-block size-3 rounded-full ring-1 ring-border"
+                              style={{ backgroundColor: char.eyeColorHex }}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
       </div>
 
       {/* FAB */}
-      <Link
-        href={`/work/${workId}/character/new`}
-        className="group fixed bottom-8 right-8 flex h-14 w-14 items-center justify-center rounded-full bg-primary-600 text-white shadow-fab transition-all duration-200 hover:scale-105 hover:bg-primary-700"
+      <motion.div
+        initial={reduce ? { opacity: 0 } : { opacity: 0, scale: 0.85 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.1 }}
+        whileTap={reduce ? undefined : { scale: 0.94 }}
+        className="fixed bottom-6 right-6 z-30 sm:bottom-8 sm:right-8"
       >
-        <PlusIcon size={24} />
-        <span className="pointer-events-none absolute bottom-full right-0 mb-2 whitespace-nowrap rounded-lg bg-tooltip px-3 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-          캐릭터 추가
-        </span>
-      </Link>
+        <Link
+          href={`/work/${workId}/character/new`}
+          className="group flex size-14 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-fab ring-1 ring-primary/30 transition-all hover:shadow-[0_10px_28px_-8px] hover:shadow-primary/50"
+          aria-label="캐릭터 추가"
+        >
+          <Plus className="size-6" strokeWidth={2.2} />
+        </Link>
+      </motion.div>
 
       {/* Folder Create Modal */}
       <Modal
@@ -515,32 +608,28 @@ export default function WorkPage() {
         title="새 폴더"
         size="sm"
       >
-        <form onSubmit={handleCreateFolder}>
-          <input
+        <form onSubmit={handleCreateFolder} className="space-y-4">
+          <Input
             type="text"
             value={folderName}
             onChange={(e) => setFolderName(e.target.value)}
             placeholder="폴더 이름"
-            className="w-full rounded-lg border border-surface-300 bg-card px-4 py-2.5 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
             autoFocus
           />
-          <div className="mt-4 flex justify-end gap-2">
-            <button
+          <div className="flex justify-end gap-2">
+            <Button
               type="button"
+              variant="outline"
               onClick={() => {
                 setShowFolderModal(false);
                 setFolderName("");
               }}
-              className="rounded-lg px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100"
             >
               취소
-            </button>
-            <button
-              type="submit"
-              className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
-            >
+            </Button>
+            <Button type="submit" disabled={!folderName.trim()}>
               생성
-            </button>
+            </Button>
           </div>
         </form>
       </Modal>
@@ -551,41 +640,39 @@ export default function WorkPage() {
         onClose={() => setShowAddToFolder(false)}
         title="폴더에 캐릭터 추가"
       >
-        <div className="max-h-64 overflow-y-auto">
-          {allCharacters.map((char) => (
-            <label
-              key={char.id}
-              className="flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-surface-50"
-            >
-              <input
-                type="checkbox"
-                checked={selectedCharIds.includes(char.id)}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedCharIds([...selectedCharIds, char.id]);
-                  } else {
-                    setSelectedCharIds(selectedCharIds.filter((id) => id !== char.id));
-                  }
-                }}
-                className="rounded accent-primary-600"
-              />
-              <span className="text-sm text-surface-700">{char.name}</span>
-            </label>
-          ))}
-        </div>
+        <ScrollArea className="max-h-64">
+          <div className="space-y-0.5 pr-2">
+            {allCharacters.map((char) => (
+              <label
+                key={char.id}
+                className="flex cursor-pointer items-center gap-3 rounded-md px-2.5 py-2 transition-colors hover:bg-muted"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedCharIds.includes(char.id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedCharIds([...selectedCharIds, char.id]);
+                    } else {
+                      setSelectedCharIds(
+                        selectedCharIds.filter((id) => id !== char.id)
+                      );
+                    }
+                  }}
+                  className="size-4 rounded border-border text-primary accent-primary"
+                />
+                <span className="text-[13px] text-foreground">{char.name}</span>
+              </label>
+            ))}
+          </div>
+        </ScrollArea>
         <div className="mt-4 flex justify-end gap-2">
-          <button
-            onClick={() => setShowAddToFolder(false)}
-            className="rounded-lg px-3 py-2 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100"
-          >
+          <Button variant="outline" onClick={() => setShowAddToFolder(false)}>
             취소
-          </button>
-          <button
-            onClick={handleAddToFolder}
-            className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"
-          >
+          </Button>
+          <Button onClick={handleAddToFolder} disabled={selectedCharIds.length === 0}>
             추가 ({selectedCharIds.length})
-          </button>
+          </Button>
         </div>
       </Modal>
     </div>

@@ -2,8 +2,20 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { UserIcon, UploadIcon, LoaderIcon } from "./Icons";
+import { User, Upload, Loader } from "lucide-react";
 import { useToast } from "./Toast";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 
 export interface CharacterData {
   name: string;
@@ -59,130 +71,49 @@ interface Props {
   submitLabel: string;
 }
 
-function TextField({
+function Field({
   label,
-  value,
-  onChange,
   required,
+  children,
+  className,
 }: {
   label: string;
-  value: string;
-  onChange: (v: string) => void;
   required?: boolean;
+  children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div>
-      <label className="block text-sm font-medium text-surface-600">
-        {label} {required && <span className="text-danger-500">*</span>}
-      </label>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        className="mt-1.5 w-full rounded-lg border border-surface-300 bg-card px-3 py-2 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
-      />
+    <div className={className}>
+      <Label className="text-xs font-medium text-muted-foreground">
+        {label} {required && <span className="text-destructive">*</span>}
+      </Label>
+      <div className="mt-1.5">{children}</div>
     </div>
   );
 }
 
-function NumberField({
-  label,
-  value,
-  onChange,
-  suffix,
+function SectionHeader({
+  eyebrow,
+  title,
+  tone = "primary",
 }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  suffix?: string;
+  eyebrow: string;
+  title: string;
+  tone?: "primary" | "accent";
 }) {
+  const toneClass = tone === "accent" ? "text-accent-foreground/85" : "text-primary";
+  const dotClass = tone === "accent" ? "bg-accent-foreground/70" : "bg-primary";
   return (
-    <div>
-      <label className="block text-sm font-medium text-surface-600">{label}</label>
-      <div className="mt-1.5 flex items-center gap-1.5">
-        <input
-          type="number"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-lg border border-surface-300 bg-card px-3 py-2 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
-        />
-        {suffix && <span className="text-sm text-surface-400">{suffix}</span>}
-      </div>
-    </div>
-  );
-}
-
-function TextArea({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-surface-600">{label}</label>
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        rows={3}
-        className="mt-1.5 w-full rounded-lg border border-surface-300 bg-card px-3 py-2 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
-      />
-    </div>
-  );
-}
-
-function SelectField({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-surface-600">{label}</label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded-lg border border-surface-300 px-3 py-2 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none bg-card"
+    <div className="space-y-1.5">
+      <p
+        className={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] ${toneClass}`}
       >
-        <option value="">선택</option>
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-function DateField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div>
-      <label className="block text-sm font-medium text-surface-600">{label}</label>
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="mt-1.5 w-full rounded-lg border border-surface-300 bg-card px-3 py-2 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
-      />
+        <span aria-hidden className={`inline-block size-1 rounded-full ${dotClass}`} />
+        {eyebrow}
+      </p>
+      <h3 className="text-[15px] font-semibold tracking-[-0.005em] text-foreground">
+        {title}
+      </h3>
     </div>
   );
 }
@@ -201,32 +132,22 @@ function ColorTextField({
   onChangeColor: (v: string) => void;
 }) {
   return (
-    <div>
-      <label className="block text-sm font-medium text-surface-600">{label}</label>
-      <div className="mt-1.5 flex items-center gap-2">
-        <input
+    <Field label={label}>
+      <div className="flex items-center gap-2">
+        <Input
           type="text"
           value={value}
           onChange={(e) => onChangeText(e.target.value)}
-          className="w-full rounded-lg border border-surface-300 bg-card px-3 py-2 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
         />
         <input
           type="color"
           value={colorValue || "#000000"}
           onChange={(e) => onChangeColor(e.target.value)}
-          className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-surface-300 p-0.5"
+          className="h-9 w-10 shrink-0 cursor-pointer rounded-md border border-input bg-background p-0.5"
+          aria-label={`${label} 색상`}
         />
       </div>
-    </div>
-  );
-}
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <h3 className="flex items-center gap-2 text-sm font-bold text-surface-700">
-      <span className="h-4 w-1 rounded-full bg-primary-400" />
-      {title}
-    </h3>
+    </Field>
   );
 }
 
@@ -276,12 +197,13 @@ export default function CharacterForm({ initialData, onSubmit, submitLabel }: Pr
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-8">
+    <form onSubmit={handleSubmit} className="space-y-10">
       {/* Image Upload */}
-      <div>
-        <label className="block text-sm font-medium text-surface-600">캐릭터 이미지</label>
-        <div className="mt-2 flex items-center gap-4">
-          <div className="relative h-32 w-32 shrink-0 overflow-hidden rounded-xl bg-surface-100">
+      <section className="space-y-4">
+        <SectionHeader eyebrow="Portrait" title="캐릭터 이미지" />
+        <Separator />
+        <div className="flex flex-wrap items-center gap-5">
+          <div className="relative size-28 shrink-0 overflow-hidden rounded-xl bg-muted ring-1 ring-border">
             {data.imageUrl ? (
               <Image
                 src={data.imageUrl}
@@ -289,23 +211,23 @@ export default function CharacterForm({ initialData, onSubmit, submitLabel }: Pr
                 fill
                 unoptimized={data.imageUrl.startsWith("/uploads/")}
                 className="object-cover"
-                sizes="128px"
+                sizes="112px"
               />
             ) : (
               <div className="flex h-full items-center justify-center">
-                <UserIcon size={40} className="text-surface-300" />
+                <User className="size-9 text-muted-foreground/50" strokeWidth={1.4} />
               </div>
             )}
           </div>
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-surface-300 px-4 py-2.5 text-sm text-surface-600 transition-colors hover:bg-surface-50 hover:border-primary-300">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border bg-background px-4 py-2.5 text-[13px] font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground">
             {uploading ? (
               <>
-                <LoaderIcon size={16} className="animate-spin" />
-                업로드 중...
+                <Loader className="size-4 animate-spin" />
+                업로드 중…
               </>
             ) : (
               <>
-                <UploadIcon size={16} />
+                <Upload className="size-4" />
                 이미지 선택
               </>
             )}
@@ -318,44 +240,95 @@ export default function CharacterForm({ initialData, onSubmit, submitLabel }: Pr
             />
           </label>
         </div>
-      </div>
+      </section>
 
       {/* Basic Info */}
       <section className="space-y-4">
-        <SectionHeader title="기본 정보" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <TextField label="이름" value={data.name} onChange={update("name")} required />
-          <TextField label="배역" value={data.role} onChange={update("role")} />
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-surface-600">별칭</label>
-            <input
+        <SectionHeader eyebrow="Basic" title="기본 정보" />
+        <Separator />
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="이름" required>
+            <Input
+              type="text"
+              value={data.name}
+              onChange={(e) => update("name")(e.target.value)}
+              required
+            />
+          </Field>
+          <Field label="배역">
+            <Input
+              type="text"
+              value={data.role}
+              onChange={(e) => update("role")(e.target.value)}
+            />
+          </Field>
+          <Field label="별칭" className="sm:col-span-2">
+            <Input
               type="text"
               value={data.aliases}
               onChange={(e) => update("aliases")(e.target.value)}
               placeholder="쉼표로 구분 (예: 수현이, 현이, 대장)"
-              className="mt-1.5 w-full rounded-lg border border-surface-300 bg-card px-3 py-2 text-sm transition-colors focus:border-primary-400 focus:ring-2 focus:ring-primary-100 focus:outline-none"
             />
-          </div>
-          <SelectField
-            label="성별"
-            value={data.gender}
-            onChange={update("gender")}
-            options={[
-              { value: "남자", label: "남자" },
-              { value: "여자", label: "여자" },
-            ]}
-          />
-          <DateField label="생일" value={data.birthday} onChange={update("birthday")} />
-          <NumberField label="나이" value={data.age} onChange={update("age")} suffix="세" />
-          <NumberField label="키" value={data.height} onChange={update("height")} suffix="cm" />
-          <NumberField label="체중" value={data.weight} onChange={update("weight")} suffix="kg" />
+          </Field>
+          <Field label="성별">
+            <Select
+              value={data.gender || undefined}
+              onValueChange={(v) => update("gender")(v ?? "")}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="선택" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="남자">남자</SelectItem>
+                <SelectItem value="여자">여자</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="생일">
+            <Input
+              type="date"
+              value={data.birthday}
+              onChange={(e) => update("birthday")(e.target.value)}
+            />
+          </Field>
+          <Field label="나이">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={data.age}
+                onChange={(e) => update("age")(e.target.value)}
+              />
+              <span className="text-[13px] text-muted-foreground">세</span>
+            </div>
+          </Field>
+          <Field label="키">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={data.height}
+                onChange={(e) => update("height")(e.target.value)}
+              />
+              <span className="text-[13px] text-muted-foreground">cm</span>
+            </div>
+          </Field>
+          <Field label="체중">
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                value={data.weight}
+                onChange={(e) => update("weight")(e.target.value)}
+              />
+              <span className="text-[13px] text-muted-foreground">kg</span>
+            </div>
+          </Field>
         </div>
       </section>
 
       {/* Appearance */}
       <section className="space-y-4">
-        <SectionHeader title="외형" />
-        <div className="grid gap-4 sm:grid-cols-2">
+        <SectionHeader eyebrow="Appearance" title="외형" tone="accent" />
+        <Separator />
+        <div className="grid gap-5 sm:grid-cols-2">
           <ColorTextField
             label="머리색"
             value={data.hairColor}
@@ -363,7 +336,13 @@ export default function CharacterForm({ initialData, onSubmit, submitLabel }: Pr
             colorValue={data.hairColorHex}
             onChangeColor={update("hairColorHex")}
           />
-          <TextField label="헤어스타일" value={data.hairStyle} onChange={update("hairStyle")} />
+          <Field label="헤어스타일">
+            <Input
+              type="text"
+              value={data.hairStyle}
+              onChange={(e) => update("hairStyle")(e.target.value)}
+            />
+          </Field>
           <ColorTextField
             label="눈색"
             value={data.eyeColor}
@@ -376,42 +355,83 @@ export default function CharacterForm({ initialData, onSubmit, submitLabel }: Pr
 
       {/* Settings */}
       <section className="space-y-4">
-        <SectionHeader title="설정" />
-        <div className="space-y-4">
-          <TextArea label="성격" value={data.personality} onChange={update("personality")} />
-          <TextArea label="특징" value={data.features} onChange={update("features")} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TextField label="지역" value={data.region} onChange={update("region")} />
-            <TextField label="소속" value={data.affiliation} onChange={update("affiliation")} />
+        <SectionHeader eyebrow="Profile" title="설정" />
+        <Separator />
+        <div className="space-y-5">
+          <Field label="성격">
+            <Textarea
+              value={data.personality}
+              onChange={(e) => update("personality")(e.target.value)}
+              rows={3}
+            />
+          </Field>
+          <Field label="특징">
+            <Textarea
+              value={data.features}
+              onChange={(e) => update("features")(e.target.value)}
+              rows={3}
+            />
+          </Field>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field label="지역">
+              <Input
+                type="text"
+                value={data.region}
+                onChange={(e) => update("region")(e.target.value)}
+              />
+            </Field>
+            <Field label="소속">
+              <Input
+                type="text"
+                value={data.affiliation}
+                onChange={(e) => update("affiliation")(e.target.value)}
+              />
+            </Field>
           </div>
         </div>
       </section>
 
       {/* Story */}
       <section className="space-y-4">
-        <SectionHeader title="스토리 관련" />
-        <div className="space-y-4">
-          <TextArea label="복선" value={data.foreshadowing} onChange={update("foreshadowing")} />
-          <TextField label="사망" value={data.death} onChange={update("death")} />
+        <SectionHeader eyebrow="Story" title="스토리 관련" tone="accent" />
+        <Separator />
+        <div className="space-y-5">
+          <Field label="복선">
+            <Textarea
+              value={data.foreshadowing}
+              onChange={(e) => update("foreshadowing")(e.target.value)}
+              rows={3}
+            />
+          </Field>
+          <Field label="사망">
+            <Input
+              type="text"
+              value={data.death}
+              onChange={(e) => update("death")(e.target.value)}
+            />
+          </Field>
         </div>
       </section>
 
       {/* Notes */}
       <section className="space-y-4">
-        <SectionHeader title="기타" />
-        <TextArea label="비고" value={data.notes} onChange={update("notes")} />
+        <SectionHeader eyebrow="Notes" title="기타" />
+        <Separator />
+        <Field label="비고">
+          <Textarea
+            value={data.notes}
+            onChange={(e) => update("notes")(e.target.value)}
+            rows={4}
+          />
+        </Field>
       </section>
 
       {/* Submit */}
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="flex items-center gap-2 rounded-lg bg-primary-600 px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-700 disabled:opacity-50"
-        >
-          {submitting && <LoaderIcon size={16} className="animate-spin" />}
-          {submitting ? "저장 중..." : submitLabel}
-        </button>
+      <div className="sticky bottom-0 -mx-4 flex justify-end border-t border-border bg-background/90 px-4 py-4 backdrop-blur-md sm:-mx-6 sm:px-6">
+        <Button type="submit" size="lg" disabled={submitting}>
+          {submitting && <Loader className="size-4 animate-spin" />}
+          {submitting ? "저장 중…" : submitLabel}
+        </Button>
       </div>
     </form>
   );

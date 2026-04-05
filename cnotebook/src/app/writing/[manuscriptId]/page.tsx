@@ -3,7 +3,10 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import WritingEditor from "@/components/WritingEditor";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 
 interface ManuscriptDetail {
   id: string;
@@ -42,12 +45,10 @@ export default function StandaloneWritingEditorPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <div className="animate-skeleton">
-          <div className="h-4 w-48 rounded bg-surface-200" />
-          <div className="mt-6 h-8 w-64 rounded bg-surface-200" />
-          <div className="mt-4 h-96 rounded bg-surface-100" />
-        </div>
+      <div className="mx-auto max-w-[48rem] space-y-6">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-96 w-full" />
       </div>
     );
   }
@@ -55,33 +56,28 @@ export default function StandaloneWritingEditorPage() {
   if (!manuscript) return null;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <div className="flex items-center gap-2 text-sm">
+    <div className="mx-auto max-w-[48rem]">
+      <div className="flex flex-wrap items-center gap-3 text-[13px]">
         <Link
           href="/writing"
-          className="text-surface-500 transition-colors hover:text-primary-700"
+          className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
         >
-          ← 원고 목록
+          <ArrowLeft className="size-3.5" />
+          원고 목록
         </Link>
-        {manuscript.work && (
-          <>
-            <span className="text-surface-300">·</span>
-            <span className="rounded-md bg-surface-100 px-2 py-0.5 text-xs font-medium text-surface-600">
-              {manuscript.work.title}
-            </span>
-          </>
-        )}
-        {!manuscript.work && (
-          <>
-            <span className="text-surface-300">·</span>
-            <span className="rounded-md bg-surface-100 px-2 py-0.5 text-xs font-medium text-surface-400">
-              미분류
-            </span>
-          </>
+        <span className="text-muted-foreground/40">·</span>
+        {manuscript.work ? (
+          <Badge variant="secondary" className="font-normal">
+            {manuscript.work.title}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="font-normal text-muted-foreground">
+            미분류
+          </Badge>
         )}
       </div>
 
-      <div className="mt-4">
+      <div className="mt-6">
         <WritingEditor
           manuscriptId={manuscript.id}
           initialTitle={manuscript.title}

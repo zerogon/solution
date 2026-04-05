@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
+import { BookOpen, FileText } from "lucide-react";
 import "./globals.css";
 import Providers from "@/components/Providers";
 import ThemeToggle from "@/components/ThemeToggle";
 import LogoutButton from "@/components/LogoutButton";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import PageTransition from "@/components/PageTransition";
 
 import { verifySessionToken, AUTH_COOKIE_NAME } from "@/lib/auth";
 
@@ -41,50 +43,62 @@ export default async function RootLayout({
   const isAuthenticated = token ? await verifySessionToken(token) : false;
 
   return (
-    <html lang="ko" suppressHydrationWarning>
+    <html lang="ko" suppressHydrationWarning className="font-sans">
       <head>
+        {/* Noto Sans KR — full Korean glyph coverage via Google Fonts CSS2 */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link
           rel="preconnect"
-          href="https://cdn.jsdelivr.net"
+          href="https://fonts.gstatic.com"
           crossOrigin="anonymous"
         />
         <link
           rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Serif+KR:wght@500;600;700&display=swap"
         />
       </head>
-      <body className="bg-surface-50 text-surface-900 antialiased">
+      <body className="relative min-h-svh bg-background text-foreground antialiased">
         <ServiceWorkerRegister />
+        {/* Ambient warm gradient — subtle color tint to the whole app */}
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[520px] bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(0.95_0.05_70/0.7),transparent_70%)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(0.35_0.08_60/0.25),transparent_70%)]"
+        />
         <Providers>
-          <header className="sticky top-0 z-40 border-b border-surface-200 bg-card/80 backdrop-blur-md">
-            <div className="mx-auto flex h-14 max-w-6xl items-center px-4 sm:px-6">
-              <Link href="/" className="flex items-center gap-2 text-surface-800 transition-colors hover:text-primary-600">
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                  <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-                </svg>
-                <span className="text-sm font-bold tracking-tight">Character Notebook</span>
+          <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
+            <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6 lg:px-8">
+              <Link
+                href="/"
+                className="group flex items-center gap-2.5 text-foreground transition-colors"
+              >
+                <span className="flex size-7 items-center justify-center rounded-md bg-gradient-to-br from-primary to-primary/75 text-primary-foreground shadow-sm shadow-primary/25 transition-transform group-hover:scale-[1.04]">
+                  <BookOpen className="size-4" strokeWidth={2.2} />
+                </span>
+                <span className="hidden text-sm font-semibold tracking-[-0.01em] sm:inline">
+                  Character Notebook
+                </span>
               </Link>
               {isAuthenticated && (
-                <Link
-                  href="/writing"
-                  className="ml-4 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-surface-600 transition-colors hover:bg-surface-100 hover:text-primary-700"
-                  aria-label="원고"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <polyline points="14 2 14 8 20 8" />
-                  </svg>
-                  <span className="hidden sm:inline">원고</span>
-                </Link>
+                <nav className="flex items-center gap-1">
+                  <Link
+                    href="/writing"
+                    className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[13px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                    aria-label="원고"
+                  >
+                    <FileText className="size-3.5" />
+                    <span className="hidden sm:inline">원고</span>
+                  </Link>
+                </nav>
               )}
-              <div className="ml-auto flex items-center gap-1">
+              <div className="ml-auto flex items-center gap-0.5">
                 <ThemeToggle />
                 {isAuthenticated && <LogoutButton />}
               </div>
             </div>
           </header>
-          <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6">{children}</main>
+          <main className="relative z-10 mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+            <PageTransition>{children}</PageTransition>
+          </main>
         </Providers>
       </body>
     </html>

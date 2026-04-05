@@ -3,7 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronDownIcon, UserIcon, XIcon } from "./Icons";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { ChevronDown, User, X, ArrowUpRight } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 export interface DetectedCharacter {
   id: string;
@@ -23,11 +26,11 @@ interface Props {
 }
 
 export default function CharacterDetectionPanel({ characters }: Props) {
+  const reduce = useReducedMotion();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const prevCountRef = useRef(characters.length);
 
-  // Auto-select first new character when detection changes
   useEffect(() => {
     if (characters.length > 0 && characters.length !== prevCountRef.current) {
       setDismissed(false);
@@ -42,12 +45,18 @@ export default function CharacterDetectionPanel({ characters }: Props) {
     : null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t-2 border-primary-400 bg-card shadow-modal">
-      {/* Always-visible chip bar */}
-      <div className="flex items-center gap-2 px-4 py-2.5">
-        <span className="shrink-0 rounded-md bg-primary-600 px-2 py-0.5 text-xs font-bold text-white">
+    <motion.div
+      initial={reduce ? { opacity: 0 } : { opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 12 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur-xl"
+    >
+      {/* Chip bar */}
+      <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 py-2.5 sm:px-6 lg:px-8">
+        <Badge className="shrink-0 rounded-md bg-primary text-primary-foreground">
           {characters.length}
-        </span>
+        </Badge>
 
         <div className="flex flex-1 flex-wrap items-center gap-1.5 overflow-hidden">
           {characters.map((char) => {
@@ -55,31 +64,32 @@ export default function CharacterDetectionPanel({ characters }: Props) {
             return (
               <button
                 key={char.id}
-                onClick={() =>
-                  setSelectedId(isSelected ? null : char.id)
-                }
-                className={`flex items-center gap-1.5 rounded-full py-1 pl-1.5 pr-3 text-sm font-medium transition-all ${
+                onClick={() => setSelectedId(isSelected ? null : char.id)}
+                className={cn(
+                  "group/chip flex items-center gap-1.5 rounded-full border py-0.5 pl-1 pr-2.5 text-xs font-medium transition-all",
                   isSelected
-                    ? "bg-primary-600 text-white shadow-card"
-                    : "bg-primary-50 text-primary-700 hover:bg-primary-100"
-                }`}
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-foreground/80 hover:border-primary/40 hover:bg-primary/5"
+                )}
               >
                 <span
-                  className={`truncate max-w-[6rem] rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  className={cn(
+                    "max-w-[5rem] truncate rounded-full px-1.5 py-0.5 text-[9.5px] font-semibold uppercase tracking-[0.06em]",
                     isSelected
-                      ? "bg-primary-800/60 text-primary-100"
-                      : "bg-white text-surface-500"
-                  }`}
+                      ? "bg-primary-foreground/15 text-primary-foreground/80"
+                      : "bg-muted text-muted-foreground"
+                  )}
                   title={char.work.title}
                 >
                   {char.work.title}
                 </span>
-                <span>{char.name}</span>
+                <span className="truncate">{char.name}</span>
                 {char.role && (
                   <span
-                    className={`text-xs ${
-                      isSelected ? "text-primary-200" : "text-primary-400"
-                    }`}
+                    className={cn(
+                      "text-[10.5px]",
+                      isSelected ? "text-primary-foreground/75" : "text-muted-foreground"
+                    )}
                   >
                     {char.role}
                   </span>
@@ -91,86 +101,104 @@ export default function CharacterDetectionPanel({ characters }: Props) {
 
         <button
           onClick={() => setDismissed(true)}
-          className="shrink-0 rounded-lg p-1 text-surface-300 transition-colors hover:bg-surface-100 hover:text-surface-500"
+          className="shrink-0 rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+          aria-label="닫기"
         >
-          <XIcon size={14} />
+          <X className="size-3.5" />
         </button>
       </div>
 
-      {/* Expanded character detail */}
-      {selected && (
-        <div className="animate-fade-in border-t border-surface-100 px-4 pb-4 pt-3">
-          <div className="flex gap-4 rounded-xl border border-primary-100 bg-primary-50/50 p-4">
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-primary-200 bg-white">
-              {selected.imageUrl ? (
-                <Image
-                  src={selected.imageUrl}
-                  alt={selected.name}
-                  width={64}
-                  height={64}
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center text-primary-300">
-                  <UserIcon size={28} />
+      <AnimatePresence>
+        {selected && (
+          <motion.div
+            initial={reduce ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden border-t border-border"
+          >
+            <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6 lg:px-8">
+              <div className="flex gap-4 rounded-xl bg-primary/5 p-4 ring-1 ring-primary/15">
+                <div className="size-14 shrink-0 overflow-hidden rounded-lg bg-background ring-1 ring-border">
+                  {selected.imageUrl ? (
+                    <Image
+                      src={selected.imageUrl}
+                      alt={selected.name}
+                      width={56}
+                      height={56}
+                      unoptimized={selected.imageUrl.startsWith("/uploads/")}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-muted-foreground/50">
+                      <User className="size-6" strokeWidth={1.4} />
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md bg-surface-100 px-2 py-0.5 text-xs font-medium text-surface-600">
-                  {selected.work.title}
-                </span>
-                <h4 className="font-bold text-surface-900">{selected.name}</h4>
-                {selected.role && (
-                  <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
-                    {selected.role}
-                  </span>
-                )}
-                {selected.gender && (
-                  <span className="text-sm text-surface-500">
-                    {selected.gender}
-                  </span>
-                )}
-                {selected.age && (
-                  <span className="text-sm text-surface-500">
-                    {selected.age}세
-                  </span>
-                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary" className="text-[10px] font-normal">
+                      {selected.work.title}
+                    </Badge>
+                    <h4 className="text-[14.5px] font-semibold tracking-[-0.005em] text-foreground">
+                      {selected.name}
+                    </h4>
+                    {selected.role && (
+                      <Badge
+                        variant="outline"
+                        className="border-primary/25 bg-primary/5 text-[10px] font-medium text-primary"
+                      >
+                        {selected.role}
+                      </Badge>
+                    )}
+                    {selected.gender && (
+                      <span className="text-xs text-muted-foreground">
+                        {selected.gender}
+                      </span>
+                    )}
+                    {selected.age && (
+                      <span className="text-xs tabular-nums text-muted-foreground">
+                        {selected.age}세
+                      </span>
+                    )}
+                  </div>
+
+                  {selected.personality && (
+                    <p className="mt-1.5 line-clamp-1 text-[13px] leading-[1.6] text-foreground/80">
+                      <span className="font-semibold text-muted-foreground">성격 · </span>
+                      {selected.personality}
+                    </p>
+                  )}
+                  {selected.features && (
+                    <p className="mt-0.5 line-clamp-1 text-[13px] leading-[1.6] text-foreground/80">
+                      <span className="font-semibold text-muted-foreground">특징 · </span>
+                      {selected.features}
+                    </p>
+                  )}
+
+                  <Link
+                    href={`/work/${selected.work.id}/character/${selected.id}`}
+                    target="_blank"
+                    className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:text-primary/80"
+                  >
+                    상세보기
+                    <ArrowUpRight className="size-3" />
+                  </Link>
+                </div>
+
+                <button
+                  onClick={() => setSelectedId(null)}
+                  className="self-start rounded-md p-1 text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="접기"
+                >
+                  <ChevronDown className="size-3.5" />
+                </button>
               </div>
-
-              {selected.personality && (
-                <p className="mt-1.5 line-clamp-1 text-sm text-surface-600">
-                  <span className="font-semibold text-surface-700">성격</span>{" "}
-                  {selected.personality}
-                </p>
-              )}
-              {selected.features && (
-                <p className="mt-0.5 line-clamp-1 text-sm text-surface-600">
-                  <span className="font-semibold text-surface-700">특징</span>{" "}
-                  {selected.features}
-                </p>
-              )}
-
-              <Link
-                href={`/work/${selected.work.id}/character/${selected.id}`}
-                target="_blank"
-                className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary-600 transition-colors hover:text-primary-700"
-              >
-                상세보기 &rarr;
-              </Link>
             </div>
-
-            <button
-              onClick={() => setSelectedId(null)}
-              className="self-start rounded-lg p-1 text-surface-300 transition-colors hover:bg-surface-100 hover:text-surface-500"
-            >
-              <ChevronDownIcon size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }

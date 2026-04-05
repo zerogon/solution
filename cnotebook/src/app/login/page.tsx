@@ -1,10 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { motion, useReducedMotion } from "framer-motion";
+import { BookOpen } from "lucide-react";
 import { loginAction } from "./actions";
 import InstallPrompt from "@/components/InstallPrompt";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
 
 export default function LoginPage() {
+  const reduce = useReducedMotion();
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
 
@@ -25,68 +32,66 @@ export default function LoginPage() {
 
   return (
     <>
-    <InstallPrompt />
-    <div className="relative flex min-h-[65vh] items-center justify-center">
-      {/* Decorative background elements */}
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-32 -left-32 h-80 w-80 rounded-full bg-primary-200/15 blur-3xl animate-float" />
-        <div className="absolute -bottom-32 -right-32 h-80 w-80 rounded-full bg-primary-300/10 blur-3xl animate-float" style={{ animationDelay: '-3s' }} />
-        <div className="absolute top-1/4 right-1/4 h-40 w-40 rounded-full bg-primary-100/20 blur-2xl animate-float" style={{ animationDelay: '-1.5s' }} />
-      </div>
-
-      <div className="relative z-10 w-full max-w-sm animate-slide-up">
-        <div className="rounded-2xl border border-surface-200/80 bg-card/80 p-8 shadow-card-lg backdrop-blur-sm">
-          {/* Logo */}
+      <InstallPrompt />
+      <div className="relative mx-auto flex min-h-[70vh] max-w-sm flex-col items-center justify-center">
+        <motion.div
+          initial={reduce ? { opacity: 0 } : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full"
+        >
+          {/* Mark + literary quote */}
           <div className="mb-10 text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-lg shadow-primary-500/20">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
-                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
-              </svg>
+            <div className="relative mx-auto flex size-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary via-primary/90 to-primary/70 text-primary-foreground shadow-lg shadow-primary/30 ring-1 ring-primary/20">
+              <BookOpen className="relative z-10 size-5" strokeWidth={2.2} />
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-xl bg-gradient-to-t from-transparent to-white/15"
+              />
             </div>
-            <h2 className="mt-5 text-xl font-bold text-surface-900 sm:text-2xl">
+            <p className="mt-6 text-xs font-semibold uppercase tracking-[0.2em] text-primary/80">
               Character Notebook
-            </h2>
-            <p className="mt-1.5 text-sm text-surface-400">
-              비밀번호를 입력하여 접속하세요
             </p>
+            <blockquote className="mx-auto mt-4 max-w-[22rem] text-[15px] font-normal italic leading-[1.7] text-foreground/80">
+              &ldquo;모든 이야기는 결국 한 사람의 이름에서 시작된다.&rdquo;
+            </blockquote>
           </div>
 
-          <form action={handleSubmit} className="space-y-4">
-            <div>
-              <input
+          <Separator className="mb-8" />
+
+          <form action={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-[13px]">
+                비밀번호
+              </Label>
+              <Input
+                id="password"
                 type="password"
                 name="password"
                 placeholder="비밀번호를 입력하세요"
                 required
                 autoFocus
-                className="w-full rounded-xl border border-surface-200 bg-surface-50/80 px-4 py-3 text-sm text-surface-800 shadow-inner-soft transition-all duration-200 placeholder:text-surface-400 focus:border-primary-400 focus:bg-card focus:outline-none focus:ring-2 focus:ring-primary-200/50"
+                className="h-10"
               />
             </div>
             {error && (
-              <p className="text-sm text-danger-500">{error}</p>
+              <p className="text-[13px] leading-[1.5] text-destructive">{error}</p>
             )}
-            <button
+            <Button
               type="submit"
               disabled={isPending}
-              className="w-full rounded-xl bg-gradient-to-r from-primary-600 to-primary-500 py-3 text-sm font-semibold text-white shadow-sm transition-all duration-200 hover:shadow-md hover:shadow-primary-500/20 active:scale-[0.98] disabled:opacity-50"
+              size="lg"
+              className="w-full"
             >
-              {isPending ? "확인 중..." : "로그인"}
-            </button>
+              {isPending ? "확인 중..." : "들어가기"}
+            </Button>
           </form>
-        </div>
+
+          <p className="mt-10 text-center text-xs uppercase tracking-[0.12em] text-muted-foreground/70">
+            for writers who remember names
+          </p>
+        </motion.div>
       </div>
-    </div>
     </>
   );
 }

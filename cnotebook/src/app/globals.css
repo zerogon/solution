@@ -1,6 +1,8 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-@variant dark (&:where(.dark, .dark *));
+@custom-variant dark (&:is(.dark *));
 
 @theme {
   /* Primary - warm amber/bronze tone */
@@ -52,8 +54,21 @@
   /* Tooltip - dark chip background for toast/tooltip */
   --color-tooltip: oklch(0.27 0.006 80);
 
-  /* Font */
-  --font-sans: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  /* Font — Noto Sans KR (Google Fonts CSS2) with system fallbacks */
+  --font-sans: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, 'Helvetica Neue', Arial, sans-serif;
+  --font-serif: 'Noto Serif KR', 'Nanum Myeongjo', Georgia, 'Times New Roman', serif;
+
+  /* Typography scale */
+  --text-eyebrow: 0.6875rem;    /* 11px */
+  --text-xs: 0.75rem;           /* 12px */
+  --text-sm: 0.8125rem;         /* 13px */
+  --text-base: 0.9375rem;       /* 15px */
+  --text-md: 1rem;              /* 16px */
+  --text-lg: 1.0625rem;         /* 17px */
+  --text-xl: 1.25rem;           /* 20px */
+  --text-2xl: 1.5rem;           /* 24px */
+  --text-3xl: 1.875rem;         /* 30px */
+  --text-4xl: 2.125rem;         /* 34px */
 
   /* Shadows */
   --shadow-card: 0 1px 3px oklch(0 0 0 / 0.04), 0 1px 2px oklch(0 0 0 / 0.06);
@@ -91,6 +106,43 @@
   66% { transform: translateY(4px) rotate(-1deg); }
 }
 
+/* shadcn theme tokens mapped to existing OKLCH palette */
+:root {
+  --background: var(--color-surface-50);
+  --foreground: var(--color-surface-900);
+  --card: var(--color-card);
+  --card-foreground: var(--color-surface-900);
+  --popover: var(--color-card);
+  --popover-foreground: var(--color-surface-900);
+  --primary: var(--color-primary-600);
+  --primary-foreground: var(--color-surface-50);
+  --secondary: var(--color-surface-100);
+  --secondary-foreground: var(--color-surface-800);
+  --muted: var(--color-surface-100);
+  --muted-foreground: var(--color-surface-500);
+  --accent: var(--color-accent-100);
+  --accent-foreground: var(--color-accent-700);
+  --destructive: var(--color-danger-600);
+  --destructive-foreground: var(--color-surface-50);
+  --border: var(--color-surface-200);
+  --input: var(--color-surface-200);
+  --ring: var(--color-primary-400);
+  --radius: 0.625rem;
+  --chart-1: var(--color-primary-500);
+  --chart-2: var(--color-accent-600);
+  --chart-3: var(--color-primary-300);
+  --chart-4: var(--color-accent-700);
+  --chart-5: var(--color-primary-800);
+  --sidebar: var(--color-surface-50);
+  --sidebar-foreground: var(--color-surface-800);
+  --sidebar-primary: var(--color-primary-600);
+  --sidebar-primary-foreground: var(--color-surface-50);
+  --sidebar-accent: var(--color-surface-100);
+  --sidebar-accent-foreground: var(--color-surface-800);
+  --sidebar-border: var(--color-surface-200);
+  --sidebar-ring: var(--color-primary-400);
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -100,7 +152,7 @@ html {
   outline-offset: 2px;
 }
 
-/* Dark mode overrides */
+/* Dark mode overrides - flip OKLCH surface tokens + shadcn aliases follow */
 .dark {
   /* Primary - subtle adjustments for dark backgrounds, NOT inverted */
   --color-primary-50: oklch(0.22 0.02 60);
@@ -158,8 +210,141 @@ html {
   --shadow-fab: 0 6px 20px oklch(0 0 0 / 0.35), 0 2px 6px oklch(0 0 0 / 0.25);
   --shadow-card-lg: 0 8px 24px oklch(0 0 0 / 0.20), 0 4px 8px oklch(0 0 0 / 0.15);
   --shadow-inner-soft: inset 0 2px 4px oklch(0 0 0 / 0.10);
+
+  /* shadcn aliases auto-update via var() references above; redeclare card because --color-card changes */
+  --card: var(--color-card);
+  --popover: var(--color-card);
+  --primary-foreground: var(--color-surface-50);
+  --destructive-foreground: var(--color-surface-900);
+  --ring: var(--color-primary-500);
 }
 
 .dark *:focus-visible {
   outline-color: oklch(0.65 0.15 55);
+}
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-size: 15px;
+    line-height: 1.65;
+    letter-spacing: -0.005em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  html {
+    @apply font-sans;
+  }
+
+  /* Typography rhythm: headings */
+  h1 { letter-spacing: -0.022em; }
+  h2, h3 { letter-spacing: -0.015em; }
+
+  /* Editorial: tabular nums for stats */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Editorial typography classes */
+  .t-eyebrow {
+    @apply text-xs font-semibold uppercase text-muted-foreground;
+    letter-spacing: 0.16em;
+  }
+  .t-display {
+    @apply text-[2rem] font-semibold leading-[1.2] text-foreground sm:text-[2.125rem];
+    letter-spacing: -0.022em;
+  }
+  .t-h1 {
+    @apply text-[1.75rem] font-semibold leading-[1.2] text-foreground;
+    letter-spacing: -0.02em;
+  }
+  .t-h2 {
+    @apply text-[1.25rem] font-semibold leading-[1.35] text-foreground;
+    letter-spacing: -0.015em;
+  }
+  .t-lead {
+    @apply text-[15px] leading-[1.7] text-muted-foreground;
+  }
+  .t-body {
+    @apply text-[14.5px] leading-[1.7] text-foreground;
+  }
+  .t-meta {
+    @apply text-[12.5px] leading-[1.5] text-muted-foreground;
+  }
+  .t-caption {
+    @apply text-xs font-medium text-muted-foreground;
+    letter-spacing: 0.04em;
+  }
+}
+
+/* Editorial grain texture - light mode only */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+}
+.dark body::before {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

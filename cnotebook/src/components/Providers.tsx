@@ -1,17 +1,16 @@
 "use client";
 
 import { ThemeProvider } from "next-themes";
-import { ToastProvider } from "./Toast";
+import { Toaster } from "@/components/ui/sonner";
 import { ConfirmDialogProvider } from "./ConfirmDialog";
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <ThemeProvider attribute="class" defaultTheme="light">
-      <ToastProvider>
-        <ConfirmDialogProvider>
-          {children}
-        </ConfirmDialogProvider>
-      </ToastProvider>
+      <ConfirmDialogProvider>
+        {children}
+        <Toaster position="bottom-right" richColors closeButton />
+      </ConfirmDialogProvider>
     </ThemeProvider>
   );
 }

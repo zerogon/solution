@@ -85,22 +85,29 @@ export default function EditCharacterPage() {
   }
 
   return (
-    <div className="animate-fade-in">
-      <Breadcrumb
-        items={[
-          { label: workTitle || "...", href: `/work/${workId}` },
-          { label: charName, href: `/work/${workId}/character/${characterId}` },
-          { label: "수정" },
-        ]}
-      />
-      <h1 className="mt-3 text-2xl font-bold text-surface-900">캐릭터 수정</h1>
-      <div className="mt-6 rounded-2xl border border-surface-200 bg-card p-6 shadow-card">
-        <CharacterForm
-          initialData={initialData || undefined}
-          onSubmit={handleSubmit}
-          submitLabel="수정 완료"
+    <div className="mx-auto max-w-3xl space-y-8">
+      <div className="space-y-4">
+        <Breadcrumb
+          items={[
+            { label: workTitle || "...", href: `/work/${workId}` },
+            { label: charName, href: `/work/${workId}/character/${characterId}` },
+            { label: "수정" },
+          ]}
         />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+            Edit Character
+          </p>
+          <h1 className="mt-2 text-[2rem] font-semibold tracking-[-0.022em] leading-[1.2] text-foreground">
+            캐릭터 수정
+          </h1>
+        </div>
       </div>
+      <CharacterForm
+        initialData={initialData || undefined}
+        onSubmit={handleSubmit}
+        submitLabel="수정 완료"
+      />
     </div>
   );
 }

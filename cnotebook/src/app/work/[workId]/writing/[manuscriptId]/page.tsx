@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Breadcrumb from "@/components/Breadcrumb";
 import WritingEditor from "@/components/WritingEditor";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface ManuscriptDetail {
   id: string;
@@ -43,12 +44,10 @@ export default function WritingEditorPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8">
-        <div className="animate-skeleton">
-          <div className="h-4 w-48 rounded bg-surface-200" />
-          <div className="mt-6 h-8 w-64 rounded bg-surface-200" />
-          <div className="mt-4 h-96 rounded bg-surface-100" />
-        </div>
+      <div className="mx-auto max-w-[48rem] space-y-6">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-96 w-full" />
       </div>
     );
   }
@@ -56,7 +55,7 @@ export default function WritingEditorPage() {
   if (!manuscript) return null;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-[48rem]">
       <Breadcrumb
         items={[
           {

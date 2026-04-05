@@ -2,10 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { Trash2, RotateCcw, Sparkles } from "lucide-react";
 import Breadcrumb from "@/components/Breadcrumb";
 import { useConfirm } from "@/components/ConfirmDialog";
 import { useToast } from "@/components/Toast";
-import { TrashIcon, RotateCcwIcon, SparklesIcon } from "@/components/Icons";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 
 interface TrashedWork {
   id: string;
@@ -84,87 +88,94 @@ export default function TrashPage() {
   };
 
   return (
-    <div className="animate-fade-in">
-      <Breadcrumb items={[{ label: "휴지통" }]} />
-
-      <div className="mt-3">
-        <h1 className="text-2xl font-bold text-surface-900">휴지통</h1>
-        <p className="mt-1 text-sm text-surface-400">
-          삭제된 작품은 30일간 보관 후 자동으로 영구 삭제됩니다
-        </p>
+    <div className="mx-auto max-w-3xl space-y-8">
+      <div className="space-y-4">
+        <Breadcrumb items={[{ label: "휴지통" }]} />
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Trash · 휴지통
+          </p>
+          <h1 className="mt-2 text-[2rem] font-semibold tracking-[-0.022em] leading-[1.2] text-foreground">
+            삭제된 작품
+          </h1>
+          <p className="mt-2 text-[14.5px] leading-[1.65] text-muted-foreground">
+            삭제된 작품은 30일간 보관 후 자동으로 영구 삭제됩니다.
+          </p>
+        </div>
       </div>
 
+      <Separator />
+
       {loading ? (
-        <div className="mt-6 space-y-3">
+        <div className="space-y-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-20 animate-pulse rounded-xl bg-surface-100"
-            />
+            <Skeleton key={i} className="h-20 w-full rounded-xl" />
           ))}
         </div>
       ) : works.length === 0 ? (
-        <div className="mt-20 flex flex-col items-center text-center">
-          <div className="rounded-2xl bg-surface-100 p-4">
-            <SparklesIcon size={32} className="text-surface-400" />
+        <div className="flex flex-col items-center px-6 py-20 text-center">
+          <div className="flex size-14 items-center justify-center rounded-full bg-gradient-to-br from-muted via-muted to-accent/30 text-muted-foreground ring-1 ring-border">
+            <Sparkles className="size-6" strokeWidth={1.8} />
           </div>
-          <p className="mt-4 text-lg font-medium text-surface-600">
+          <p className="mt-5 text-[14.5px] font-medium text-foreground">
             휴지통이 비어 있습니다
           </p>
           <Link
             href="/"
-            className="mt-4 text-sm font-medium text-primary-600 transition-colors hover:text-primary-700"
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-5")}
           >
-            홈으로 돌아가기
+            서재로 돌아가기
           </Link>
         </div>
       ) : (
-        <div className="mt-6 space-y-3">
+        <ul className="space-y-3">
           {works.map((work) => {
             const remaining = getRemainingDays(work.deletedAt);
             return (
-              <div
+              <li
                 key={work.id}
-                className="flex items-center justify-between rounded-xl border border-surface-200 bg-card p-4 shadow-card"
+                className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-card p-5"
               >
-                <div>
-                  <h3 className="font-semibold text-surface-800">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[15px] font-semibold tracking-[-0.005em] text-foreground">
                     {work.title}
                   </h3>
-                  <div className="mt-1 flex items-center gap-3 text-xs text-surface-400">
-                    <span>캐릭터 {work._count.characters}명</span>
-                    <span>원고 {work._count.manuscripts}편</span>
+                  <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-muted-foreground">
+                    <span>캐릭터 {work._count.characters}</span>
+                    <span className="text-muted-foreground/40">·</span>
+                    <span>원고 {work._count.manuscripts}</span>
+                    <span className="text-muted-foreground/40">·</span>
                     <span>
-                      {new Date(work.deletedAt).toLocaleDateString("ko-KR")}{" "}
-                      삭제
+                      {new Date(work.deletedAt).toLocaleDateString("ko-KR")} 삭제
                     </span>
-                    <span className="font-medium text-danger-500">
+                    <span className="text-muted-foreground/40">·</span>
+                    <span className="font-medium text-destructive">
                       {remaining}일 후 자동 삭제
                     </span>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
                     onClick={() => handleRestore(work.id)}
-                    className="flex items-center gap-1 rounded-lg border border-surface-300 px-3 py-1.5 text-sm text-surface-600 transition-colors hover:bg-surface-100"
                   >
-                    <RotateCcwIcon size={14} />
+                    <RotateCcw className="size-3.5" />
                     복원
-                  </button>
-                  <button
-                    onClick={() =>
-                      handlePermanentDelete(work.id, work.title)
-                    }
-                    className="flex items-center gap-1 rounded-lg border border-danger-300 px-3 py-1.5 text-sm text-danger-500 transition-colors hover:bg-danger-50"
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => handlePermanentDelete(work.id, work.title)}
                   >
-                    <TrashIcon size={14} />
+                    <Trash2 className="size-3.5" />
                     영구 삭제
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );
