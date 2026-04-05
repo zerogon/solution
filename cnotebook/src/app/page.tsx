@@ -256,7 +256,10 @@ function WorkCard({ work }: { work: Work }) {
           className="absolute inset-y-5 left-0 w-[3px] rounded-r-full bg-gradient-to-b from-primary via-primary/70 to-primary/30 transition-all group-hover:from-primary group-hover:via-primary group-hover:to-accent-foreground/40"
         />
         <div className="relative pl-3">
-          <h2 className="line-clamp-2 text-[17px] font-semibold leading-[1.35] tracking-[-0.01em] text-foreground transition-colors group-hover:text-primary">
+          <h2
+            title={work.title}
+            className="truncate text-[17px] font-semibold leading-[1.35] tracking-[-0.01em] text-foreground transition-colors group-hover:text-primary"
+          >
             {work.title}
           </h2>
           <div className="mt-5 flex items-center gap-2">
