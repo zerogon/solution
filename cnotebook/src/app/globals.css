@@ -5,35 +5,35 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  /* Primary - warm amber/bronze tone */
-  --color-primary-50: oklch(0.98 0.015 75);
-  --color-primary-100: oklch(0.95 0.035 75);
-  --color-primary-200: oklch(0.90 0.065 70);
-  --color-primary-300: oklch(0.82 0.10 65);
-  --color-primary-400: oklch(0.72 0.13 60);
-  --color-primary-500: oklch(0.63 0.15 55);
-  --color-primary-600: oklch(0.55 0.14 50);
-  --color-primary-700: oklch(0.48 0.12 50);
-  --color-primary-800: oklch(0.40 0.10 50);
-  --color-primary-900: oklch(0.33 0.08 50);
+  /* Primary - deep sage/forest green */
+  --color-primary-50: oklch(0.97 0.012 150);
+  --color-primary-100: oklch(0.94 0.025 150);
+  --color-primary-200: oklch(0.88 0.045 148);
+  --color-primary-300: oklch(0.78 0.07 146);
+  --color-primary-400: oklch(0.66 0.09 145);
+  --color-primary-500: oklch(0.55 0.10 145);
+  --color-primary-600: oklch(0.46 0.095 145);
+  --color-primary-700: oklch(0.39 0.080 145);
+  --color-primary-800: oklch(0.32 0.065 145);
+  --color-primary-900: oklch(0.26 0.050 145);
 
-  /* Surface - warm neutral gray */
-  --color-surface-50: oklch(0.985 0.003 80);
-  --color-surface-100: oklch(0.97 0.005 80);
-  --color-surface-200: oklch(0.93 0.007 80);
-  --color-surface-300: oklch(0.87 0.008 80);
-  --color-surface-400: oklch(0.70 0.010 80);
-  --color-surface-500: oklch(0.55 0.010 80);
-  --color-surface-600: oklch(0.44 0.010 80);
-  --color-surface-700: oklch(0.36 0.008 80);
-  --color-surface-800: oklch(0.27 0.006 80);
-  --color-surface-900: oklch(0.20 0.005 80);
+  /* Surface - cool neutral gray */
+  --color-surface-50: oklch(0.985 0.003 150);
+  --color-surface-100: oklch(0.97 0.005 150);
+  --color-surface-200: oklch(0.93 0.007 150);
+  --color-surface-300: oklch(0.87 0.008 150);
+  --color-surface-400: oklch(0.70 0.010 150);
+  --color-surface-500: oklch(0.55 0.010 150);
+  --color-surface-600: oklch(0.44 0.010 150);
+  --color-surface-700: oklch(0.36 0.008 150);
+  --color-surface-800: oklch(0.27 0.006 150);
+  --color-surface-900: oklch(0.20 0.005 150);
 
-  /* Accent - teal/sage complement to warm primary */
-  --color-accent-50: oklch(0.97 0.015 175);
-  --color-accent-100: oklch(0.93 0.035 175);
-  --color-accent-600: oklch(0.50 0.12 175);
-  --color-accent-700: oklch(0.43 0.10 175);
+  /* Accent - warm terracotta complement to sage primary */
+  --color-accent-50: oklch(0.97 0.015 40);
+  --color-accent-100: oklch(0.93 0.035 40);
+  --color-accent-600: oklch(0.55 0.12 40);
+  --color-accent-700: oklch(0.45 0.10 40);
 
   /* Danger - red */
   --color-danger-50: oklch(0.97 0.015 25);
@@ -49,10 +49,10 @@
   --color-card: oklch(1 0 0);
 
   /* Overlay - modal/dialog backdrop */
-  --color-overlay: oklch(0.20 0.005 80 / 0.40);
+  --color-overlay: oklch(0.20 0.005 150 / 0.40);
 
   /* Tooltip - dark chip background for toast/tooltip */
-  --color-tooltip: oklch(0.27 0.006 80);
+  --color-tooltip: oklch(0.27 0.006 150);
 
   /* Font — Noto Sans KR (Google Fonts CSS2) with system fallbacks */
   --font-sans: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, 'Helvetica Neue', Arial, sans-serif;
@@ -148,50 +148,50 @@ html {
 }
 
 *:focus-visible {
-  outline: 2px solid oklch(0.72 0.13 60);
+  outline: 2px solid oklch(0.66 0.09 145);
   outline-offset: 2px;
 }
 
 /* Dark mode overrides - flip OKLCH surface tokens + shadcn aliases follow */
 .dark {
   /* Primary - subtle adjustments for dark backgrounds, NOT inverted */
-  --color-primary-50: oklch(0.22 0.02 60);
-  --color-primary-100: oklch(0.28 0.04 60);
-  --color-primary-200: oklch(0.35 0.06 60);
-  --color-primary-300: oklch(0.48 0.10 60);
-  --color-primary-400: oklch(0.65 0.14 58);
-  --color-primary-500: oklch(0.58 0.15 55);
-  --color-primary-600: oklch(0.52 0.14 50);
-  --color-primary-700: oklch(0.65 0.14 55);
-  --color-primary-800: oklch(0.75 0.12 55);
-  --color-primary-900: oklch(0.85 0.08 55);
+  --color-primary-50: oklch(0.22 0.02 145);
+  --color-primary-100: oklch(0.28 0.04 145);
+  --color-primary-200: oklch(0.35 0.05 145);
+  --color-primary-300: oklch(0.48 0.08 145);
+  --color-primary-400: oklch(0.65 0.10 145);
+  --color-primary-500: oklch(0.58 0.10 145);
+  --color-primary-600: oklch(0.52 0.095 145);
+  --color-primary-700: oklch(0.65 0.10 145);
+  --color-primary-800: oklch(0.75 0.085 145);
+  --color-primary-900: oklch(0.85 0.06 145);
 
   /* Surface - inverted lightness, high contrast for readability */
-  --color-surface-50: oklch(0.16 0.003 80);
-  --color-surface-100: oklch(0.20 0.005 80);
-  --color-surface-200: oklch(0.28 0.007 80);
-  --color-surface-300: oklch(0.38 0.008 80);
-  --color-surface-400: oklch(0.63 0.008 80);
-  --color-surface-500: oklch(0.72 0.008 80);
-  --color-surface-600: oklch(0.80 0.006 80);
-  --color-surface-700: oklch(0.87 0.005 80);
-  --color-surface-800: oklch(0.92 0.004 80);
-  --color-surface-900: oklch(0.95 0.003 80);
+  --color-surface-50: oklch(0.16 0.003 150);
+  --color-surface-100: oklch(0.20 0.005 150);
+  --color-surface-200: oklch(0.28 0.007 150);
+  --color-surface-300: oklch(0.38 0.008 150);
+  --color-surface-400: oklch(0.63 0.008 150);
+  --color-surface-500: oklch(0.72 0.008 150);
+  --color-surface-600: oklch(0.80 0.006 150);
+  --color-surface-700: oklch(0.87 0.005 150);
+  --color-surface-800: oklch(0.92 0.004 150);
+  --color-surface-900: oklch(0.95 0.003 150);
 
   /* Card */
-  --color-card: oklch(0.22 0.005 80);
+  --color-card: oklch(0.22 0.005 150);
 
   /* Overlay */
   --color-overlay: oklch(0 0 0 / 0.60);
 
   /* Tooltip - stays dark for white text contrast */
-  --color-tooltip: oklch(0.35 0.008 80);
+  --color-tooltip: oklch(0.35 0.008 150);
 
   /* Accent */
-  --color-accent-50: oklch(0.22 0.015 175);
-  --color-accent-100: oklch(0.28 0.035 175);
-  --color-accent-600: oklch(0.55 0.12 175);
-  --color-accent-700: oklch(0.65 0.10 175);
+  --color-accent-50: oklch(0.22 0.015 40);
+  --color-accent-100: oklch(0.28 0.035 40);
+  --color-accent-600: oklch(0.55 0.12 40);
+  --color-accent-700: oklch(0.65 0.10 40);
 
   /* Danger */
   --color-danger-50: oklch(0.22 0.015 25);
@@ -220,7 +220,7 @@ html {
 }
 
 .dark *:focus-visible {
-  outline-color: oklch(0.65 0.15 55);
+  outline-color: oklch(0.60 0.11 145);
 }
 
 @theme inline {

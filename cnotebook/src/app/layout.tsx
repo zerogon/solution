@@ -59,10 +59,10 @@ export default async function RootLayout({
       </head>
       <body className="relative min-h-svh bg-background text-foreground antialiased">
         <ServiceWorkerRegister />
-        {/* Ambient warm gradient — subtle color tint to the whole app */}
+        {/* Ambient sage gradient — subtle color tint to the whole app */}
         <div
           aria-hidden
-          className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[520px] bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(0.95_0.05_70/0.7),transparent_70%)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(0.35_0.08_60/0.25),transparent_70%)]"
+          className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[520px] bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(0.94_0.04_150/0.7),transparent_70%)] dark:bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,oklch(0.32_0.07_145/0.25),transparent_70%)]"
         />
         <Providers>
           <header className="sticky top-0 z-40 border-b border-border/70 bg-background/70 backdrop-blur-xl">
