@@ -45,6 +45,23 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const updateData: Record<string, unknown> = {};
     if (body.title !== undefined) updateData.title = body.title;
     if (body.content !== undefined) updateData.content = body.content;
+    if (body.workId !== undefined) {
+      const workIdRaw = body.workId;
+      const newWorkId =
+        typeof workIdRaw === "string" && workIdRaw.trim() !== ""
+          ? workIdRaw.trim()
+          : null;
+      if (newWorkId) {
+        const work = await prisma.work.findUnique({ where: { id: newWorkId } });
+        if (!work) {
+          return NextResponse.json(
+            { error: "존재하지 않는 작품입니다." },
+            { status: 404 }
+          );
+        }
+      }
+      updateData.workId = newWorkId;
+    }
 
     const manuscript = await prisma.manuscript.update({
       where: { id },

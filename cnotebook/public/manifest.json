@@ -29,5 +29,25 @@
       "type": "image/png",
       "purpose": "maskable"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "바로 글쓰기",
+      "short_name": "글쓰기",
+      "description": "빈 원고를 만들고 바로 편집",
+      "url": "/writing/new",
+      "icons": [
+        { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    },
+    {
+      "name": "원고 목록",
+      "short_name": "원고",
+      "description": "작성한 원고 보기",
+      "url": "/writing",
+      "icons": [
+        { "src": "/icons/icon-192x192.png", "sizes": "192x192", "type": "image/png" }
+      ]
+    }
   ]
 }

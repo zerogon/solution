@@ -11,14 +11,9 @@ export async function GET(request: NextRequest) {
     const order = searchParams.get("order") || "asc";
     const folderId = searchParams.get("folderId");
 
-    if (!workId) {
-      return NextResponse.json(
-        { error: "workId는 필수입니다." },
-        { status: 400 }
-      );
-    }
-
-    const where: Prisma.CharacterWhereInput = { workId };
+    const where: Prisma.CharacterWhereInput = workId
+      ? { workId }
+      : { work: { deletedAt: null } };
 
     if (search) {
       where.OR = [
@@ -44,6 +39,7 @@ export async function GET(request: NextRequest) {
       orderBy: { [sortField]: sortOrder },
       include: {
         folders: { include: { folder: true } },
+        work: workId ? false : { select: { id: true, title: true } },
       },
     });
 

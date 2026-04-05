@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { PlusIcon, SparklesIcon, TrashIcon } from "@/components/Icons";
+import { useRouter } from "next/navigation";
+import { PlusIcon, SparklesIcon, TrashIcon, FileTextIcon } from "@/components/Icons";
 import { SkeletonWorkCard } from "@/components/Skeleton";
 import Modal from "@/components/Modal";
 
@@ -14,10 +15,32 @@ interface Work {
 }
 
 export default function Home() {
+  const router = useRouter();
   const [works, setWorks] = useState<Work[]>([]);
   const [title, setTitle] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+
+  const handleQuickWrite = async () => {
+    if (creatingDraft) return;
+    setCreatingDraft(true);
+    try {
+      const res = await fetch("/api/manuscript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        router.push(`/writing/${created.id}`);
+        return;
+      }
+    } catch {
+      /* ignore */
+    }
+    setCreatingDraft(false);
+  };
 
   const fetchWorks = async () => {
     try {
@@ -68,6 +91,14 @@ export default function Home() {
             <TrashIcon size={16} />
             휴지통
           </Link>
+          <button
+            onClick={handleQuickWrite}
+            disabled={creatingDraft}
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-primary-300 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 transition-colors hover:bg-primary-100 disabled:opacity-50"
+          >
+            <FileTextIcon size={16} />
+            글쓰기
+          </button>
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-700"

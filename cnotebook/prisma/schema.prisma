@@ -77,14 +77,14 @@ model FolderCharacter {
 
 model Manuscript {
   id        String   @id @default(uuid())
-  workId    String   @map("work_id")
+  workId    String?  @map("work_id")
   title     String
   content   String   @default("") @db.Text
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+  work Work? @relation(fields: [workId], references: [id], onDelete: Cascade)
 
   @@map("manuscripts")
 }

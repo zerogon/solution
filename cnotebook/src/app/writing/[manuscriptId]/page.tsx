@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import Breadcrumb from "@/components/Breadcrumb";
 import WritingEditor from "@/components/WritingEditor";
 
 interface ManuscriptDetail {
@@ -12,10 +12,9 @@ interface ManuscriptDetail {
   work: { id: string; title: string } | null;
 }
 
-export default function WritingEditorPage() {
+export default function StandaloneWritingEditorPage() {
   const params = useParams();
   const router = useRouter();
-  const workId = params.workId as string;
   const manuscriptId = params.manuscriptId as string;
 
   const [manuscript, setManuscript] = useState<ManuscriptDetail | null>(null);
@@ -25,17 +24,17 @@ export default function WritingEditorPage() {
     try {
       const res = await fetch(`/api/manuscript/${manuscriptId}`);
       if (!res.ok) {
-        router.push(`/work/${workId}/writing`);
+        router.push(`/writing`);
         return;
       }
       const data = await res.json();
       setManuscript(data);
     } catch {
-      router.push(`/work/${workId}/writing`);
+      router.push(`/writing`);
     } finally {
       setLoading(false);
     }
-  }, [manuscriptId, workId, router]);
+  }, [manuscriptId, router]);
 
   useEffect(() => {
     fetchManuscript();
@@ -57,18 +56,32 @@ export default function WritingEditorPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      <Breadcrumb
-        items={[
-          {
-            label: manuscript.work?.title ?? "작품",
-            href: `/work/${workId}`,
-          },
-          { label: "글쓰기", href: `/work/${workId}/writing` },
-          { label: manuscript.title },
-        ]}
-      />
+      <div className="flex items-center gap-2 text-sm">
+        <Link
+          href="/writing"
+          className="text-surface-500 transition-colors hover:text-primary-700"
+        >
+          ← 원고 목록
+        </Link>
+        {manuscript.work && (
+          <>
+            <span className="text-surface-300">·</span>
+            <span className="rounded-md bg-surface-100 px-2 py-0.5 text-xs font-medium text-surface-600">
+              {manuscript.work.title}
+            </span>
+          </>
+        )}
+        {!manuscript.work && (
+          <>
+            <span className="text-surface-300">·</span>
+            <span className="rounded-md bg-surface-100 px-2 py-0.5 text-xs font-medium text-surface-400">
+              미분류
+            </span>
+          </>
+        )}
+      </div>
 
-      <div className="mt-6">
+      <div className="mt-4">
         <WritingEditor
           manuscriptId={manuscript.id}
           initialTitle={manuscript.title}

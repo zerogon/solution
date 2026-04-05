@@ -10,7 +10,6 @@ type SaveStatus = "saved" | "saving" | "unsaved" | "error";
 
 interface Props {
   manuscriptId: string;
-  workId: string;
   initialTitle: string;
   initialContent: string;
 }
@@ -45,7 +44,6 @@ function detectCharacters(
 
 export default function WritingEditor({
   manuscriptId,
-  workId,
   initialTitle,
   initialContent,
 }: Props) {
@@ -62,11 +60,11 @@ export default function WritingEditor({
   const titleRef = useRef(initialTitle);
   const isSavingRef = useRef(false);
 
-  // Fetch characters for this work
+  // Fetch characters across all works
   useEffect(() => {
     const fetchCharacters = async () => {
       try {
-        const res = await fetch(`/api/character?workId=${workId}`);
+        const res = await fetch(`/api/character`);
         const data = await res.json();
         if (Array.isArray(data)) {
           setAllCharacters(
@@ -81,6 +79,7 @@ export default function WritingEditor({
                 features: string | null;
                 aliases: string | null;
                 imageUrl: string | null;
+                work: { id: string; title: string };
               }) => ({
                 id: c.id,
                 name: c.name,
@@ -91,6 +90,7 @@ export default function WritingEditor({
                 features: c.features,
                 aliases: c.aliases,
                 imageUrl: c.imageUrl,
+                work: c.work,
               })
             )
           );
@@ -100,7 +100,7 @@ export default function WritingEditor({
       }
     };
     fetchCharacters();
-  }, [workId]);
+  }, []);
 
   // Run initial detection once characters are loaded
   useEffect(() => {
@@ -250,10 +250,7 @@ export default function WritingEditor({
       </div>
 
       {/* Character detection panel */}
-      <CharacterDetectionPanel
-        characters={detectedCharacters}
-        workId={workId}
-      />
+      <CharacterDetectionPanel characters={detectedCharacters} />
     </div>
   );
 }

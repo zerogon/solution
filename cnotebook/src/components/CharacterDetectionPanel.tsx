@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronUpIcon, ChevronDownIcon, UserIcon, XIcon } from "./Icons";
+import { ChevronDownIcon, UserIcon, XIcon } from "./Icons";
 
 export interface DetectedCharacter {
   id: string;
@@ -15,14 +15,14 @@ export interface DetectedCharacter {
   features: string | null;
   aliases: string | null;
   imageUrl: string | null;
+  work: { id: string; title: string };
 }
 
 interface Props {
   characters: DetectedCharacter[];
-  workId: string;
 }
 
-export default function CharacterDetectionPanel({ characters, workId }: Props) {
+export default function CharacterDetectionPanel({ characters }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
   const prevCountRef = useRef(characters.length);
@@ -50,32 +50,43 @@ export default function CharacterDetectionPanel({ characters, workId }: Props) {
         </span>
 
         <div className="flex flex-1 flex-wrap items-center gap-1.5 overflow-hidden">
-          {characters.map((char) => (
-            <button
-              key={char.id}
-              onClick={() =>
-                setSelectedId(selected?.id === char.id ? null : char.id)
-              }
-              className={`rounded-full px-3 py-1 text-sm font-medium transition-all ${
-                selected?.id === char.id
-                  ? "bg-primary-600 text-white shadow-card"
-                  : "bg-primary-50 text-primary-700 hover:bg-primary-100"
-              }`}
-            >
-              {char.name}
-              {char.role && (
+          {characters.map((char) => {
+            const isSelected = selected?.id === char.id;
+            return (
+              <button
+                key={char.id}
+                onClick={() =>
+                  setSelectedId(isSelected ? null : char.id)
+                }
+                className={`flex items-center gap-1.5 rounded-full py-1 pl-1.5 pr-3 text-sm font-medium transition-all ${
+                  isSelected
+                    ? "bg-primary-600 text-white shadow-card"
+                    : "bg-primary-50 text-primary-700 hover:bg-primary-100"
+                }`}
+              >
                 <span
-                  className={`ml-2 text-xs ${
-                    selected?.id === char.id
-                      ? "text-primary-200"
-                      : "text-primary-400"
+                  className={`truncate max-w-[6rem] rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    isSelected
+                      ? "bg-primary-800/60 text-primary-100"
+                      : "bg-white text-surface-500"
                   }`}
+                  title={char.work.title}
                 >
-                  {char.role}
+                  {char.work.title}
                 </span>
-              )}
-            </button>
-          ))}
+                <span>{char.name}</span>
+                {char.role && (
+                  <span
+                    className={`text-xs ${
+                      isSelected ? "text-primary-200" : "text-primary-400"
+                    }`}
+                  >
+                    {char.role}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
 
         <button
@@ -107,7 +118,10 @@ export default function CharacterDetectionPanel({ characters, workId }: Props) {
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-md bg-surface-100 px-2 py-0.5 text-xs font-medium text-surface-600">
+                  {selected.work.title}
+                </span>
                 <h4 className="font-bold text-surface-900">{selected.name}</h4>
                 {selected.role && (
                   <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">
@@ -140,7 +154,7 @@ export default function CharacterDetectionPanel({ characters, workId }: Props) {
               )}
 
               <Link
-                href={`/work/${workId}/character/${selected.id}`}
+                href={`/work/${selected.work.id}/character/${selected.id}`}
                 target="_blank"
                 className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-primary-600 transition-colors hover:text-primary-700"
               >
