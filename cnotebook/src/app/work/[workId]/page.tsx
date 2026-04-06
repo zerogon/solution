@@ -247,6 +247,14 @@ export default function WorkPage() {
   };
 
   const sortValue = `${sort}-${order}`;
+  const sortLabels: Record<string, string> = {
+    "name-asc": "이름 오름차순",
+    "name-desc": "이름 내림차순",
+    "age-asc": "나이 오름차순",
+    "age-desc": "나이 내림차순",
+    "gender-asc": "성별 오름차순",
+    "gender-desc": "성별 내림차순",
+  };
 
   return (
     <div className="space-y-8">
@@ -337,7 +345,7 @@ export default function WorkPage() {
             폴더
           </Button>
 
-          <div className="relative min-w-[200px] flex-1">
+          <div className="relative min-w-0 w-full sm:w-auto sm:min-w-[200px] sm:flex-1 order-last sm:order-none">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="text"
@@ -368,8 +376,10 @@ export default function WorkPage() {
               updateParams({ sort: s, order: o });
             }}
           >
-            <SelectTrigger size="sm" className="h-9 min-w-[140px]">
-              <SelectValue />
+            <SelectTrigger size="sm" className="h-9 w-auto min-w-0">
+              <SelectValue placeholder={sortLabels[sortValue] || "정렬"}>
+                {sortLabels[sortValue] || sortValue}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="name-asc">이름 오름차순</SelectItem>

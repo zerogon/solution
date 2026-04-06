@@ -11,7 +11,7 @@ export function SkeletonText({ width = "w-full" }: { width?: string }) {
 
 export function SkeletonWorkCard() {
   return (
-    <div className="rounded-xl border border-border bg-card p-6">
+    <div className="rounded-xl border border-border bg-card p-4 sm:p-6">
       <SkeletonBox className="h-5 w-3/4" />
       <SkeletonBox className="mt-3 h-4 w-1/3" />
       <SkeletonBox className="mt-2 h-3 w-1/4" />

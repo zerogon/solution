@@ -121,26 +121,24 @@ export default function Home() {
           <h1 className="text-[2rem] font-semibold tracking-[-0.022em] leading-[1.2] text-foreground sm:text-[2.125rem]">
             내 작품
           </h1>
-          <p className="max-w-md text-[15px] leading-[1.65] text-muted-foreground">
-            작품별로 캐릭터를 정돈하고, 원고를 쓰는 순간 바로 꺼내어 볼 수 있게.
-          </p>
         </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Link href="/trash" className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}>
-            <Trash2 className="size-3.5" />
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center">
+          <Link href="/trash" className={cn(buttonVariants({ variant: "ghost", size: "default" }), "text-muted-foreground w-full sm:w-auto")}>
+            <Trash2 className="size-4" />
             휴지통
           </Link>
           <Button
             variant="outline"
-            size="sm"
+            size="default"
+            className="w-full sm:w-auto"
             onClick={handleQuickWrite}
             disabled={creatingDraft}
           >
-            <FileText className="size-3.5" />
+            <FileText className="size-4" />
             빠른 글쓰기
           </Button>
-          <Button size="sm" onClick={() => setShowDialog(true)}>
-            <Plus className="size-3.5" />
+          <Button size="default" className="w-full sm:w-auto" onClick={() => setShowDialog(true)}>
+            <Plus className="size-4" />
             작품 추가
           </Button>
         </div>
@@ -150,7 +148,7 @@ export default function Home() {
 
       {/* Content */}
       {loading ? (
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-5 overflow-hidden sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
             <SkeletonWorkCard key={i} />
           ))}
@@ -173,13 +171,13 @@ export default function Home() {
         </div>
       ) : (
         <motion.div
-          className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3"
+          className="grid gap-5 overflow-hidden sm:grid-cols-2 lg:grid-cols-3"
           variants={container}
           initial="hidden"
           animate="show"
         >
           {works.map((work) => (
-            <motion.div key={work.id} variants={item}>
+            <motion.div key={work.id} variants={item} className="min-w-0">
               <WorkCard work={work} />
             </motion.div>
           ))}
@@ -243,7 +241,7 @@ function WorkCard({ work }: { work: Work }) {
     >
       <Link
         href={`/work/${work.id}`}
-        className="group relative flex h-full flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-6 transition-all hover:border-primary/50 hover:shadow-[0_8px_24px_-12px] hover:shadow-primary/20"
+        className="group relative flex h-full flex-col justify-between overflow-hidden rounded-xl border border-border bg-card p-4 sm:p-6 transition-all hover:border-primary/50 hover:shadow-[0_8px_24px_-12px] hover:shadow-primary/20"
       >
         {/* Ambient corner glow on hover */}
         <span

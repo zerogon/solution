@@ -157,9 +157,7 @@ export default function GlobalWritingPage() {
           <h1 className="text-[2rem] font-semibold tracking-[-0.022em] leading-[1.2] text-foreground">
             내 원고
           </h1>
-          <p className="text-[14.5px] leading-[1.65] text-muted-foreground">
-            작성한 원고를 한 곳에서 관리하세요.
-          </p>
+
         </div>
         <Button onClick={handleNewDraft} disabled={creatingDraft}>
           <Plus className="size-4" />

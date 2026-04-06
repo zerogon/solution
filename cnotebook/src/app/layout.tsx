@@ -57,7 +57,7 @@ export default async function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=Noto+Serif+KR:wght@500;600;700&display=swap"
         />
       </head>
-      <body className="relative min-h-svh bg-background text-foreground antialiased">
+      <body className="relative min-h-svh overflow-x-hidden bg-background text-foreground antialiased">
         <ServiceWorkerRegister />
         {/* Ambient sage gradient — subtle color tint to the whole app */}
         <div
@@ -96,7 +96,7 @@ export default async function RootLayout({
               </div>
             </div>
           </header>
-          <main className="relative z-10 mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
+          <main className="relative z-10 mx-auto max-w-6xl overflow-x-hidden px-4 py-8 sm:px-6 sm:py-10 lg:px-8 lg:py-12">
             <PageTransition>{children}</PageTransition>
           </main>
         </Providers>
