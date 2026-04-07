@@ -1,3 +1,3 @@
-export const MEMORIZE_DURATION = 1500;
-export const FLIP_DURATION = 0.4;
-export const MISMATCH_DELAY = 1000;
+export const ROULETTE_INITIAL_INTERVAL = 50;
+export const ROULETTE_MULTIPLIER = 1.15;
+export const ROULETTE_MAX_INTERVAL = 500;
