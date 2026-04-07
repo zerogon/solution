@@ -45,7 +45,7 @@ export function TodayStats() {
     >
       <Card className="border-none shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-normal text-muted-foreground text-center">
+          <CardTitle className="text-base font-normal text-muted-foreground text-center">
             오늘 가장 많이 선택된 단어
           </CardTitle>
         </CardHeader>
@@ -61,7 +61,7 @@ export function TodayStats() {
               <Badge variant={badgeVariants[i]} className="text-xs">
                 {medals[i]}
               </Badge>
-              <span className="flex-1 font-medium">{s.word}</span>
+              <span className="flex-1 text-base font-medium">{s.word}</span>
               <div className="flex items-center gap-2 w-36">
                 <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                   <motion.div

@@ -53,7 +53,7 @@ export function MemoryCard({
         <div
           className={cn(
             "absolute inset-0 flex items-center justify-center rounded-2xl",
-            "text-xl font-bold shadow-md"
+            "text-2xl font-bold shadow-md"
           )}
           style={{
             backfaceVisibility: "hidden",
@@ -68,7 +68,7 @@ export function MemoryCard({
         <div
           className={cn(
             "absolute inset-0 flex items-center justify-center rounded-2xl",
-            "text-2xl font-bold shadow-md"
+            "text-3xl font-bold shadow-md"
           )}
           style={{
             backfaceVisibility: "hidden",

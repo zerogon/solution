@@ -22,7 +22,7 @@ export function ResultCard({ word, fortune }: ResultCardProps) {
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-            className="text-3xl font-bold text-primary mb-6"
+            className="text-4xl font-bold text-primary mb-6"
           >
             &ldquo;{word}&rdquo;
           </motion.h2>
@@ -33,8 +33,8 @@ export function ResultCard({ word, fortune }: ResultCardProps) {
               transition={{ delay: 0.6 }}
             >
               <div className="w-1/3 mx-auto border-t border-border/40 mb-5" />
-              <p className="text-xs text-muted-foreground mb-2">오늘의 운세</p>
-              <p className="text-base text-foreground/80 leading-relaxed">
+              <p className="text-sm text-muted-foreground mb-2">오늘의 운세</p>
+              <p className="text-lg text-foreground/80 leading-relaxed">
                 {fortune}
               </p>
             </motion.div>

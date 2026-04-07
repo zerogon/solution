@@ -1,13 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
-import { Gowun_Batang } from "next/font/google";
+import { Nanum_Brush_Script } from "next/font/google";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
-const gowunBatang = Gowun_Batang({
+const nanumBrushScript = Nanum_Brush_Script({
   subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: "400",
   variable: "--font-korean",
 });
 
@@ -29,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className={cn("font-sans", geist.variable, gowunBatang.variable)}>
+    <html lang="ko" className={cn("font-sans", geist.variable, nanumBrushScript.variable)}>
       <body className="min-h-dvh bg-background text-foreground antialiased">
         {children}
       </body>

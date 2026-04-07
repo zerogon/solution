@@ -208,7 +208,7 @@ export function DailyWordApp() {
       <motion.h1
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-xl font-bold text-foreground"
+        className="text-2xl font-bold text-foreground"
       >
         오늘의 단어
       </motion.h1>
@@ -247,7 +247,7 @@ export function DailyWordApp() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
                 onClick={startGame}
-                className="px-6 py-2.5 bg-primary text-white text-sm font-semibold rounded-xl shadow-md hover:opacity-90 active:scale-95 transition-all cursor-pointer"
+                className="px-6 py-2.5 bg-primary text-white text-base font-semibold rounded-xl shadow-md hover:opacity-90 active:scale-95 transition-all cursor-pointer"
               >
                 시작하기
               </motion.button>
@@ -269,7 +269,7 @@ export function DailyWordApp() {
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           카드를 기억하세요!
         </motion.p>
@@ -278,7 +278,7 @@ export function DailyWordApp() {
         <motion.p
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="text-xs text-muted-foreground"
+          className="text-sm text-muted-foreground"
         >
           짝이 맞는 카드를 찾아보세요
         </motion.p>
