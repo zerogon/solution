@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { CharacterReveal } from "@/components/character/CharacterReveal";
+import { MenuRecommend } from "@/components/MenuRecommend";
 import { Separator } from "@/components/ui/separator";
 
 interface ResultCardProps {
@@ -26,7 +27,7 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-            className="text-5xl font-bold text-primary mb-6"
+            className="text-6xl font-bold text-primary mb-6"
           >
             {word}
           </motion.h2>
@@ -35,7 +36,7 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="text-xl text-foreground/80 leading-relaxed"
+              className="text-2xl text-foreground/80 leading-relaxed"
             >
               &ldquo;{fortune}&rdquo;
             </motion.p>
@@ -49,6 +50,8 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
           >
             <Separator className="my-6" />
             <CharacterReveal instant={alreadyRevealed} />
+            <Separator className="my-6" />
+            <MenuRecommend />
           </motion.div>
         </CardContent>
       </Card>

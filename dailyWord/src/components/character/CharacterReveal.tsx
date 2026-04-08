@@ -54,7 +54,7 @@ export function CharacterReveal({ instant }: CharacterRevealProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="text-lg text-muted-foreground mb-3 text-center"
+        className="text-xl text-muted-foreground mb-3 text-center"
       >
         오늘의 캐릭터
       </motion.p>
@@ -68,13 +68,13 @@ export function CharacterReveal({ instant }: CharacterRevealProps) {
             className="flex flex-col items-center gap-2 py-6"
           >
             <motion.span
-              className="text-5xl select-none inline-block"
+              className="text-6xl select-none inline-block"
               animate={{ scale: [1, 1.15, 1] }}
               transition={{ duration: 0.16, repeat: Infinity }}
             >
               {displayEmoji}
             </motion.span>
-            <span className="text-sm text-muted-foreground animate-pulse">
+            <span className="text-base text-muted-foreground animate-pulse">
               뽑는 중...
             </span>
           </motion.div>

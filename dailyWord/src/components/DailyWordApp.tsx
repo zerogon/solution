@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Coffee } from "lucide-react";
 import { useSession } from "@/hooks/useSession";
 import { WordGrid } from "./WordGrid";
 import { ResultCard } from "./ResultCard";
@@ -165,25 +164,10 @@ export function DailyWordApp() {
 
   return (
     <div className="flex flex-col items-center gap-6 w-full">
-      <motion.a
-        href="https://api.handorder.co.kr/data/r?r=QFYWQT"
-        target="_blank"
-        rel="noopener noreferrer"
-        initial={{ opacity: 0, scale: 0 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.8, type: "spring", stiffness: 260, damping: 20 }}
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className="fixed top-4 right-4 z-50 flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl bg-white/80 backdrop-blur-sm text-stone-600 shadow-md ring-1 ring-stone-200/60 hover:bg-white hover:shadow-lg hover:text-stone-800 transition-all"
-      >
-        <Coffee className="w-6 h-6" />
-        <span className="text-[10px] font-semibold leading-tight">세이프토피아</span>
-      </motion.a>
-
       <motion.h1
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-3xl font-bold text-foreground"
+        className="text-4xl font-bold text-foreground"
       >
         오늘의 단어
       </motion.h1>
@@ -229,7 +213,7 @@ export function DailyWordApp() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="text-base text-muted-foreground"
+          className="text-lg text-muted-foreground"
         >
           마음에 드는 단어를 선택하세요
         </motion.p>

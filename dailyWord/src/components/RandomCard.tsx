@@ -42,11 +42,11 @@ export function RandomCard({
       whileTap={!disabled ? { scale: 0.95 } : undefined}
       transition={{ duration: 0.15, delay: isHighlighted ? 0 : index * 0.05 }}
     >
-      <span className="absolute text-lg text-muted-foreground/70 font-semibold">
+      <span className="absolute text-xl text-muted-foreground/70 font-semibold">
         랜덤 선택
       </span>
       <motion.span
-        className="relative text-4xl font-bold text-primary drop-shadow-md"
+        className="relative text-5xl font-bold text-primary drop-shadow-md"
         animate={{ scale: [1, 1.15, 1], rotate: [0, 5, -5, 0] }}
         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
       >

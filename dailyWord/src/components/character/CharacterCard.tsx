@@ -57,7 +57,7 @@ export function CharacterCard({ character }: CharacterCardProps) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className={cn("text-2xl font-bold", config.color)}
+        className={cn("text-3xl font-bold", config.color)}
       >
         {character.name}
       </motion.p>
@@ -70,7 +70,7 @@ export function CharacterCard({ character }: CharacterCardProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
-        className="text-lg text-foreground/70 text-center leading-relaxed"
+        className="text-xl text-foreground/70 text-center leading-relaxed"
       >
         &ldquo;{character.greeting}&rdquo;
       </motion.p>

@@ -30,7 +30,7 @@ export function WordCard({
       onClick={onSelect}
       disabled={disabled}
       className={cn(
-        "relative flex items-center justify-center rounded-2xl shadow-md text-2xl font-bold",
+        "relative flex items-center justify-center rounded-2xl shadow-md text-3xl font-bold",
         "aspect-square cursor-pointer select-none min-h-[5.5rem]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:cursor-default"

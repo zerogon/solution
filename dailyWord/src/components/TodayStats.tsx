@@ -45,7 +45,7 @@ export function TodayStats() {
     >
       <Card className="border-none shadow-sm">
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg font-normal text-muted-foreground text-center">
+          <CardTitle className="text-xl font-normal text-muted-foreground text-center">
             오늘 가장 많이 선택된 단어
           </CardTitle>
         </CardHeader>
@@ -58,10 +58,10 @@ export function TodayStats() {
               transition={{ delay: 1.0 + i * 0.2 }}
               className="flex items-center gap-3 rounded-lg bg-muted/50 px-4 py-3"
             >
-              <Badge variant={badgeVariants[i]} className="text-sm">
+              <Badge variant={badgeVariants[i]} className="text-base">
                 {medals[i]}
               </Badge>
-              <span className="flex-1 text-lg font-medium">{s.word}</span>
+              <span className="flex-1 text-xl font-medium">{s.word}</span>
               <div className="flex items-center gap-2 w-36">
                 <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                   <motion.div
@@ -71,7 +71,7 @@ export function TodayStats() {
                     transition={{ delay: 1.2 + i * 0.2, duration: 0.6 }}
                   />
                 </div>
-                <span className="text-base font-medium text-muted-foreground text-right whitespace-nowrap">
+                <span className="text-lg font-medium text-muted-foreground text-right whitespace-nowrap">
                   {s.percentage}% ({s.count}명)
                 </span>
               </div>
