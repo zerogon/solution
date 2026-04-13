@@ -150,7 +150,7 @@ export function DailyWordApp() {
 
   if (state === "loading") {
     return (
-      <div className="flex flex-col items-center gap-6 w-full max-w-sm">
+      <div className="flex flex-col items-center gap-4 w-full max-w-sm">
         <Skeleton className="h-7 w-32 rounded-lg" />
         <div className="grid grid-cols-3 gap-2.5 w-full">
           {Array.from({ length: 9 }).map((_, i) => (
@@ -163,11 +163,11 @@ export function DailyWordApp() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full">
+    <div className="flex flex-col items-center gap-4 w-full">
       <motion.h1
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-4xl font-bold text-foreground"
+        className="text-2xl font-bold text-foreground"
       >
         오늘의 단어
       </motion.h1>
@@ -213,7 +213,7 @@ export function DailyWordApp() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="text-lg text-muted-foreground"
+          className="text-base text-muted-foreground"
         >
           마음에 드는 단어를 선택하세요
         </motion.p>

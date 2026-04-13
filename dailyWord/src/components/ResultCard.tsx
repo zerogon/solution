@@ -22,12 +22,12 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
       className="w-full max-w-sm"
     >
       <Card className="border-none shadow-lg text-center">
-        <CardContent className="pt-8 pb-8">
+        <CardContent className="pt-6 pb-6">
           <motion.h2
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-            className="text-6xl font-bold text-primary mb-6"
+            className="text-4xl font-bold text-primary mb-4"
           >
             {word}
           </motion.h2>
@@ -36,7 +36,7 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="text-2xl text-foreground/80 leading-relaxed"
+              className="text-lg text-foreground/80 leading-relaxed"
             >
               &ldquo;{fortune}&rdquo;
             </motion.p>
@@ -48,9 +48,9 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
             animate={{ opacity: 1 }}
             transition={{ delay: alreadyRevealed ? 0.3 : 0.8 }}
           >
-            <Separator className="my-6" />
+            <Separator className="my-4" />
             <CharacterReveal instant={alreadyRevealed} />
-            <Separator className="my-6" />
+            <Separator className="my-4" />
             <MenuRecommend />
           </motion.div>
         </CardContent>

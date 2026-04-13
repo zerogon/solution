@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { DailyWordApp } from "@/components/DailyWordApp";
+import { DailySentence } from "@/components/DailySentence";
 import { ZodiacFortune } from "@/components/ZodiacFortune";
 
 type Version = "v1" | "v2";
@@ -25,32 +25,32 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-dvh flex-col items-center px-4 py-8">
+    <main className="flex min-h-dvh flex-col items-center px-4 py-6">
       {mounted && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="flex gap-2 mb-6"
+          className="flex gap-2 mb-4"
         >
           <button
             onClick={() => handleVersionChange("v1")}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`px-3 py-1 rounded-full text-base font-medium transition-all ${
               version === "v1"
                 ? "bg-primary text-white shadow-md"
                 : "bg-secondary text-foreground/60 hover:text-foreground/80"
             }`}
           >
-            오늘의 단어
+            오늘의 운세
           </button>
           <button
             onClick={() => handleVersionChange("v2")}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+            className={`px-3 py-1 rounded-full text-base font-medium transition-all ${
               version === "v2"
                 ? "bg-primary text-white shadow-md"
                 : "bg-secondary text-foreground/60 hover:text-foreground/80"
             }`}
           >
-            오늘의 운세
+            띠별 운세
           </button>
         </motion.div>
       )}
@@ -64,9 +64,9 @@ export default function Home() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
-              className="w-full"
+              className="w-full flex items-center justify-center"
             >
-              <DailyWordApp />
+              <DailySentence />
             </motion.div>
           ) : (
             <motion.div

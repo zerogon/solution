@@ -54,7 +54,7 @@ export function CharacterReveal({ instant }: CharacterRevealProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.1 }}
-        className="text-xl text-muted-foreground mb-3 text-center"
+        className="text-base text-muted-foreground mb-2 text-center"
       >
         오늘의 캐릭터
       </motion.p>
@@ -65,10 +65,10 @@ export function CharacterReveal({ instant }: CharacterRevealProps) {
             key="rolling"
             exit={{ opacity: 0, scale: 0.8, rotateY: 90 }}
             transition={{ duration: 0.3 }}
-            className="flex flex-col items-center gap-2 py-6"
+            className="flex flex-col items-center gap-2 py-4"
           >
             <motion.span
-              className="text-6xl select-none inline-block"
+              className="text-4xl select-none inline-block"
               animate={{ scale: [1, 1.15, 1] }}
               transition={{ duration: 0.16, repeat: Infinity }}
             >

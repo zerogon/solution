@@ -83,6 +83,15 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+@keyframes gradient-shift {
+  0% { background-position: 0% center; }
+  100% { background-position: 200% center; }
+}
+
+.animate-gradient-shift {
+  animation: gradient-shift 4s linear infinite;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

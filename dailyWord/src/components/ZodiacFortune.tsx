@@ -47,25 +47,25 @@ function ScoreStars({ score }: { score: number }) {
 
 function ZodiacGrid({ onSelect }: { onSelect: (key: string) => void }) {
   return (
-    <div className="flex flex-col items-center gap-5 w-full max-w-lg">
+    <div className="flex flex-col items-center gap-4 w-full max-w-lg">
       <motion.h1
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-5xl font-bold text-foreground"
+        className="text-2xl font-bold text-foreground"
       >
-        오늘의 운세
+        띠별 운세
       </motion.h1>
 
       <motion.p
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="text-xl text-muted-foreground"
+        className="text-base text-muted-foreground"
       >
         나의 띠를 선택하세요
       </motion.p>
 
-      <div className="grid grid-cols-3 gap-4 w-full">
+      <div className="grid grid-cols-3 gap-3 w-full">
         {ZODIAC_ANIMALS.map((animal, i) => (
           <motion.button
             key={animal.key}
@@ -75,9 +75,9 @@ function ZodiacGrid({ onSelect }: { onSelect: (key: string) => void }) {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => onSelect(animal.key)}
-            className="flex flex-col items-center gap-2 p-5 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+            className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow cursor-pointer"
           >
-            <span className="text-6xl">{animal.emoji}</span>
+            <span className="text-4xl">{animal.emoji}</span>
             <span className="text-base font-semibold text-foreground">{animal.label}</span>
             <span className="text-sm text-muted-foreground leading-tight text-center">
               {animal.years}
@@ -124,12 +124,12 @@ function FortuneDetail({
   };
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full max-w-lg">
+    <div className="flex flex-col items-center gap-4 w-full max-w-lg">
       <motion.button
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={onBack}
-        className="self-start text-lg text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        className="self-start text-base text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
       >
         ← 띠 선택
       </motion.button>
@@ -139,7 +139,7 @@ function FortuneDetail({
         animate={{ opacity: 1, y: 0 }}
         className="text-center"
       >
-        <h1 className="text-5xl font-bold text-foreground">오늘의 운세</h1>
+        <h1 className="text-2xl font-bold text-foreground">띠별 운세</h1>
       </motion.div>
 
       <motion.div
@@ -148,9 +148,9 @@ function FortuneDetail({
         transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
         className="text-center"
       >
-        <div className="text-8xl mb-3">{zodiac.emoji}</div>
-        <p className="text-2xl font-semibold text-primary">{zodiac.label}</p>
-        <p className="text-lg text-muted-foreground">{date}</p>
+        <div className="text-5xl mb-2">{zodiac.emoji}</div>
+        <p className="text-lg font-semibold text-primary">{zodiac.label}</p>
+        <p className="text-base text-muted-foreground">{date}</p>
       </motion.div>
 
       {fortuneCategories.map((cat, i) => (
@@ -162,15 +162,15 @@ function FortuneDetail({
           className="w-full"
         >
           <Card className="border-none shadow-md">
-            <CardContent className="pt-6 pb-6">
+            <CardContent className="pt-4 pb-4">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-3xl">{cat.emoji}</span>
-                  <span className="text-xl font-bold text-foreground">{cat.label}</span>
+                  <span className="text-xl">{cat.emoji}</span>
+                  <span className="text-base font-bold text-foreground">{cat.label}</span>
                 </div>
                 <ScoreStars score={scoreMap[cat.key]} />
               </div>
-              <p className="text-lg text-foreground/80 leading-relaxed">
+              <p className="text-base text-foreground/80 leading-relaxed">
                 {fortune[cat.key]}
               </p>
             </CardContent>
@@ -185,18 +185,18 @@ function FortuneDetail({
         className="w-full"
       >
         <Card className="border-none shadow-md bg-gradient-to-r from-indigo-50 to-purple-50">
-          <CardContent className="pt-6 pb-6">
+          <CardContent className="pt-4 pb-4">
             <div className="flex justify-around text-center">
               <div>
                 <p className="text-base text-muted-foreground mb-1">럭키 컬러</p>
-                <p className="text-2xl font-bold text-primary">
+                <p className="text-lg font-bold text-primary">
                   {fortune.luckyColor}
                 </p>
               </div>
-              <Separator orientation="vertical" className="h-16" />
+              <Separator orientation="vertical" className="h-12" />
               <div>
                 <p className="text-base text-muted-foreground mb-1">럭키 넘버</p>
-                <p className="text-2xl font-bold text-primary">
+                <p className="text-lg font-bold text-primary">
                   {fortune.luckyNumber}
                 </p>
               </div>

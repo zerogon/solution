@@ -25,7 +25,7 @@ export function CharacterCard({ character }: CharacterCardProps) {
         damping: 15,
       }}
       className={cn(
-        "relative flex flex-col items-center gap-3 p-6 rounded-2xl",
+        "relative flex flex-col items-center gap-2 p-4 rounded-2xl",
         config.bg,
         "shadow-lg",
         config.glow
@@ -48,7 +48,7 @@ export function CharacterCard({ character }: CharacterCardProps) {
         <CharacterLottie
           url={character.lottieUrl}
           fallbackEmoji={character.emoji}
-          size={120}
+          size={100}
         />
       </motion.div>
 
@@ -57,7 +57,7 @@ export function CharacterCard({ character }: CharacterCardProps) {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className={cn("text-3xl font-bold", config.color)}
+        className={cn("text-xl font-bold", config.color)}
       >
         {character.name}
       </motion.p>
@@ -70,7 +70,7 @@ export function CharacterCard({ character }: CharacterCardProps) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.6 }}
-        className="text-xl text-foreground/70 text-center leading-relaxed"
+        className="text-base text-foreground/70 text-center leading-relaxed"
       >
         &ldquo;{character.greeting}&rdquo;
       </motion.p>
