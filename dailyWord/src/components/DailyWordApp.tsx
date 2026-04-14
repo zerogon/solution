@@ -167,7 +167,7 @@ export function DailyWordApp() {
       <motion.h1
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-2xl font-bold text-foreground"
+        className="text-4xl font-bold text-foreground"
       >
         오늘의 단어
       </motion.h1>
@@ -213,7 +213,7 @@ export function DailyWordApp() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
-          className="text-base text-muted-foreground"
+          className="text-2xl text-muted-foreground"
         >
           마음에 드는 단어를 선택하세요
         </motion.p>

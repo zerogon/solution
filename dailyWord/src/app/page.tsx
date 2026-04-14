@@ -34,7 +34,7 @@ export default function Home() {
         >
           <button
             onClick={() => handleVersionChange("v1")}
-            className={`px-4 py-1.5 rounded-full text-lg font-medium transition-all ${
+            className={`px-4 py-1.5 rounded-full text-3xl font-medium transition-all ${
               version === "v1"
                 ? "bg-primary text-white shadow-md"
                 : "bg-secondary text-foreground/60 hover:text-foreground/80"
@@ -44,7 +44,7 @@ export default function Home() {
           </button>
           <button
             onClick={() => handleVersionChange("v2")}
-            className={`px-4 py-1.5 rounded-full text-lg font-medium transition-all ${
+            className={`px-4 py-1.5 rounded-full text-3xl font-medium transition-all ${
               version === "v2"
                 ? "bg-primary text-white shadow-md"
                 : "bg-secondary text-foreground/60 hover:text-foreground/80"

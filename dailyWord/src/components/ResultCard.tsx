@@ -27,7 +27,7 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-            className="text-5xl font-bold text-primary mb-4"
+            className="text-7xl font-bold text-primary mb-4"
           >
             {word}
           </motion.h2>
@@ -36,7 +36,7 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="text-xl text-foreground/80 leading-relaxed"
+              className="text-3xl text-foreground/80 leading-relaxed"
             >
               &ldquo;{fortune}&rdquo;
             </motion.p>
