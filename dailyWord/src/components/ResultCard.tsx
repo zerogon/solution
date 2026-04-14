@@ -2,43 +2,57 @@
 
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
+import { CharacterReveal } from "@/components/character/CharacterReveal";
+import { MenuRecommend } from "@/components/MenuRecommend";
+import { Separator } from "@/components/ui/separator";
 
 interface ResultCardProps {
   word: string;
   fortune: string | null;
+  /** 이미 선택된 결과를 다시 보여줄 때 true (슬롯머신 연출 생략) */
+  alreadyRevealed?: boolean;
 }
 
-export function ResultCard({ word, fortune }: ResultCardProps) {
+export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 30, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="w-full max-w-sm"
+      className="w-full max-w-md"
     >
       <Card className="border-none shadow-lg text-center">
-        <CardContent className="pt-8 pb-8">
+        <CardContent className="pt-7 pb-7">
           <motion.h2
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-            className="text-3xl font-bold text-primary mb-6"
+            className="text-5xl font-bold text-primary mb-4"
           >
-            &ldquo;{word}&rdquo;
+            {word}
           </motion.h2>
           {fortune && (
-            <motion.div
+            <motion.p
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
+              className="text-xl text-foreground/80 leading-relaxed"
             >
-              <div className="w-1/3 mx-auto border-t border-border/40 mb-5" />
-              <p className="text-xs text-muted-foreground mb-2">오늘의 운세</p>
-              <p className="text-base text-foreground/80 leading-relaxed">
-                {fortune}
-              </p>
-            </motion.div>
+              &ldquo;{fortune}&rdquo;
+            </motion.p>
           )}
+
+          {/* 오늘의 캐릭터 */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: alreadyRevealed ? 0.3 : 0.8 }}
+          >
+            <Separator className="my-4" />
+            <CharacterReveal instant={alreadyRevealed} />
+            <Separator className="my-4" />
+            <MenuRecommend />
+          </motion.div>
         </CardContent>
       </Card>
     </motion.div>

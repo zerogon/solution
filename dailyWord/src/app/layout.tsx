@@ -1,13 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
-import { Gowun_Batang } from "next/font/google";
+import { Dongle } from "next/font/google";
 import { cn } from "@/lib/utils";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
-const gowunBatang = Gowun_Batang({
+const dongle = Dongle({
   subsets: ["latin"],
-  weight: ["400", "700"],
+  weight: ["300", "400", "700"],
   variable: "--font-korean",
 });
 
@@ -29,7 +29,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ko" className={cn("font-sans", geist.variable, gowunBatang.variable)}>
+    <html lang="ko" className={cn("font-sans", geist.variable, dongle.variable)}>
       <body className="min-h-dvh bg-background text-foreground antialiased">
         {children}
       </body>
