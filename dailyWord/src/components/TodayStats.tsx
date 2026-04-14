@@ -41,7 +41,7 @@ export function TodayStats() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.8 }}
-      className="w-full max-w-sm mt-4"
+      className="w-full max-w-md mt-4"
     >
       <Card className="border-none shadow-sm">
         <CardHeader className="pb-3">
@@ -61,7 +61,7 @@ export function TodayStats() {
               <Badge variant={badgeVariants[i]} className="text-sm">
                 {medals[i]}
               </Badge>
-              <span className="flex-1 text-base font-medium">{s.word}</span>
+              <span className="flex-1 text-lg font-medium">{s.word}</span>
               <div className="flex items-center gap-2 w-36">
                 <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
                   <motion.div
@@ -71,7 +71,7 @@ export function TodayStats() {
                     transition={{ delay: 1.2 + i * 0.2, duration: 0.6 }}
                   />
                 </div>
-                <span className="text-base font-medium text-muted-foreground text-right whitespace-nowrap">
+                <span className="text-base font-medium text-muted-foreground text-right whitespace-nowrap leading-tight">
                   {s.percentage}% ({s.count}명)
                 </span>
               </div>

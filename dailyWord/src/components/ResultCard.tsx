@@ -19,15 +19,15 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
       initial={{ opacity: 0, y: 30, scale: 0.95 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="w-full max-w-sm"
+      className="w-full max-w-md"
     >
       <Card className="border-none shadow-lg text-center">
-        <CardContent className="pt-6 pb-6">
+        <CardContent className="pt-7 pb-7">
           <motion.h2
             initial={{ scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-            className="text-4xl font-bold text-primary mb-4"
+            className="text-5xl font-bold text-primary mb-4"
           >
             {word}
           </motion.h2>
@@ -36,7 +36,7 @@ export function ResultCard({ word, fortune, alreadyRevealed }: ResultCardProps) 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.6 }}
-              className="text-lg text-foreground/80 leading-relaxed"
+              className="text-xl text-foreground/80 leading-relaxed"
             >
               &ldquo;{fortune}&rdquo;
             </motion.p>

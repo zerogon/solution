@@ -29,7 +29,7 @@ export function WordGrid({
   const hasSelection = selectedIndex !== null;
 
   return (
-    <div className={cn("grid grid-cols-3 gap-2.5 w-full max-w-sm")}>
+    <div className={cn("grid grid-cols-3 gap-3 w-full max-w-md")}>
       {words.map((w, i) => (
         <WordCard
           key={w.id}

@@ -19,5 +19,7 @@ export function getTodayDateKST(): string {
   const year = kst.getUTCFullYear();
   const month = String(kst.getUTCMonth() + 1).padStart(2, "0");
   const day = String(kst.getUTCDate()).padStart(2, "0");
-  return `${year}년 ${month}월 ${day}일`;
+  const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+  const weekday = weekdays[kst.getUTCDay()];
+  return `${year}년 ${month}월 ${day}일 (${weekday})`;
 }

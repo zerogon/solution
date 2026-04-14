@@ -25,7 +25,7 @@ export function RandomCard({
       disabled={disabled}
       className={cn(
         "relative flex items-center justify-center rounded-2xl bg-card shadow-md",
-        "aspect-square cursor-pointer select-none overflow-hidden min-h-[4.5rem]",
+        "aspect-square cursor-pointer select-none overflow-hidden min-h-[5.5rem]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         "disabled:cursor-default"
       )}
@@ -42,11 +42,11 @@ export function RandomCard({
       whileTap={!disabled ? { scale: 0.95 } : undefined}
       transition={{ duration: 0.15, delay: isHighlighted ? 0 : index * 0.05 }}
     >
-      <span className="absolute text-base text-muted-foreground/70 font-semibold">
+      <span className="absolute text-lg text-muted-foreground/70 font-semibold">
         랜덤 선택
       </span>
       <motion.span
-        className="relative text-3xl font-bold text-primary drop-shadow-md"
+        className="relative text-4xl font-bold text-primary drop-shadow-md"
         animate={{ scale: [1, 1.15, 1], rotate: [0, 5, -5, 0] }}
         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
       >

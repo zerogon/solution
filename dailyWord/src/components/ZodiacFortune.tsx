@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   getTodayFortune,
   getTodayDateKST,
   type ZodiacFortune as ZodiacFortuneType,
 } from "@/lib/zodiac-fortunes";
+import { getTodayMenu, getCategoryEmoji, formatPrice, getMenuDescription } from "@/lib/menu";
 
 const ZODIAC_ANIMALS = [
   { key: "rat", emoji: "🐭", label: "쥐띠", years: "1984, 1996, 2008" },
@@ -35,7 +36,7 @@ const fortuneCategories = [
 
 function ScoreStars({ score }: { score: number }) {
   return (
-    <span className="text-base tracking-wider">
+    <span className="text-2xl tracking-wider">
       {Array.from({ length: 5 }, (_, i) => (
         <span key={i} className={i < score ? "text-yellow-400" : "text-gray-300"}>
           ★
@@ -47,11 +48,11 @@ function ScoreStars({ score }: { score: number }) {
 
 function ZodiacGrid({ onSelect }: { onSelect: (key: string) => void }) {
   return (
-    <div className="flex flex-col items-center gap-4 w-full max-w-lg">
+    <div className="flex flex-col items-center gap-4 w-full max-w-xl">
       <motion.h1
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="text-2xl font-bold text-foreground"
+        className="text-5xl font-bold text-foreground"
       >
         띠별 운세
       </motion.h1>
@@ -60,12 +61,12 @@ function ZodiacGrid({ onSelect }: { onSelect: (key: string) => void }) {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.2 }}
-        className="text-base text-muted-foreground"
+        className="text-2xl text-muted-foreground"
       >
         나의 띠를 선택하세요
       </motion.p>
 
-      <div className="grid grid-cols-3 gap-3 w-full">
+      <div className="grid grid-cols-3 gap-4 w-full">
         {ZODIAC_ANIMALS.map((animal, i) => (
           <motion.button
             key={animal.key}
@@ -75,13 +76,10 @@ function ZodiacGrid({ onSelect }: { onSelect: (key: string) => void }) {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => onSelect(animal.key)}
-            className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+            className="flex flex-col items-center gap-2 p-5 rounded-2xl bg-white shadow-md hover:shadow-lg transition-shadow cursor-pointer"
           >
-            <span className="text-4xl">{animal.emoji}</span>
-            <span className="text-base font-semibold text-foreground">{animal.label}</span>
-            <span className="text-sm text-muted-foreground leading-tight text-center">
-              {animal.years}
-            </span>
+            <span className="text-6xl">{animal.emoji}</span>
+            <span className="text-2xl font-semibold text-foreground">{animal.label}</span>
           </motion.button>
         ))}
       </div>
@@ -124,12 +122,12 @@ function FortuneDetail({
   };
 
   return (
-    <div className="flex flex-col items-center gap-4 w-full max-w-lg">
+    <div className="flex flex-col items-center gap-4 w-full max-w-xl">
       <motion.button
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         onClick={onBack}
-        className="self-start text-base text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+        className="self-start text-2xl text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
       >
         ← 띠 선택
       </motion.button>
@@ -139,7 +137,7 @@ function FortuneDetail({
         animate={{ opacity: 1, y: 0 }}
         className="text-center"
       >
-        <h1 className="text-2xl font-bold text-foreground">띠별 운세</h1>
+        <h1 className="text-5xl font-bold text-foreground">띠별 운세</h1>
       </motion.div>
 
       <motion.div
@@ -148,9 +146,9 @@ function FortuneDetail({
         transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
         className="text-center"
       >
-        <div className="text-5xl mb-2">{zodiac.emoji}</div>
-        <p className="text-lg font-semibold text-primary">{zodiac.label}</p>
-        <p className="text-base text-muted-foreground">{date}</p>
+        <div className="text-7xl mb-2">{zodiac.emoji}</div>
+        <p className="text-3xl font-semibold text-primary">{zodiac.label}</p>
+        <p className="text-xl text-muted-foreground">{date}</p>
       </motion.div>
 
       {fortuneCategories.map((cat, i) => (
@@ -162,15 +160,15 @@ function FortuneDetail({
           className="w-full"
         >
           <Card className="border-none shadow-md">
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center justify-between mb-3">
+            <CardContent className="pt-6 pb-6">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl">{cat.emoji}</span>
-                  <span className="text-base font-bold text-foreground">{cat.label}</span>
+                  <span className="text-3xl">{cat.emoji}</span>
+                  <span className="text-2xl font-bold text-foreground">{cat.label}</span>
                 </div>
                 <ScoreStars score={scoreMap[cat.key]} />
               </div>
-              <p className="text-base text-foreground/80 leading-relaxed">
+              <p className="text-2xl text-foreground/80 leading-relaxed">
                 {fortune[cat.key]}
               </p>
             </CardContent>
@@ -186,21 +184,48 @@ function FortuneDetail({
       >
         <Card className="border-none shadow-md bg-gradient-to-r from-indigo-50 to-purple-50">
           <CardContent className="pt-4 pb-4">
-            <div className="flex justify-around text-center">
-              <div>
-                <p className="text-base text-muted-foreground mb-1">럭키 컬러</p>
-                <p className="text-lg font-bold text-primary">
-                  {fortune.luckyColor}
-                </p>
-              </div>
-              <Separator orientation="vertical" className="h-12" />
-              <div>
-                <p className="text-base text-muted-foreground mb-1">럭키 넘버</p>
-                <p className="text-lg font-bold text-primary">
-                  {fortune.luckyNumber}
-                </p>
-              </div>
-            </div>
+            <p className="text-2xl text-muted-foreground mb-2 text-center">
+              <span className="font-bold text-indigo-600">세이프토피아</span> 추천 메뉴
+            </p>
+            {(() => {
+              const menu = getTodayMenu(zodiac.key);
+              const description = getMenuDescription(menu.id);
+              return (
+                <div className="flex flex-col gap-2">
+                <div className="flex items-center gap-3">
+                  {menu.image ? (
+                    <div className="relative w-20 h-20 rounded-xl overflow-hidden shrink-0 shadow-sm">
+                      <Image
+                        src={`/menu/${menu.image}`}
+                        alt={menu.name}
+                        fill
+                        className="object-cover"
+                        sizes="80px"
+                      />
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center w-20 h-20 rounded-xl bg-white shadow-sm shrink-0">
+                      <span className="text-3xl">{getCategoryEmoji(menu.category)}</span>
+                    </div>
+                  )}
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <span className="text-lg text-muted-foreground">{menu.category}</span>
+                    <span className="text-2xl font-bold text-foreground truncate">
+                      {menu.name}
+                    </span>
+                    <span className="text-xl font-semibold text-primary">
+                      {formatPrice(menu.price)}
+                    </span>
+                  </div>
+                </div>
+                {description && (
+                  <p className="text-lg text-foreground/70 leading-relaxed text-center">
+                    {description}
+                  </p>
+                )}
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       </motion.div>

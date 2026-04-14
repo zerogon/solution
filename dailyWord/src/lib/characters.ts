@@ -21,15 +21,6 @@ export const characters: Character[] = [
     greeting: "오늘 하루도 화이팅!",
   },
   {
-    id: "cat",
-    name: "나비",
-    emoji: "🐱",
-    lottieUrl:
-      "https://assets-v2.lottiefiles.com/a/814d9de6-f5d5-11ee-9058-7fb43f2edc02/RCvndLeF2G.json",
-    rarity: "common",
-    greeting: "야옹~ 좋은 일만 가득할 거예요!",
-  },
-  {
     id: "chick",
     name: "삐약이",
     emoji: "🐥",

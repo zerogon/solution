@@ -75,9 +75,74 @@ export function getCategoryEmoji(category: string): string {
   return categoryEmoji[category] ?? "☕";
 }
 
+const menuDescriptions: Record<number, string> = {
+  1: "진하고 부드러운 크림이 얹힌 세이프토피아 대표 시그니처.",
+  2: "홍차를 정성껏 우려낸 깊고 고소한 수제 밀크티.",
+  3: "깔끔한 바디감이 매력적인 정통 아메리카노.",
+  4: "우유의 고소함과 에스프레소가 조화로운 클래식 라떼.",
+  5: "달콤한 초콜릿과 에스프레소의 진한 만남.",
+  6: "저온에서 천천히 추출한 부드러운 콜드브루.",
+  7: "원두 본연의 향을 섬세하게 즐기는 핸드드립.",
+  8: "고소한 코코넛 향이 매력적인 이색 커피.",
+  9: "세이프토피아만의 시그니처 블렌드 라떼.",
+  10: "오트밀크의 부드러움이 돋보이는 비건 친화 라떼.",
+  11: "진하게 농축된 한 잔, 커피 본연의 맛.",
+  12: "달콤한 초콜릿이 가득한 디저트 같은 라떼.",
+  13: "향긋한 국산 녹차가루로 만든 건강한 라떼.",
+  14: "상큼한 딸기와 우유가 어우러진 분홍빛 라떼.",
+  15: "새콤달콤 유자가 입안 가득 퍼지는 블렌드.",
+  16: "신선한 토마토로 만든 건강 한 잔.",
+  17: "상큼함 가득, 기분까지 청량해지는 레몬에이드.",
+  18: "달콤 쌉쌀한 복자의 깊은 풍미.",
+  19: "부드럽고 새하얀 요거트의 상큼한 매력.",
+  20: "카페인 걱정 없이 즐기는 깔끔한 디카페인 아메리카노.",
+  21: "잠들기 전에도 부담 없는 디카페인 라떼.",
+  22: "달콤한 초콜릿은 그대로, 카페인만 쏙 뺀 한 잔.",
+  23: "시그니처 세토라떼를 디카페인으로 부담 없이.",
+  24: "오트의 고소함을 디카페인으로 편안하게.",
+  25: "이국적인 코코넛 향을 늦은 시간에도 즐겨요.",
+  26: "진한 풍미는 그대로, 디카페인 에스프레소.",
+  27: "상큼한 레몬으로 목을 부드럽게 달래는 한 잔.",
+  28: "달콤한 유자 향이 기분까지 풀어주는 차.",
+  29: "청량한 페퍼민트로 머릿속까지 상쾌하게.",
+  30: "달콤한 복숭아 향이 가득한 시원한 아이스티.",
+  31: "사과의 은은한 향이 퍼지는 블렌드 티.",
+  32: "산호빛처럼 화사한 머스캣의 달콤함.",
+  33: "여름을 닮은 오렌지의 상큼한 향미.",
+  34: "톡 쏘는 탄산의 청량감, 깔끔한 미네랄 워터.",
+  35: "라임향을 더한 상쾌한 스파클링.",
+  36: "사과의 달콤함과 톡 쏘는 탄산의 조화.",
+  37: "사과 본연의 풍미를 그대로 즐기는 무탄산.",
+  38: "묵직한 자몽의 쌉쌀함과 달콤함이 매력적.",
+  39: "사과와 블루베리가 어우러진 베리풍미.",
+  40: "바삭하고 달콤한 수제 쿠키로 작은 행복을.",
+  41: "담백한 닭가슴살이 든든한 건강 샌드위치.",
+  42: "부드러운 에그 스프레드가 가득한 클래식.",
+  43: "달콤 짭짤한 불고기로 든든한 한 끼.",
+  44: "크림치즈와 딸기의 달콤한 하모니.",
+};
+
+export function getMenuDescription(id: number): string {
+  return menuDescriptions[id] ?? "";
+}
+
 export function pickRandomMenu(): MenuItem {
   const available = menuItems.filter((m) => !m.soldOut);
   return available[Math.floor(Math.random() * available.length)];
+}
+
+export function getTodayMenu(zodiacKey?: string): MenuItem {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const dateSeed =
+    kst.getUTCFullYear() * 10000 +
+    (kst.getUTCMonth() + 1) * 100 +
+    kst.getUTCDate();
+  const zodiacOffset = zodiacKey
+    ? [...zodiacKey].reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+    : 0;
+  const available = menuItems.filter((m) => !m.soldOut);
+  return available[(dateSeed + zodiacOffset) % available.length];
 }
 
 export function formatPrice(price: number): string {

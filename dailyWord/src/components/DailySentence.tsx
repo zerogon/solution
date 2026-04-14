@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getTodaySentence, getTodayDateKST } from "@/lib/daily-sentences";
+import Lottie from "lottie-react";
+import { characters } from "@/lib/characters";
 
 
 interface Particle {
@@ -57,6 +59,44 @@ function FloatingParticles() {
   );
 }
 
+function RandomAnimatedCharacter({ size = 96 }: { size?: number }) {
+  const [animationData, setAnimationData] = useState<object | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const pool = [...characters].sort(() => Math.random() - 0.5);
+
+    (async () => {
+      for (const c of pool) {
+        try {
+          const res = await fetch(c.lottieUrl);
+          if (!res.ok) continue;
+          const data = await res.json();
+          if (cancelled) return;
+          setAnimationData(data);
+          return;
+        } catch {
+          continue;
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!animationData) return null;
+
+  return (
+    <Lottie
+      animationData={animationData}
+      loop
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
 const containerVariants = {
   hidden: {},
   visible: {
@@ -90,7 +130,7 @@ export function DailySentence() {
 
   if (!sentence) return null;
 
-  const characters = sentence.split("");
+  const sentenceChars = sentence.split("");
 
   return (
     <div className="relative flex flex-col items-center justify-center gap-6 w-full max-w-md mx-auto">
@@ -101,29 +141,19 @@ export function DailySentence() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="text-base text-muted-foreground tracking-wide"
+        className="text-lg text-muted-foreground tracking-wide"
       >
         {date}
       </motion.p>
-
-      {/* 타이틀 */}
-      <motion.h1
-        initial={{ opacity: 0, scale: 0.85 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ delay: 0.25, type: "spring", stiffness: 150, damping: 15 }}
-        className="text-lg font-semibold text-primary"
-      >
-        오늘의 운세
-      </motion.h1>
 
       {/* 문장 */}
       <motion.p
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="text-2xl font-normal text-foreground/70 tracking-wide text-center leading-relaxed px-2"
+        className="text-2xl font-medium text-foreground/90 tracking-wide text-center leading-relaxed px-4 py-4 rounded-2xl bg-gradient-to-b from-primary/5 to-transparent [text-shadow:0_0_18px_hsl(var(--primary)/0.25)]"
       >
-        {characters.map((char, i) => (
+        {sentenceChars.map((char, i) => (
           <span key={i}>
             <motion.span
               variants={charVariants}
@@ -131,7 +161,7 @@ export function DailySentence() {
             >
               {char === " " ? "\u00A0" : char}
             </motion.span>
-            {char === "." && i < characters.length - 1 && <br />}
+            {char === "." && i < sentenceChars.length - 1 && <br />}
           </span>
         ))}
       </motion.p>
@@ -144,14 +174,13 @@ export function DailySentence() {
         className="w-16 h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent"
       />
 
-      {/* 하단 장식 이모지 */}
+      {/* 하단 장식: 랜덤 귀여운 캐릭터 애니메이션 */}
       <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 2.3 }}
-        className="text-2xl"
+        initial={{ opacity: 0, y: 10, scale: 0.5 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ delay: 2.3, type: "spring", stiffness: 200, damping: 12 }}
       >
-        ✨
+        <RandomAnimatedCharacter size={96} />
       </motion.div>
     </div>
   );
