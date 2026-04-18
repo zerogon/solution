@@ -225,8 +225,8 @@ export default function AdminPage() {
                       <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                       <Tooltip
                         labelFormatter={(l) => l}
-                        formatter={(value: number, name: string) => [
-                          value,
+                        formatter={(value, name) => [
+                          value as number,
                           name === "dailySentence"
                             ? "오늘의 문장"
                             : name === "zodiacFortune"
@@ -361,9 +361,9 @@ export default function AdminPage() {
                       />
                       <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                       <Tooltip
-                        labelFormatter={formatMonth}
-                        formatter={(value: number, name: string) => [
-                          value,
+                        labelFormatter={(m) => formatMonth(m as string)}
+                        formatter={(value, name) => [
+                          value as number,
                           name === "dailySentence"
                             ? "오늘의 문장"
                             : name === "zodiacFortune"
