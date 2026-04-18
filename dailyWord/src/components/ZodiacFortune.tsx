@@ -5,11 +5,16 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  getTodayFortune,
-  getTodayDateKST,
-  type ZodiacFortune as ZodiacFortuneType,
-} from "@/lib/zodiac-fortunes";
+interface ZodiacFortuneType {
+  overall: string;
+  love: string;
+  money: string;
+  health: string;
+  overallScore: number;
+  loveScore: number;
+  moneyScore: number;
+  healthScore: number;
+}
 import { getTodayMenu, getCategoryEmoji, formatPrice, getMenuDescription } from "@/lib/menu";
 
 const ZODIAC_ANIMALS = [
@@ -98,9 +103,15 @@ function FortuneDetail({
   const [date, setDate] = useState("");
 
   useEffect(() => {
-    setFortune(getTodayFortune());
-    setDate(getTodayDateKST());
-  }, []);
+    fetch(`/api/zodiac-fortune?zodiac=${zodiac.key}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.fortune) {
+          setFortune(data.fortune);
+          setDate(data.date);
+        }
+      });
+  }, [zodiac.key]);
 
   if (!fortune) {
     return (

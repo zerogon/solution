@@ -39,13 +39,13 @@ export const menuItems: MenuItem[] = [
   { id: 25, name: "De코코넛커피", price: 4500, category: "디카페인" },
   { id: 26, name: "De에스프레소", price: 2500, category: "디카페인" },
   // 티
-  { id: 27, name: "레몬차", price: 3500, category: "티" },
-  { id: 28, name: "유자차", price: 3500, category: "티" },
-  { id: 29, name: "페퍼민트", price: 3200, category: "티" },
-  { id: 30, name: "복숭아 아이스티", price: 3200, category: "티" },
-  { id: 31, name: "애플블렌드", price: 3200, category: "티" },
-  { id: 32, name: "코랄머스캣", price: 3200, category: "티" },
-  { id: 33, name: "썸머오렌지", price: 4000, category: "티" },
+  { id: 27, name: "레몬차", price: 3500, category: "티(tea)" },
+  { id: 28, name: "유자차", price: 3500, category: "티(tea)" },
+  { id: 29, name: "페퍼민트", price: 3200, category: "티(tea)" },
+  { id: 30, name: "복숭아 아이스티", price: 3200, category: "티(tea)" },
+  { id: 31, name: "애플블렌드", price: 3200, category: "티(tea)" },
+  { id: 32, name: "코랄머스캣", price: 3200, category: "티(tea)" },
+  { id: 33, name: "썸머오렌지", price: 4000, category: "티(tea)" },
   // 병음료
   { id: 34, name: "페리에 플레인", price: 3000, category: "병음료" },
   { id: 35, name: "페리에 라임", price: 3000, category: "병음료" },
@@ -66,7 +66,7 @@ const categoryEmoji: Record<string, string> = {
   커피: "☕",
   논커피: "🥤",
   디카페인: "🌿",
-  티: "🍵",
+  "티(tea)": "🍵",
   병음료: "🍾",
   디저트: "🍪",
 };
@@ -141,8 +141,10 @@ export function getTodayMenu(zodiacKey?: string): MenuItem {
   const zodiacOffset = zodiacKey
     ? [...zodiacKey].reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
     : 0;
-  const available = menuItems.filter((m) => !m.soldOut);
-  return available[(dateSeed + zodiacOffset) % available.length];
+  const preferred = menuItems.filter(
+    (m) => !m.soldOut && (m.category === "시그니처" || m.category === "커피") && m.name !== "에스프레소"
+  );
+  return preferred[(dateSeed + zodiacOffset) % preferred.length];
 }
 
 export function formatPrice(price: number): string {

@@ -1,13 +1,5 @@
 import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-
-const CSV_FILES = [
-  "today_fortune_sentences_100.csv",
-  "bizarre_office_fortune_100.csv",
-  "healing_fortune_100.csv",
-  "office_teams_meme_fortune_100.csv",
-];
+import { getActiveSentences } from "@/db/queries";
 
 function getDateSeed(): number {
   const now = new Date();
@@ -18,25 +10,15 @@ function getDateSeed(): number {
   return year * 10000 + month * 100 + day;
 }
 
-function parseCsv(text: string): string[] {
-  return text
-    .split(/\r?\n/)
-    .slice(1)
-    .filter((line) => line.trim())
-    .map((line) => line.replace(/^\d+,/, ""));
-}
-
 export async function GET() {
-  const dir = path.join(process.cwd(), "public", "sentenses");
-  const allSentences: string[] = [];
+  const sentences = await getActiveSentences();
 
-  for (const file of CSV_FILES) {
-    const text = fs.readFileSync(path.join(dir, file), "utf-8");
-    allSentences.push(...parseCsv(text));
+  if (sentences.length === 0) {
+    return NextResponse.json({ sentence: "오늘도 좋은 하루 보내세요!" });
   }
 
   const seed = getDateSeed();
-  const index = seed % allSentences.length;
+  const index = seed % sentences.length;
 
-  return NextResponse.json({ sentence: allSentences[index] });
+  return NextResponse.json({ sentence: sentences[index].text });
 }

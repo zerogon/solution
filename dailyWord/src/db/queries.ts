@@ -1,122 +1,131 @@
 import { getDb } from "./index";
-import { words, fortunes, visits, selections } from "./schema";
-import { eq, sql, and, gte, asc, desc } from "drizzle-orm";
+import { visits, zodiacFortunes, dailySentences, pageViews, ideas } from "./schema";
+import { and, eq, gte, sql, desc } from "drizzle-orm";
 
-function todayKST(): Date {
-  const now = new Date();
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  kst.setUTCHours(0, 0, 0, 0);
-  return new Date(kst.getTime() - 9 * 60 * 60 * 1000);
+export async function recordVisit(sessionId: string, userAgent: string | null) {
+  await getDb().insert(visits).values({ sessionId, userAgent });
 }
 
-export async function getActiveWords() {
-  return getDb()
-    .select({ id: words.id, word: words.word, displayOrder: words.displayOrder })
-    .from(words)
-    .where(eq(words.isActive, true))
-    .orderBy(asc(words.displayOrder));
-}
-
-export async function getSessionSelection(sessionId: string) {
-  const today = todayKST();
+export async function getZodiacFortune(zodiacKey: string, dayOfYear: number) {
   const result = await getDb()
     .select({
-      wordId: selections.wordId,
-      word: words.word,
-      fortune: fortunes.fortune,
+      overall: zodiacFortunes.overall,
+      love: zodiacFortunes.love,
+      money: zodiacFortunes.money,
+      health: zodiacFortunes.health,
+      overallScore: zodiacFortunes.overallScore,
+      loveScore: zodiacFortunes.loveScore,
+      moneyScore: zodiacFortunes.moneyScore,
+      healthScore: zodiacFortunes.healthScore,
     })
-    .from(selections)
-    .innerJoin(words, eq(selections.wordId, words.id))
-    .innerJoin(fortunes, eq(fortunes.wordId, words.id))
+    .from(zodiacFortunes)
     .where(
-      and(eq(selections.sessionId, sessionId), gte(selections.selectedAt, today))
+      and(
+        eq(zodiacFortunes.zodiacKey, zodiacKey),
+        eq(zodiacFortunes.dayOfYear, dayOfYear)
+      )
     )
     .limit(1);
 
   return result[0] ?? null;
 }
 
-export async function recordVisit(sessionId: string, userAgent: string | null) {
-  await getDb().insert(visits).values({ sessionId, userAgent });
+export async function getActiveSentences() {
+  return getDb()
+    .select({ id: dailySentences.id, text: dailySentences.text })
+    .from(dailySentences)
+    .where(eq(dailySentences.isActive, true))
+    .orderBy(dailySentences.id);
 }
 
-export async function recordSelection(sessionId: string, wordId: number) {
-  const today = todayKST();
-
-  // 중복 체크
-  const existing = await getDb()
-    .select({ id: selections.id })
-    .from(selections)
-    .where(
-      and(eq(selections.sessionId, sessionId), gte(selections.selectedAt, today))
-    )
-    .limit(1);
-
-  if (existing.length > 0) {
-    return null;
-  }
-
-  await getDb().insert(selections).values({ sessionId, wordId });
-
-  const word = await getDb()
-    .select({ word: words.word })
-    .from(words)
-    .where(eq(words.id, wordId))
-    .limit(1);
-
-  // 랜덤 운세 선택
-  const forts = await getDb()
-    .select({ fortune: fortunes.fortune })
-    .from(fortunes)
-    .where(eq(fortunes.wordId, wordId));
-
-  if (word.length === 0) return null;
-
-  const randomFortune = forts[Math.floor(Math.random() * forts.length)];
-  return {
-    word: word[0].word,
-    fortune: randomFortune?.fortune ?? null,
-  };
+export async function recordPageView(sessionId: string, page: string) {
+  await getDb().insert(pageViews).values({ sessionId, page });
 }
 
-export async function deleteSessionSelection(sessionId: string) {
-  const today = todayKST();
-  await getDb()
-    .delete(selections)
-    .where(
-      and(eq(selections.sessionId, sessionId), gte(selections.selectedAt, today))
-    );
+export async function submitIdea(name: string | null, content: string) {
+  await getDb().insert(ideas).values({ name, content });
+}
+
+export async function getIdeas() {
+  return getDb()
+    .select({
+      id: ideas.id,
+      name: ideas.name,
+      content: ideas.content,
+      createdAt: ideas.createdAt,
+    })
+    .from(ideas)
+    .orderBy(desc(ideas.createdAt));
+}
+
+function getTodayStartKST(): Date {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  const dateStr = kst.toISOString().slice(0, 10);
+  return new Date(dateStr + "T00:00:00+09:00");
 }
 
 export async function getTodayStats() {
-  const today = todayKST();
+  const todayStart = getTodayStartKST();
 
   const result = await getDb()
     .select({
-      wordId: selections.wordId,
-      word: words.word,
-      count: sql<number>`count(*)::int`,
+      total: sql<number>`count(distinct ${pageViews.sessionId})`,
+      dailySentence: sql<number>`count(distinct case when ${pageViews.page} = 'daily_sentence' then ${pageViews.sessionId} end)`,
+      zodiacFortune: sql<number>`count(distinct case when ${pageViews.page} = 'zodiac_fortune' then ${pageViews.sessionId} end)`,
     })
-    .from(selections)
-    .innerJoin(words, eq(selections.wordId, words.id))
-    .where(gte(selections.selectedAt, today))
-    .groupBy(selections.wordId, words.word)
-    .orderBy(desc(sql`count(*)`))
-    .limit(3);
+    .from(pageViews)
+    .where(gte(pageViews.viewedAt, todayStart));
 
-  const totalResult = await getDb()
-    .select({ total: sql<number>`count(*)::int` })
-    .from(selections)
-    .where(gte(selections.selectedAt, today));
+  return result[0] ?? { total: 0, dailySentence: 0, zodiacFortune: 0 };
+}
 
-  const total = totalResult[0]?.total ?? 0;
+export async function getDailyStats(days: number = 30) {
+  const result = await getDb()
+    .select({
+      date: sql<string>`to_char(${pageViews.viewedAt} AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')`,
+      total: sql<number>`count(distinct ${pageViews.sessionId})`,
+      dailySentence: sql<number>`count(distinct case when ${pageViews.page} = 'daily_sentence' then ${pageViews.sessionId} end)`,
+      zodiacFortune: sql<number>`count(distinct case when ${pageViews.page} = 'zodiac_fortune' then ${pageViews.sessionId} end)`,
+    })
+    .from(pageViews)
+    .where(
+      gte(
+        pageViews.viewedAt,
+        sql`now() AT TIME ZONE 'Asia/Seoul' - interval '${sql.raw(String(days))} days'`
+      )
+    )
+    .groupBy(
+      sql`to_char(${pageViews.viewedAt} AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')`
+    )
+    .orderBy(
+      sql`to_char(${pageViews.viewedAt} AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')`
+    );
 
-  return {
-    stats: result.map((r) => ({
-      word: r.word,
-      count: r.count,
-      percentage: total > 0 ? Math.round((r.count / total) * 100) : 0,
-    })),
-    totalSelections: total,
-  };
+  return result;
+}
+
+export async function getMonthlyStats(months: number = 12) {
+  const result = await getDb()
+    .select({
+      month: sql<string>`to_char(${pageViews.viewedAt} AT TIME ZONE 'Asia/Seoul', 'YYYY-MM')`,
+      total: sql<number>`count(distinct ${pageViews.sessionId})`,
+      dailySentence: sql<number>`count(distinct case when ${pageViews.page} = 'daily_sentence' then ${pageViews.sessionId} end)`,
+      zodiacFortune: sql<number>`count(distinct case when ${pageViews.page} = 'zodiac_fortune' then ${pageViews.sessionId} end)`,
+    })
+    .from(pageViews)
+    .where(
+      gte(
+        pageViews.viewedAt,
+        sql`now() AT TIME ZONE 'Asia/Seoul' - interval '${sql.raw(String(months))} months'`
+      )
+    )
+    .groupBy(
+      sql`to_char(${pageViews.viewedAt} AT TIME ZONE 'Asia/Seoul', 'YYYY-MM')`
+    )
+    .orderBy(
+      sql`to_char(${pageViews.viewedAt} AT TIME ZONE 'Asia/Seoul', 'YYYY-MM')`
+    );
+
+  return result;
 }
