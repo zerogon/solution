@@ -7,6 +7,7 @@ import { DailySentence } from "@/components/DailySentence";
 import { ZodiacFortune } from "@/components/ZodiacFortune";
 import { IdeaModal } from "@/components/IdeaModal";
 import { useSession } from "@/hooks/useSession";
+import { useDeviceId } from "@/hooks/useDeviceId";
 
 type Version = "v1" | "v2";
 
@@ -15,6 +16,7 @@ export default function Home() {
   const [mounted, setMounted] = useState(false);
   const [ideaOpen, setIdeaOpen] = useState(false);
   const sessionId = useSession();
+  const deviceId = useDeviceId();
   const trackedRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -26,16 +28,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!mounted || !sessionId) return;
+    if (!mounted || !sessionId || !deviceId) return;
     const page = version === "v1" ? "daily_sentence" : "zodiac_fortune";
-    if (trackedRef.current === `${version}-${sessionId}`) return;
-    trackedRef.current = `${version}-${sessionId}`;
+    if (trackedRef.current === `${version}-${deviceId}`) return;
+    trackedRef.current = `${version}-${deviceId}`;
     fetch("/api/page-view", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId, page }),
+      body: JSON.stringify({ sessionId, deviceId, page }),
     }).catch(() => {});
-  }, [mounted, sessionId, version]);
+  }, [mounted, sessionId, deviceId, version]);
 
   const handleVersionChange = (v: Version) => {
     setVersion(v);

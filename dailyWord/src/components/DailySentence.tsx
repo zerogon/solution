@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getTodaySentence, getTodayDateKST } from "@/lib/daily-sentences";
+import { useDeviceId } from "@/hooks/useDeviceId";
 import Lottie from "lottie-react";
 import { characters } from "@/lib/characters";
 
@@ -115,18 +116,23 @@ const charVariants = {
 };
 
 export function DailySentence() {
+  const deviceId = useDeviceId();
   const [sentence, setSentence] = useState<string | null>(null);
   const [date, setDate] = useState("");
 
   useEffect(() => {
-    getTodaySentence()
+    setDate(getTodayDateKST());
+  }, []);
+
+  useEffect(() => {
+    if (!deviceId) return;
+    getTodaySentence(deviceId)
       .then((text) => setSentence(text))
       .catch((err) => {
         console.error("Failed to load sentence:", err);
         setSentence("오늘 하루도 당신은 충분히 잘하고 있어요.");
       });
-    setDate(getTodayDateKST());
-  }, []);
+  }, [deviceId]);
 
   if (!sentence) return null;
 

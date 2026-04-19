@@ -38,8 +38,12 @@ export async function getActiveSentences() {
     .orderBy(dailySentences.id);
 }
 
-export async function recordPageView(sessionId: string, page: string) {
-  await getDb().insert(pageViews).values({ sessionId, page });
+export async function recordPageView(
+  sessionId: string,
+  page: string,
+  deviceId: string | null
+) {
+  await getDb().insert(pageViews).values({ sessionId, page, deviceId });
 }
 
 export async function submitIdea(name: string | null, content: string) {
@@ -70,9 +74,9 @@ export async function getTodayStats() {
 
   const result = await getDb()
     .select({
-      total: sql<number>`count(distinct ${pageViews.sessionId})`,
-      dailySentence: sql<number>`count(distinct case when ${pageViews.page} = 'daily_sentence' then ${pageViews.sessionId} end)`,
-      zodiacFortune: sql<number>`count(distinct case when ${pageViews.page} = 'zodiac_fortune' then ${pageViews.sessionId} end)`,
+      total: sql<number>`count(distinct coalesce(${pageViews.deviceId}, ${pageViews.sessionId}))`,
+      dailySentence: sql<number>`count(distinct case when ${pageViews.page} = 'daily_sentence' then coalesce(${pageViews.deviceId}, ${pageViews.sessionId}) end)`,
+      zodiacFortune: sql<number>`count(distinct case when ${pageViews.page} = 'zodiac_fortune' then coalesce(${pageViews.deviceId}, ${pageViews.sessionId}) end)`,
     })
     .from(pageViews)
     .where(gte(pageViews.viewedAt, todayStart));
@@ -84,9 +88,9 @@ export async function getDailyStats(days: number = 30) {
   const result = await getDb()
     .select({
       date: sql<string>`to_char(${pageViews.viewedAt} AT TIME ZONE 'Asia/Seoul', 'YYYY-MM-DD')`,
-      total: sql<number>`count(distinct ${pageViews.sessionId})`,
-      dailySentence: sql<number>`count(distinct case when ${pageViews.page} = 'daily_sentence' then ${pageViews.sessionId} end)`,
-      zodiacFortune: sql<number>`count(distinct case when ${pageViews.page} = 'zodiac_fortune' then ${pageViews.sessionId} end)`,
+      total: sql<number>`count(distinct coalesce(${pageViews.deviceId}, ${pageViews.sessionId}))`,
+      dailySentence: sql<number>`count(distinct case when ${pageViews.page} = 'daily_sentence' then coalesce(${pageViews.deviceId}, ${pageViews.sessionId}) end)`,
+      zodiacFortune: sql<number>`count(distinct case when ${pageViews.page} = 'zodiac_fortune' then coalesce(${pageViews.deviceId}, ${pageViews.sessionId}) end)`,
     })
     .from(pageViews)
     .where(
@@ -109,9 +113,9 @@ export async function getMonthlyStats(months: number = 12) {
   const result = await getDb()
     .select({
       month: sql<string>`to_char(${pageViews.viewedAt} AT TIME ZONE 'Asia/Seoul', 'YYYY-MM')`,
-      total: sql<number>`count(distinct ${pageViews.sessionId})`,
-      dailySentence: sql<number>`count(distinct case when ${pageViews.page} = 'daily_sentence' then ${pageViews.sessionId} end)`,
-      zodiacFortune: sql<number>`count(distinct case when ${pageViews.page} = 'zodiac_fortune' then ${pageViews.sessionId} end)`,
+      total: sql<number>`count(distinct coalesce(${pageViews.deviceId}, ${pageViews.sessionId}))`,
+      dailySentence: sql<number>`count(distinct case when ${pageViews.page} = 'daily_sentence' then coalesce(${pageViews.deviceId}, ${pageViews.sessionId}) end)`,
+      zodiacFortune: sql<number>`count(distinct case when ${pageViews.page} = 'zodiac_fortune' then coalesce(${pageViews.deviceId}, ${pageViews.sessionId}) end)`,
     })
     .from(pageViews)
     .where(

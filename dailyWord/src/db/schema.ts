@@ -67,12 +67,14 @@ export const pageViews = pgTable(
   {
     id: serial("id").primaryKey(),
     sessionId: text("session_id").notNull(),
+    deviceId: text("device_id"),
     page: varchar("page", { length: 30 }).notNull(),
     viewedAt: timestamp("viewed_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     index("idx_page_views_viewed_at").on(table.viewedAt),
     index("idx_page_views_page").on(table.page),
+    index("idx_page_views_device_id").on(table.deviceId),
   ]
 );
 

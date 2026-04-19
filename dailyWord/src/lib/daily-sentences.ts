@@ -7,8 +7,11 @@ function getDateSeed(): number {
   return year * 10000 + month * 100 + day;
 }
 
-export async function getTodaySentence(): Promise<string> {
-  const res = await fetch("/api/sentence");
+export async function getTodaySentence(deviceId?: string): Promise<string> {
+  const url = deviceId
+    ? `/api/sentence?deviceId=${encodeURIComponent(deviceId)}`
+    : "/api/sentence";
+  const res = await fetch(url, { cache: "no-store" });
   const data = await res.json();
   return data.sentence;
 }
