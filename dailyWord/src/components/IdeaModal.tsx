@@ -80,7 +80,7 @@ export function IdeaModal({ open, onOpenChange }: IdeaModalProps) {
               >
                 <CheckCircle className="h-12 w-12 text-accent" />
                 <p className="text-3xl font-medium text-foreground">
-                  아이디어가 전달되었어요!
+                  피드백이 전달되었어요!
                 </p>
                 <p className="text-2xl text-muted-foreground">
                   소중한 의견 감사합니다
@@ -93,7 +93,7 @@ export function IdeaModal({ open, onOpenChange }: IdeaModalProps) {
                   <div className="flex items-center gap-2">
                     <Mail className="h-5 w-5 text-primary" />
                     <h2 className="text-3xl font-bold text-foreground">
-                      개발자에게 아이디어 보내기
+                      피드백 보내기
                     </h2>
                   </div>
                   <button
@@ -111,7 +111,7 @@ export function IdeaModal({ open, onOpenChange }: IdeaModalProps) {
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder="이름 + 팀명 (선택사항)"
+                      placeholder="이메일 계정명 (@skshieldus.com 제외) ex) gdhong2"
                       maxLength={100}
                       className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-2xl text-foreground placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none"
                     />
@@ -120,7 +120,7 @@ export function IdeaModal({ open, onOpenChange }: IdeaModalProps) {
                     <textarea
                       value={content}
                       onChange={(e) => setContent(e.target.value)}
-                      placeholder="아이디어를 자유롭게 적어주세요"
+                      placeholder="피드백을 자유롭게 적어주세요"
                       maxLength={1000}
                       rows={4}
                       className="w-full resize-none rounded-xl border border-border bg-background px-4 py-2.5 text-2xl text-foreground placeholder:text-muted-foreground/60 transition-colors focus:border-primary focus:outline-none"

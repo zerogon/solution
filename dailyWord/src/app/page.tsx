@@ -46,12 +46,12 @@ export default function Home() {
 
   return (
     <main className="relative flex min-h-dvh flex-col items-center px-4 py-8">
-      {/* 아이디어 보내기 아이콘 */}
+      {/* 피드백 보내기 아이콘 */}
       {mounted && (
         <button
           onClick={() => setIdeaOpen(true)}
           className="fixed top-4 right-4 z-40 rounded-full p-2 text-foreground/40 transition-colors hover:bg-secondary hover:text-foreground/70"
-          aria-label="아이디어 보내기"
+          aria-label="피드백 보내기"
         >
           <Mail className="h-5 w-5" />
         </button>
