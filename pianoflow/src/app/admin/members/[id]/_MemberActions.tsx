@@ -34,6 +34,26 @@ export function MemberActions({ id, role, status, remainingLessons }: Props) {
     });
   }
 
+  function withdraw() {
+    const confirmed = window.confirm(
+      "정말 탈퇴 처리하시겠습니까?\n탈퇴 회원은 로그인과 예약이 차단됩니다. 필요 시 활성화로 복구할 수 있습니다.",
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      const res = await adminSetStatus({ id, status: UserStatus.WITHDRAWN });
+      if (res.ok) toast.success("탈퇴 처리되었습니다.");
+      else toast.error(res.message);
+    });
+  }
+
+  function restore() {
+    startTransition(async () => {
+      const res = await adminSetStatus({ id, status: UserStatus.ACTIVE });
+      if (res.ok) toast.success("활성 상태로 복구되었습니다.");
+      else toast.error(res.message);
+    });
+  }
+
   function applyCredits() {
     if (delta === 0) return;
     startTransition(async () => {
@@ -64,18 +84,29 @@ export function MemberActions({ id, role, status, remainingLessons }: Props) {
     <div className="space-y-4">
       {tempPassword && (
         <div className="rounded-md border bg-amber-50 p-3 text-sm">
-          <p className="font-semibold">임시 비밀번호 (한 번만 표시)</p>
+          <p className="font-semibold">초기 비밀번호 = 로그인 ID</p>
           <p className="mt-1 font-mono text-lg text-amber-900">{tempPassword}</p>
         </div>
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" onClick={toggleDormant} disabled={pending}>
-          {status === UserStatus.ACTIVE ? "휴면 처리" : "활성화"}
-        </Button>
-        <Button variant="outline" onClick={resetPw} disabled={pending}>
-          비밀번호 초기화
-        </Button>
+        {status === UserStatus.WITHDRAWN ? (
+          <Button variant="outline" onClick={restore} disabled={pending}>
+            활성화 (복구)
+          </Button>
+        ) : (
+          <>
+            <Button variant="outline" onClick={toggleDormant} disabled={pending}>
+              {status === UserStatus.ACTIVE ? "휴면 처리" : "활성화"}
+            </Button>
+            <Button variant="outline" onClick={resetPw} disabled={pending}>
+              비밀번호 초기화
+            </Button>
+            <Button variant="destructive" onClick={withdraw} disabled={pending}>
+              탈퇴 처리
+            </Button>
+          </>
+        )}
       </div>
 
       {role === Role.STUDENT && (

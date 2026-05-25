@@ -26,7 +26,7 @@ export default function NewMemberPage() {
   useEffect(() => {
     if (state?.ok && state.data) {
       setTempPassword(state.data.tempPassword);
-      toast.success("회원이 등록되었습니다. 임시 비밀번호를 전달해주세요.");
+      toast.success("회원이 등록되었습니다. 로그인 ID/비밀번호를 전달해주세요.");
     } else if (state && !state.ok) {
       toast.error(state.message);
     }
@@ -41,10 +41,10 @@ export default function NewMemberPage() {
         {tempPassword ? (
           <div className="space-y-4">
             <div className="rounded-md border bg-amber-50 p-4 text-sm">
-              <p className="font-semibold">임시 비밀번호 (한 번만 표시됩니다)</p>
+              <p className="font-semibold">로그인 ID = 초기 비밀번호</p>
               <p className="mt-2 font-mono text-xl text-amber-900">{tempPassword}</p>
               <p className="mt-2 text-xs text-muted-foreground">
-                회원에게 직접 전달해주세요. 첫 로그인 시 변경 후 사용합니다.
+                ID와 비밀번호가 동일합니다. 회원에게 전달해주세요. 첫 로그인 시 비밀번호 변경이 강제됩니다.
               </p>
             </div>
             <div className="flex gap-2">

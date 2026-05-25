@@ -17,15 +17,6 @@ import {
   UserStatus,
 } from "@/generated/prisma/enums";
 
-function randomTempPassword(): string {
-  const chars = "23456789abcdefghjkmnpqrstuvwxyz";
-  let out = "";
-  for (let i = 0; i < 8; i += 1) {
-    out += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return out;
-}
-
 async function requireAdmin() {
   const session = await auth();
   if (!session?.user || session.user.role !== Role.ADMIN) {
@@ -50,27 +41,25 @@ export async function adminCreateMember(
       return { ok: false, message: parsed.error.issues[0].message };
     }
 
-    const tempPassword = randomTempPassword();
-    const hash = await bcrypt.hash(tempPassword, 10);
-
     // 동시 등록 충돌 시 1회 재시도
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         const loginId = await generateLoginId(prisma, parsed.data.phone);
+        const hash = await bcrypt.hash(loginId, 10);
         await prisma.user.create({
           data: {
             name: parsed.data.name,
             phone: parsed.data.phone,
             loginId,
             password: hash,
-            mustChangePassword: true,
+            mustChangePassword: false,
             role: parsed.data.role,
             status: UserStatus.ACTIVE,
             remainingLessons: parsed.data.remainingLessons,
           },
         });
         revalidatePath("/admin/members");
-        return { ok: true, data: { tempPassword } };
+        return { ok: true, data: { tempPassword: loginId } };
       } catch (err) {
         if (
           typeof err === "object" &&
@@ -199,14 +188,18 @@ export async function adminResetPassword(input: {
 }): Promise<ActionResult<{ tempPassword: string }>> {
   try {
     await requireAdmin();
-    const tempPassword = randomTempPassword();
-    const hash = await bcrypt.hash(tempPassword, 10);
+    const user = await prisma.user.findUnique({
+      where: { id: input.id },
+      select: { loginId: true },
+    });
+    if (!user) return { ok: false, message: "사용자를 찾을 수 없습니다." };
+    const hash = await bcrypt.hash(user.loginId, 10);
     await prisma.user.update({
       where: { id: input.id },
-      data: { password: hash, mustChangePassword: true },
+      data: { password: hash, mustChangePassword: false },
     });
     revalidatePath(`/admin/members/${input.id}`);
-    return { ok: true, data: { tempPassword } };
+    return { ok: true, data: { tempPassword: user.loginId } };
   } catch (err) {
     return {
       ok: false,

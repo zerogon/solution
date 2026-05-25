@@ -32,15 +32,6 @@ export const authConfig: NextAuthConfig = {
         return Response.redirect(loginUrl);
       }
 
-      // 첫 로그인 시 비밀번호 변경 강제
-      if (
-        auth.user.mustChangePassword &&
-        pathname !== "/account/password" &&
-        !pathname.startsWith("/api/")
-      ) {
-        return Response.redirect(new URL("/account/password", nextUrl));
-      }
-
       const role = auth.user.role;
       for (const { prefix, allowed } of ROLE_PREFIX) {
         if (pathname.startsWith(prefix) && !allowed.includes(role)) {

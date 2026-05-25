@@ -19,13 +19,11 @@ async function nextLoginId(phone: string): Promise<string> {
     where: { loginId: { startsWith: prefix } },
     select: { loginId: true },
   });
-  const used = new Set(
-    existing
-      .map((u) => u.loginId.slice(prefix.length))
-      .filter((s) => s.length === 1),
-  );
+  const usedIds = new Set(existing.map((u) => u.loginId));
+  if (!usedIds.has(prefix)) return prefix;
   for (const letter of SUFFIX_ALPHABET) {
-    if (!used.has(letter)) return `${prefix}${letter}`;
+    const candidate = `${prefix}${letter}`;
+    if (!usedIds.has(candidate)) return candidate;
   }
   throw new Error(`suffix exhausted for ${prefix}`);
 }
@@ -39,7 +37,7 @@ async function createUser(input: {
   mustChange?: boolean;
 }) {
   const loginId = await nextLoginId(input.phone);
-  const password = await bcrypt.hash(input.password ?? "test1234", 10);
+  const password = await bcrypt.hash(input.password ?? loginId, 10);
   return prisma.user.create({
     data: {
       name: input.name,
@@ -73,17 +71,17 @@ async function main() {
   console.log("👩‍🏫 선생님 3명 생성 + 가용 요일 설정");
   const teacherSpec = [
     {
-      name: "나연",
+      name: "이소연",
       phone: "010-1111-1111",
       weekdays: [Weekday.MON, Weekday.WED, Weekday.SAT, Weekday.SUN],
     },
     {
-      name: "다연",
+      name: "한상아",
       phone: "010-2222-2222",
       weekdays: [Weekday.TUE, Weekday.FRI, Weekday.SUN],
     },
     {
-      name: "예린",
+      name: "이승준",
       phone: "010-3333-3333",
       weekdays: [Weekday.TUE, Weekday.WED, Weekday.THU],
     },
@@ -123,9 +121,9 @@ async function main() {
   }
 
   console.log("\n✅ 시드 완료");
-  console.log("   관리자: 0000a / admin1234");
-  console.log("   선생님: 1111a, 2222a, 3333a / teacher1234");
-  console.log("   학생:   5678a, 5678b, 1234a, 4321a, 2468a / student1234");
+  console.log("   관리자: 0000 / admin1234");
+  console.log("   선생님: 1111, 2222, 3333 / teacher1234");
+  console.log("   학생:   5678, 5678a, 1234, 4321, 2468 / student1234");
 }
 
 main()
