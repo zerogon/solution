@@ -37,10 +37,23 @@ export function PwaInstallPrompt() {
   const checkboxId = useId();
 
   useEffect(() => {
+    // Register the service worker on every visit — Chrome's `beforeinstallprompt`
+    // criteria require an active SW with a fetch handler.
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker
+        .register("/sw.js", { scope: "/", updateViaCache: "none" })
+        .catch(() => {});
+    }
+
     const dismissedDate = window.localStorage.getItem(DISMISS_DATE_KEY);
     if (dismissedDate && dismissedDate === getLocalDateString()) return;
 
-    const ios = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+    // iPadOS 13+ Safari reports a Mac UA when "request desktop site" is on
+    // (the default), so combine UA sniff with the touch-on-Mac heuristic.
+    const ua = window.navigator.userAgent;
+    const ios =
+      /iphone|ipad|ipod/i.test(ua) ||
+      (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as Navigator & { standalone?: boolean }).standalone === true;

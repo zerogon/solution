@@ -18,6 +18,10 @@ export const metadata: Metadata = {
   title: "PianoFlow — 피아노 학원 레슨 예약",
   description: "약 50명 규모 피아노 학원의 레슨 예약 PWA",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

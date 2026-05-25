@@ -31,7 +31,7 @@ function LoginForm() {
         <Input
           id="loginId"
           name="loginId"
-          placeholder="휴대폰 뒷4자리 + 알파벳 (예: 5678a)"
+          placeholder="휴대폰 뒷4자리 (암호동일)"
           autoComplete="username"
           required
         />
