@@ -50,6 +50,11 @@ export function weekdayOf(date: Date): Weekday {
   return WEEKDAY_MAP[kst.getUTCDay()];
 }
 
+/** KST 기준 시(0-23) */
+export function kstHourOf(date: Date): number {
+  return new Date(date.getTime() + KST_OFFSET_MS).getUTCHours();
+}
+
 /** KST 기준 특정 일자의 특정 시(HH)에 해당하는 UTC Date */
 export function slotDatetime(dateStr: string, hour: number): Date {
   const base = parseKstDate(dateStr);

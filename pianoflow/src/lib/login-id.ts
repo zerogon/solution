@@ -21,16 +21,13 @@ export async function generateLoginId(
     select: { loginId: true },
   });
 
-  const usedSuffixes = new Set(
-    existing
-      .map((u) => u.loginId.slice(last4.length))
-      .filter((s) => s.length === 1),
-  );
+  const usedIds = new Set(existing.map((u) => u.loginId));
+
+  if (!usedIds.has(last4)) return last4;
 
   for (const letter of SUFFIX_ALPHABET) {
-    if (!usedSuffixes.has(letter)) {
-      return `${last4}${letter}`;
-    }
+    const candidate = `${last4}${letter}`;
+    if (!usedIds.has(candidate)) return candidate;
   }
 
   throw new Error(

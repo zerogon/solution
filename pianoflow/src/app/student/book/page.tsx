@@ -3,6 +3,10 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { DatePickerPanel } from "@/components/calendar/DatePickerPanel";
 import { SlotGrid } from "@/components/calendar/SlotGrid";
+import {
+  DaySchedule,
+  type DayScheduleItem,
+} from "@/components/calendar/DaySchedule";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -53,6 +57,29 @@ export default async function BookPage({ searchParams }: PageProps) {
 
   const dayStart = new Date(baseDate);
   const dayEnd = new Date(baseDate.getTime() + 24 * 60 * 60 * 1000);
+
+  const daySchedule = await prisma.reservation.findMany({
+    where: {
+      status: ReservationStatus.ACTIVE,
+      slotDatetime: { gte: dayStart, lt: dayEnd },
+    },
+    select: {
+      id: true,
+      slotDatetime: true,
+      studentId: true,
+      teacher: { select: { name: true } },
+      student: { select: { name: true } },
+    },
+    orderBy: { slotDatetime: "asc" },
+  });
+
+  const dayScheduleItems: DayScheduleItem[] = daySchedule.map((r) => ({
+    id: r.id,
+    slotDatetime: r.slotDatetime,
+    teacherName: r.teacher.name,
+    studentName: r.student.name,
+    isMine: r.studentId === session.user.id,
+  }));
 
   let slotsArea: React.ReactNode = (
     <p className="text-sm text-muted-foreground">
@@ -156,6 +183,15 @@ export default async function BookPage({ searchParams }: PageProps) {
           <CardTitle>3. 시간 선택</CardTitle>
         </CardHeader>
         <CardContent>{slotsArea}</CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>4. 같은 날 다른 학생 일정</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DaySchedule dateStr={dateStr} items={dayScheduleItems} />
+        </CardContent>
       </Card>
     </div>
   );

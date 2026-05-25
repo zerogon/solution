@@ -13,7 +13,7 @@ export const passwordSchema = z
 
 export const loginIdSchema = z
   .string()
-  .regex(/^\d{4}[a-z]$/, "로그인 ID는 숫자4자리+영문1자 형식입니다.");
+  .regex(/^\d{4}[a-z]?$/, "로그인 ID는 숫자4자리(또는 +영문1자) 형식입니다.");
 
 export const loginSchema = z.object({
   loginId: loginIdSchema,
