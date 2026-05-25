@@ -15,7 +15,7 @@ export function MenuRecommend() {
       transition={{ delay: 1.0 }}
       className="w-full"
     >
-      <p className="text-base text-muted-foreground mb-2 text-center">
+      <p className="text-2xl text-muted-foreground mb-2 text-center">
         오늘의 추천메뉴
       </p>
 
@@ -37,16 +37,16 @@ export function MenuRecommend() {
           </div>
         ) : (
           <div className="flex items-center justify-center w-16 h-16 rounded-xl bg-background shadow-sm shrink-0">
-            <span className="text-2xl">{getCategoryEmoji(menu.category)}</span>
+            <span className="text-4xl">{getCategoryEmoji(menu.category)}</span>
           </div>
         )}
 
         <div className="flex flex-col gap-1 min-w-0">
-          <span className="text-base text-muted-foreground">{menu.category}</span>
-          <span className="text-base font-bold text-foreground truncate">
+          <span className="text-2xl text-muted-foreground">{menu.category}</span>
+          <span className="text-2xl font-bold text-foreground truncate">
             {menu.name}
           </span>
-          <span className="text-base font-semibold text-primary">
+          <span className="text-2xl font-semibold text-primary">
             {formatPrice(menu.price)}
           </span>
         </div>

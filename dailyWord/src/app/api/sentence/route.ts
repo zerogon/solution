@@ -1,42 +1,38 @@
-import { NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+import { NextRequest, NextResponse } from "next/server";
+import { getActiveSentences } from "@/db/queries";
 
-const CSV_FILES = [
-  "today_fortune_sentences_100.csv",
-  "bizarre_office_fortune_100.csv",
-  "healing_fortune_100.csv",
-  "office_teams_meme_fortune_100.csv",
-];
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-function getDateSeed(): number {
+function getKSTDateString(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  const year = kst.getUTCFullYear();
-  const month = kst.getUTCMonth() + 1;
-  const day = kst.getUTCDate();
-  return year * 10000 + month * 100 + day;
+  const y = kst.getUTCFullYear();
+  const m = String(kst.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(kst.getUTCDate()).padStart(2, "0");
+  return `${y}${m}${d}`;
 }
 
-function parseCsv(text: string): string[] {
-  return text
-    .split(/\r?\n/)
-    .slice(1)
-    .filter((line) => line.trim())
-    .map((line) => line.replace(/^\d+,/, ""));
+function fnv1a32(input: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
 }
 
-export async function GET() {
-  const dir = path.join(process.cwd(), "public", "sentenses");
-  const allSentences: string[] = [];
+export async function GET(req: NextRequest) {
+  const sentences = await getActiveSentences();
 
-  for (const file of CSV_FILES) {
-    const text = fs.readFileSync(path.join(dir, file), "utf-8");
-    allSentences.push(...parseCsv(text));
+  if (sentences.length === 0) {
+    return NextResponse.json({ sentence: "오늘도 좋은 하루 보내세요!" });
   }
 
-  const seed = getDateSeed();
-  const index = seed % allSentences.length;
+  const deviceId = req.nextUrl.searchParams.get("deviceId")?.trim() ?? "";
+  const dateStr = getKSTDateString();
+  const seed = deviceId ? fnv1a32(`${deviceId}:${dateStr}`) : fnv1a32(dateStr);
+  const index = seed % sentences.length;
 
-  return NextResponse.json({ sentence: allSentences[index] });
+  return NextResponse.json({ sentence: sentences[index].text });
 }

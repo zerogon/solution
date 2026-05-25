@@ -15,6 +15,41 @@
       "when": 1775050477165,
       "tag": "0001_parallel_gunslinger",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776691200000,
+      "tag": "0002_drop_unused_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1776777600000,
+      "tag": "0003_add_zodiac_fortunes",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1776864000000,
+      "tag": "0004_add_daily_sentences",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1776950400000,
+      "tag": "0005_add_page_views",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1777036800000,
+      "tag": "0006_add_device_id_to_page_views",
+      "breakpoints": true
     }
   ]
 }

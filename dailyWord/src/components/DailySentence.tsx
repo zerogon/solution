@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getTodaySentence, getTodayDateKST } from "@/lib/daily-sentences";
+import { useDeviceId } from "@/hooks/useDeviceId";
 import Lottie from "lottie-react";
 import { characters } from "@/lib/characters";
 
@@ -115,18 +116,23 @@ const charVariants = {
 };
 
 export function DailySentence() {
+  const deviceId = useDeviceId();
   const [sentence, setSentence] = useState<string | null>(null);
   const [date, setDate] = useState("");
 
   useEffect(() => {
-    getTodaySentence()
+    setDate(getTodayDateKST());
+  }, []);
+
+  useEffect(() => {
+    if (!deviceId) return;
+    getTodaySentence(deviceId)
       .then((text) => setSentence(text))
       .catch((err) => {
         console.error("Failed to load sentence:", err);
         setSentence("오늘 하루도 당신은 충분히 잘하고 있어요.");
       });
-    setDate(getTodayDateKST());
-  }, []);
+  }, [deviceId]);
 
   if (!sentence) return null;
 
@@ -141,7 +147,7 @@ export function DailySentence() {
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="text-lg text-muted-foreground tracking-wide"
+        className="text-2xl text-muted-foreground tracking-wide"
       >
         {date}
       </motion.p>
@@ -151,7 +157,7 @@ export function DailySentence() {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="text-2xl font-medium text-foreground/90 tracking-wide text-center leading-relaxed px-4 py-4 rounded-2xl bg-gradient-to-b from-primary/5 to-transparent [text-shadow:0_0_18px_hsl(var(--primary)/0.25)]"
+        className="text-3xl font-medium text-foreground/90 tracking-wide text-center leading-relaxed px-4 py-4 rounded-2xl bg-gradient-to-b from-primary/5 to-transparent [text-shadow:0_0_18px_hsl(var(--primary)/0.25)]"
       >
         {sentenceChars.map((char, i) => (
           <span key={i}>
