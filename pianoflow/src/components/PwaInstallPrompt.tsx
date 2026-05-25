@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { BellRing, Share, Smartphone, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,14 @@ interface BeforeInstallPromptEvent extends Event {
 
 const DISMISS_DATE_KEY = "pianoflow:install-dismissed-date";
 
+type InstallMode =
+  | "chrome"
+  | "ios"
+  | "macSafari"
+  | "firefoxAndroid"
+  | "firefoxDesktop"
+  | null;
+
 function getLocalDateString(date = new Date()): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
@@ -29,10 +37,39 @@ function getLocalDateString(date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+function detectInstallMode(): InstallMode {
+  if (typeof window === "undefined") return null;
+
+  const ua = window.navigator.userAgent;
+  const platform = window.navigator.platform;
+  const maxTouchPoints = window.navigator.maxTouchPoints ?? 0;
+
+  // iPadOS 13+ Safari with "request desktop site" (default ON) reports a Mac UA,
+  // so combine UA sniff with the touch-on-Mac heuristic.
+  const isIos =
+    /iphone|ipad|ipod/i.test(ua) ||
+    (platform === "MacIntel" && maxTouchPoints > 1);
+  if (isIos) return "ios";
+
+  // Firefox iOS uses "FxiOS" and is already captured by the iOS branch above.
+  if (/firefox/i.test(ua) && !/fxios/i.test(ua)) {
+    return /android/i.test(ua) ? "firefoxAndroid" : "firefoxDesktop";
+  }
+
+  // Safari on macOS — exclude Chrome/Edge/Opera and any Chromium-based UA.
+  const isSafariEngine =
+    /safari/i.test(ua) && !/chrome|chromium|edg\/|opr\//i.test(ua);
+  const isMac = /macintosh|mac os x/i.test(ua) && maxTouchPoints <= 1;
+  if (isSafariEngine && isMac) return "macSafari";
+
+  // Chromium-based browsers: defer to the beforeinstallprompt event.
+  return null;
+}
+
 export function PwaInstallPrompt() {
   const [event, setEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [open, setOpen] = useState(false);
-  const [isIos, setIsIos] = useState(false);
+  const [installMode, setInstallMode] = useState<InstallMode>(null);
   const [dontShowToday, setDontShowToday] = useState(false);
   const checkboxId = useId();
 
@@ -48,22 +85,17 @@ export function PwaInstallPrompt() {
     const dismissedDate = window.localStorage.getItem(DISMISS_DATE_KEY);
     if (dismissedDate && dismissedDate === getLocalDateString()) return;
 
-    // iPadOS 13+ Safari reports a Mac UA when "request desktop site" is on
-    // (the default), so combine UA sniff with the touch-on-Mac heuristic.
-    const ua = window.navigator.userAgent;
-    const ios =
-      /iphone|ipad|ipod/i.test(ua) ||
-      (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
     if (standalone) return;
 
-    if (ios) {
-      // iOS doesn't fire `beforeinstallprompt`, so we have to open the sheet
-      // directly after detecting the platform on mount.
+    const mode = detectInstallMode();
+
+    // Non-Chromium browsers don't fire `beforeinstallprompt`; show the hint sheet immediately.
+    if (mode !== null) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setIsIos(true);
+      setInstallMode(mode);
       setOpen(true);
       return;
     }
@@ -71,6 +103,7 @@ export function PwaInstallPrompt() {
     const handler = (e: Event) => {
       e.preventDefault();
       setEvent(e as BeforeInstallPromptEvent);
+      setInstallMode("chrome");
       setOpen(true);
     };
     window.addEventListener("beforeinstallprompt", handler);
@@ -135,16 +168,7 @@ export function PwaInstallPrompt() {
           </li>
         </ul>
 
-        {isIos && (
-          <div className="mx-4 mb-4 rounded-md border border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground">
-            <div className="mb-1 flex items-center gap-1.5 font-medium text-foreground">
-              <Share className="size-3.5" />
-              Safari에서 설치
-            </div>
-            하단의 <strong className="text-foreground">공유</strong> 버튼을 누른 뒤{" "}
-            <strong className="text-foreground">홈 화면에 추가</strong>를 선택해주세요.
-          </div>
-        )}
+        <InstallHint mode={installMode} />
 
         <SheetFooter className="gap-3 p-4 pt-0">
           <label
@@ -162,7 +186,7 @@ export function PwaInstallPrompt() {
             <Button variant="outline" onClick={dismiss} className="flex-1">
               닫기
             </Button>
-            {!isIos && (
+            {installMode === "chrome" && (
               <Button onClick={install} className="flex-1">
                 지금 설치
               </Button>
@@ -171,5 +195,66 @@ export function PwaInstallPrompt() {
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function InstallHint({ mode }: { mode: InstallMode }) {
+  if (mode === null || mode === "chrome") return null;
+
+  const content: Record<
+    Exclude<InstallMode, null | "chrome">,
+    { title: string; body: ReactNode }
+  > = {
+    ios: {
+      title: "Safari에서 설치",
+      body: (
+        <>
+          하단의 <strong className="text-foreground">공유</strong> 버튼을 누른 뒤{" "}
+          <strong className="text-foreground">홈 화면에 추가</strong>를 선택해주세요.
+        </>
+      ),
+    },
+    macSafari: {
+      title: "Safari에서 설치",
+      body: (
+        <>
+          상단 메뉴의 <strong className="text-foreground">파일</strong> →{" "}
+          <strong className="text-foreground">Dock에 추가…</strong>를 선택하면 Dock에서 앱처럼
+          실행할 수 있어요. (Safari 17 이상)
+        </>
+      ),
+    },
+    firefoxAndroid: {
+      title: "Firefox에서 설치",
+      body: (
+        <>
+          우측 상단의 <strong className="text-foreground">메뉴(⋮)</strong>를 열고{" "}
+          <strong className="text-foreground">설치</strong> 또는{" "}
+          <strong className="text-foreground">홈 화면에 추가</strong>를 눌러주세요.
+        </>
+      ),
+    },
+    firefoxDesktop: {
+      title: "Firefox에서 빠르게 접속",
+      body: (
+        <>
+          Firefox 데스크톱은 PWA 설치를 기본 지원하지 않습니다.{" "}
+          <strong className="text-foreground">Ctrl/Cmd + D</strong>로 북마크에 추가하거나,{" "}
+          <em>PWAs for Firefox</em> 확장을 설치하면 앱처럼 사용할 수 있어요.
+        </>
+      ),
+    },
+  };
+
+  const { title, body } = content[mode];
+
+  return (
+    <div className="mx-4 mb-4 rounded-md border border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground">
+      <div className="mb-1 flex items-center gap-1.5 font-medium text-foreground">
+        <Share className="size-3.5" />
+        {title}
+      </div>
+      {body}
+    </div>
   );
 }
