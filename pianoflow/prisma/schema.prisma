@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  DORMANT
+  WITHDRAWN
+}
+
+enum ReservationStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+enum CreditChangeReason {
+  RESERVE
+  CANCEL
+  ADMIN_ADD
+  ADMIN_SUB
+  ADMIN_ADJUST
+}
+
+model User {
+  id                 String     @id @default(uuid())
+  name               String
+  phone              String     @unique
+  loginId            String     @unique @map("login_id")
+  password           String
+  mustChangePassword Boolean    @default(true) @map("must_change_password")
+  role               Role       @default(STUDENT)
+  status             UserStatus @default(ACTIVE)
+  remainingLessons   Int        @default(0) @map("remaining_lessons")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  availability    TeacherAvailability[]
+  studentBookings Reservation[]         @relation("StudentReservations")
+  teacherBookings Reservation[]         @relation("TeacherReservations")
+  creditLogs      LessonCreditLog[]     @relation("StudentCreditLogs")
+  actorCreditLogs LessonCreditLog[]     @relation("ActorCreditLogs")
+
+  @@map("users")
+}
+
+model TeacherAvailability {
+  id        String  @id @default(uuid())
+  teacherId String  @map("teacher_id")
+  weekday   Weekday
+
+  teacher User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, weekday])
+  @@map("teacher_availability")
+}
+
+model Reservation {
+  id            String            @id @default(uuid())
+  teacherId     String            @map("teacher_id")
+  studentId     String            @map("student_id")
+  slotDatetime  DateTime          @map("slot_datetime")
+  status        ReservationStatus @default(ACTIVE)
+  forcedByAdmin Boolean           @default(false) @map("forced_by_admin")
+  cancelledAt   DateTime?         @map("cancelled_at")
+  cancelledBy   String?           @map("cancelled_by")
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  teacher User @relation("TeacherReservations", fields: [teacherId], references: [id])
+  student User @relation("StudentReservations", fields: [studentId], references: [id])
+
+  @@index([teacherId, slotDatetime])
+  @@index([studentId, slotDatetime])
+  @@map("reservations")
+}
+
+model LessonCreditLog {
+  id            String             @id @default(uuid())
+  studentId     String             @map("student_id")
+  delta         Int
+  reason        CreditChangeReason
+  actorId       String?            @map("actor_id")
+  reservationId String?            @map("reservation_id")
+  memo          String?
+  createdAt     DateTime           @default(now()) @map("created_at")
+
+  student User  @relation("StudentCreditLogs", fields: [studentId], references: [id])
+  actor   User? @relation("ActorCreditLogs", fields: [actorId], references: [id])
+
+  @@index([studentId, createdAt])
+  @@map("lesson_credit_log")
+}
