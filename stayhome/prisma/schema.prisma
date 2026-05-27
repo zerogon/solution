@@ -1,0 +1,232 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------- Enums ----------
+
+enum Role {
+  ADMIN
+}
+
+enum CrawlStatus {
+  SUCCESS
+  FAILED
+  PARTIAL
+  RUNNING
+}
+
+enum ResortSlug {
+  LOTTE
+  SONO
+  HANWHA
+  DAEMYUNG
+  KENSINGTON
+  HYUNDAI
+}
+
+enum AuditAction {
+  REVEAL_CREDENTIAL
+  CREATE_ACCOUNT
+  UPDATE_ACCOUNT
+  DELETE_ACCOUNT
+  MANUAL_REFRESH
+  LOGIN
+  ADD_ALLOWED_EMAIL
+  REMOVE_ALLOWED_EMAIL
+}
+
+enum CrawlStage {
+  VALIDATE
+  LOGIN
+  SEARCH
+  PARSE
+  UPSERT
+}
+
+// ---------- Auth ----------
+
+model User {
+  id            String    @id @default(uuid())
+  email         String?   @unique
+  loginId       String?   @unique @map("login_id")
+  password      String?
+  name          String?
+  image         String?
+  emailVerified DateTime? @map("email_verified")
+  role          Role      @default(ADMIN)
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts  Account[]
+  sessions  Session[]
+  auditLogs AuditLog[]
+
+  @@map("users")
+}
+
+model AllowedEmail {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("allowed_emails")
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("oauth_accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("oauth_sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ---------- Resort registry ----------
+
+model Resort {
+  id        String     @id @default(uuid())
+  slug      ResortSlug @unique
+  name      String
+  region    String
+  baseUrl   String     @map("base_url")
+  loginUrl  String     @map("login_url")
+  active    Boolean    @default(false)
+  memo      String?
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+
+  accounts  ResortAccount[]
+  inventory ResortInventory[]
+  crawlLogs CrawlLog[]
+  session   ResortSession?
+
+  @@map("resorts")
+}
+
+model ResortAccount {
+  id          String   @id @default(uuid())
+  resortId    String   @map("resort_id")
+  label       String
+  idEncrypted String   @map("id_encrypted")
+  pwEncrypted String   @map("pw_encrypted")
+  memo        String?
+  isPrimary   Boolean  @default(true) @map("is_primary")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)
+
+  @@index([resortId, isPrimary])
+  @@map("resort_accounts")
+}
+
+model ResortSession {
+  id           String   @id @default(uuid())
+  resortId     String   @unique @map("resort_id")
+  storageState Json     @map("storage_state")
+  expiresAt    DateTime @map("expires_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)
+
+  @@map("resort_sessions")
+}
+
+model ResortInventory {
+  id           String   @id @default(uuid())
+  resortId     String   @map("resort_id")
+  resortName   String   @map("resort_name")
+  branchName   String   @map("branch_name")
+  roomType     String   @map("room_type")
+  region       String
+  checkinDate  DateTime @map("checkin_date") @db.Date
+  checkoutDate DateTime @map("checkout_date") @db.Date
+  available    Boolean
+  closingSoon  Boolean  @default(false) @map("closing_soon")
+  detailUrl    String?  @map("detail_url")
+  syncedAt     DateTime @default(now()) @map("synced_at")
+
+  resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)
+
+  @@unique([resortId, branchName, roomType, checkinDate, checkoutDate], name: "uniq_inventory_row")
+  @@index([region, checkinDate, checkoutDate, available])
+  @@index([resortId, syncedAt])
+  @@map("resort_inventory")
+}
+
+model CrawlLog {
+  id            String       @id @default(uuid())
+  resortId      String       @map("resort_id")
+  resortName    String       @map("resort_name")
+  status        CrawlStatus
+  startedAt     DateTime     @map("started_at")
+  finishedAt    DateTime?    @map("finished_at")
+  durationMs    Int?         @map("duration_ms")
+  errorMessage  String?      @map("error_message")
+  errorStage    CrawlStage?  @map("error_stage")
+  rowsUpserted  Int?         @map("rows_upserted")
+  inngestRunId  String?      @map("inngest_run_id")
+  triggeredBy   String?      @map("triggered_by")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  resort Resort @relation(fields: [resortId], references: [id])
+
+  @@index([resortId, createdAt])
+  @@index([status, createdAt])
+  @@map("crawl_logs")
+}
+
+model AuditLog {
+  id         String      @id @default(uuid())
+  actorId    String?     @map("actor_id")
+  actorEmail String      @map("actor_email")
+  action     AuditAction
+  targetId   String?     @map("target_id")
+  metadata   Json?
+  ip         String?
+  userAgent  String?     @map("user_agent")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}
