@@ -4,11 +4,12 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { generateLoginId } from "@/lib/login-id";
+import { generateLoginId, getPhoneLast4 } from "@/lib/login-id";
 import {
   creditAdjustSchema,
   memberCreateSchema,
   memberUpdateSchema,
+  teacherCredentialSchema,
 } from "@/lib/validators";
 import type { ActionResult } from "@/lib/errors";
 import {
@@ -26,9 +27,9 @@ async function requireAdmin() {
 }
 
 export async function adminCreateMember(
-  _prev: ActionResult<{ tempPassword: string }> | undefined,
+  _prev: ActionResult<{ loginId: string; tempPassword: string }> | undefined,
   formData: FormData,
-): Promise<ActionResult<{ tempPassword: string }>> {
+): Promise<ActionResult<{ loginId: string; tempPassword: string }>> {
   try {
     await requireAdmin();
     const parsed = memberCreateSchema.safeParse({
@@ -41,39 +42,36 @@ export async function adminCreateMember(
       return { ok: false, message: parsed.error.issues[0].message };
     }
 
-    // 동시 등록 충돌 시 1회 재시도
-    for (let attempt = 0; attempt < 2; attempt += 1) {
-      try {
-        const loginId = await generateLoginId(prisma, parsed.data.phone);
-        const hash = await bcrypt.hash(loginId, 10);
-        await prisma.user.create({
-          data: {
-            name: parsed.data.name,
-            phone: parsed.data.phone,
-            loginId,
-            password: hash,
-            mustChangePassword: false,
-            role: parsed.data.role,
-            status: UserStatus.ACTIVE,
-            remainingLessons: parsed.data.remainingLessons,
-          },
-        });
-        revalidatePath("/admin/members");
-        return { ok: true, data: { tempPassword: loginId } };
-      } catch (err) {
-        if (
-          typeof err === "object" &&
-          err !== null &&
-          "code" in err &&
-          (err as { code?: string }).code === "P2002" &&
-          attempt === 0
-        ) {
-          continue;
-        }
-        throw err;
+    try {
+      // 로그인 ID = 휴대폰 8자리, 초기 비밀번호 = 휴대폰 끝 4자리
+      const loginId = await generateLoginId(prisma, parsed.data.phone);
+      const initialPassword = getPhoneLast4(parsed.data.phone);
+      const hash = await bcrypt.hash(initialPassword, 10);
+      await prisma.user.create({
+        data: {
+          name: parsed.data.name,
+          phone: parsed.data.phone,
+          loginId,
+          password: hash,
+          mustChangePassword: false,
+          role: parsed.data.role,
+          status: UserStatus.ACTIVE,
+          remainingLessons: parsed.data.remainingLessons,
+        },
+      });
+      revalidatePath("/admin/members");
+      return { ok: true, data: { loginId, tempPassword: initialPassword } };
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code?: string }).code === "P2002"
+      ) {
+        return { ok: false, message: "이미 등록된 휴대폰 번호입니다." };
       }
+      throw err;
     }
-    return { ok: false, message: "회원 생성에 실패했습니다." };
   } catch (err) {
     return {
       ok: false,
@@ -183,6 +181,64 @@ export async function adminAdjustCredits(input: {
   }
 }
 
+export async function adminUpdateTeacherCredentials(input: {
+  teacherId: string;
+  loginId?: string;
+  newPassword?: string;
+}): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const parsed = teacherCredentialSchema.safeParse({
+      teacherId: input.teacherId,
+      loginId: input.loginId,
+      newPassword: input.newPassword,
+    });
+    if (!parsed.success) {
+      return { ok: false, message: parsed.error.issues[0].message };
+    }
+
+    const teacher = await prisma.user.findUnique({
+      where: { id: parsed.data.teacherId },
+      select: { role: true },
+    });
+    if (!teacher || teacher.role !== Role.TEACHER) {
+      return { ok: false, message: "선생님을 찾을 수 없습니다." };
+    }
+
+    const data: { loginId?: string; password?: string } = {};
+    if (parsed.data.loginId !== undefined) data.loginId = parsed.data.loginId;
+    if (parsed.data.newPassword !== undefined) {
+      data.password = await bcrypt.hash(parsed.data.newPassword, 10);
+    }
+
+    try {
+      await prisma.user.update({
+        where: { id: parsed.data.teacherId },
+        data,
+      });
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code?: string }).code === "P2002"
+      ) {
+        return { ok: false, message: "이미 사용 중인 로그인 ID입니다." };
+      }
+      throw err;
+    }
+
+    revalidatePath("/admin/members");
+    revalidatePath(`/admin/members/${parsed.data.teacherId}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "자격증명 변경에 실패했습니다.",
+    };
+  }
+}
+
 export async function adminResetPassword(input: {
   id: string;
 }): Promise<ActionResult<{ tempPassword: string }>> {
@@ -190,16 +246,18 @@ export async function adminResetPassword(input: {
     await requireAdmin();
     const user = await prisma.user.findUnique({
       where: { id: input.id },
-      select: { loginId: true },
+      select: { phone: true },
     });
     if (!user) return { ok: false, message: "사용자를 찾을 수 없습니다." };
-    const hash = await bcrypt.hash(user.loginId, 10);
+    // 초기 비밀번호 = 휴대폰 끝 4자리
+    const initialPassword = getPhoneLast4(user.phone);
+    const hash = await bcrypt.hash(initialPassword, 10);
     await prisma.user.update({
       where: { id: input.id },
       data: { password: hash, mustChangePassword: false },
     });
     revalidatePath(`/admin/members/${input.id}`);
-    return { ok: true, data: { tempPassword: user.loginId } };
+    return { ok: true, data: { tempPassword: initialPassword } };
   } catch (err) {
     return {
       ok: false,

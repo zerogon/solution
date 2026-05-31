@@ -52,6 +52,8 @@ model User {
   role               Role       @default(STUDENT)
   status             UserStatus @default(ACTIVE)
   remainingLessons   Int        @default(0) @map("remaining_lessons")
+  enrollmentStart    DateTime?  @map("enrollment_start")
+  enrollmentEnd      DateTime?  @map("enrollment_end")
   createdAt          DateTime   @default(now()) @map("created_at")
   updatedAt          DateTime   @updatedAt @map("updated_at")
 
@@ -68,6 +70,7 @@ model TeacherAvailability {
   id        String  @id @default(uuid())
   teacherId String  @map("teacher_id")
   weekday   Weekday
+  hours     Int[]   @default([])
 
   teacher User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 

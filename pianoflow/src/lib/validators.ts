@@ -1,5 +1,8 @@
 import { z } from "zod";
 import { Role, Weekday } from "@/generated/prisma/enums";
+import { SLOT_HOURS } from "@/lib/slots";
+
+const ALLOWED_HOURS = new Set<number>(SLOT_HOURS);
 
 export const phoneSchema = z
   .string()
@@ -13,12 +16,24 @@ export const passwordSchema = z
 
 export const loginIdSchema = z
   .string()
-  .regex(/^\d{4}[a-z]?$/, "로그인 ID는 숫자4자리(또는 +영문1자) 형식입니다.");
+  .regex(/^\d{8}$/, "로그인 ID는 숫자 8자리입니다.");
 
 export const loginSchema = z.object({
   loginId: loginIdSchema,
-  password: z.string().min(1, "비밀번호를 입력해주세요."),
+  // 학생은 비밀번호 없이 로그인 → 선택값. 선생님/관리자는 authorize에서 필수 처리.
+  password: z.string().optional(),
 });
+
+export const teacherCredentialSchema = z
+  .object({
+    teacherId: z.string().uuid(),
+    loginId: loginIdSchema.optional(),
+    newPassword: passwordSchema.optional(),
+  })
+  .refine((d) => d.loginId !== undefined || d.newPassword !== undefined, {
+    message: "변경할 로그인 ID 또는 비밀번호를 입력해주세요.",
+    path: ["loginId"],
+  });
 
 export const changePasswordSchema = z
   .object({
@@ -47,8 +62,52 @@ export const memberUpdateSchema = z.object({
 
 export const availabilitySchema = z.object({
   teacherId: z.string().uuid(),
-  weekdays: z.array(z.nativeEnum(Weekday)),
+  entries: z
+    .array(
+      z.object({
+        weekday: z.nativeEnum(Weekday),
+        hours: z
+          .array(
+            z
+              .number()
+              .int()
+              .refine((h) => ALLOWED_HOURS.has(h), "허용되지 않은 시간입니다."),
+          )
+          .min(1, "각 요일은 최소 1개 시간을 선택해야 합니다."),
+      }),
+    )
+    .superRefine((entries, ctx) => {
+      const seen = new Set<Weekday>();
+      for (const e of entries) {
+        if (seen.has(e.weekday)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "요일이 중복되었습니다.",
+          });
+        }
+        seen.add(e.weekday);
+      }
+    }),
 });
+
+const dateStrSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식(YYYY-MM-DD)이 올바르지 않습니다.");
+
+export const enrollmentPeriodSchema = z
+  .object({
+    studentId: z.string().uuid(),
+    start: dateStrSchema.nullable(),
+    end: dateStrSchema.nullable(),
+  })
+  .refine((d) => (d.start === null) === (d.end === null), {
+    message: "시작일과 종료일을 함께 입력하거나 함께 비워주세요.",
+    path: ["end"],
+  })
+  .refine((d) => !d.start || !d.end || d.start <= d.end, {
+    message: "종료일은 시작일 이후여야 합니다.",
+    path: ["end"],
+  });
 
 export const creditAdjustSchema = z.object({
   studentId: z.string().uuid(),

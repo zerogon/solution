@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { authConfig } from "@/auth.config";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validators";
-import { UserStatus } from "@/generated/prisma/enums";
+import { Role, UserStatus } from "@/generated/prisma/enums";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
@@ -27,11 +27,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         });
         if (!user || user.status !== UserStatus.ACTIVE) return null;
 
-        const passwordOk = await bcrypt.compare(
-          parsed.data.password,
-          user.password,
-        );
-        if (!passwordOk) return null;
+        // 학생은 ID(휴대폰 8자리)만으로 로그인. 선생님/관리자는 기존 비밀번호 필수.
+        if (user.role !== Role.STUDENT) {
+          if (!parsed.data.password) return null;
+          const passwordOk = await bcrypt.compare(
+            parsed.data.password,
+            user.password,
+          );
+          if (!passwordOk) return null;
+        }
 
         return {
           id: user.id,

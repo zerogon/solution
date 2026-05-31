@@ -68,22 +68,31 @@ export function isSameKstDay(a: Date, b: Date): boolean {
 
 export interface GenerateSlotsArgs {
   dateStr: string;                  // KST 기준 선택 일자
-  teacherWeekdays: Weekday[];       // 선생님 가용 요일
+  availabilityByWeekday: Map<Weekday, number[]>; // 요일 → 예약 가능 시각. 없으면 그날 불가
   bookedSlotIsos: string[];         // 이미 예약된 슬롯의 ISO 문자열
   myActiveSlotIsos: string[];       // 내가 ACTIVE로 잡은 슬롯
   now?: Date;                       // 테스트용 시각 주입
 }
 
+/** TeacherAvailability 행 목록 → 요일별 가용 시각 Map */
+export function availabilityMap(
+  rows: { weekday: Weekday; hours: number[] }[],
+): Map<Weekday, number[]> {
+  return new Map(rows.map((r) => [r.weekday, r.hours]));
+}
+
 export function generateSlots({
   dateStr,
-  teacherWeekdays,
+  availabilityByWeekday,
   bookedSlotIsos,
   myActiveSlotIsos,
   now = new Date(),
 }: GenerateSlotsArgs): Slot[] {
   const baseDate = parseKstDate(dateStr);
   const weekday = weekdayOf(baseDate);
-  const isAvailableDay = teacherWeekdays.includes(weekday);
+  const allowedHours = availabilityByWeekday.get(weekday);
+  const isAvailableDay = allowedHours !== undefined && allowedHours.length > 0;
+  const hourSet = new Set(allowedHours ?? []);
   const isToday = isSameKstDay(baseDate, now);
   const isPast = baseDate.getTime() < parseKstDate(formatKstDate(now)).getTime();
 
@@ -98,6 +107,9 @@ export function generateSlots({
       return { hour, iso, state: "unavailable" as const };
     }
     if (isToday && slot.getTime() <= now.getTime()) {
+      return { hour, iso, state: "unavailable" as const };
+    }
+    if (!hourSet.has(hour)) {
       return { hour, iso, state: "unavailable" as const };
     }
     if (mine.has(iso)) {

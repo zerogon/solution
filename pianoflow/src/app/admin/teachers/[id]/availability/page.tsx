@@ -29,7 +29,10 @@ export default async function AvailabilityPage({ params }: PageProps) {
       <CardContent>
         <AvailabilityForm
           teacherId={teacher.id}
-          initial={teacher.availability.map((a) => a.weekday)}
+          initial={teacher.availability.map((a) => ({
+            weekday: a.weekday,
+            hours: a.hours,
+          }))}
         />
       </CardContent>
     </Card>

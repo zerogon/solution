@@ -7,6 +7,7 @@ import {
   adminResetPassword,
   adminSetStatus,
 } from "@/actions/members";
+import { adminSetEnrollmentPeriod } from "@/actions/enrollment";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,13 +18,43 @@ interface Props {
   role: Role;
   status: UserStatus;
   remainingLessons: number;
+  enrollmentStart: string | null;
+  enrollmentEnd: string | null;
 }
 
-export function MemberActions({ id, role, status, remainingLessons }: Props) {
+export function MemberActions({
+  id,
+  role,
+  status,
+  remainingLessons,
+  enrollmentStart,
+  enrollmentEnd,
+}: Props) {
   const [delta, setDelta] = useState(0);
   const [memo, setMemo] = useState("");
   const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [start, setStart] = useState(enrollmentStart ?? "");
+  const [end, setEnd] = useState(enrollmentEnd ?? "");
   const [pending, startTransition] = useTransition();
+
+  function saveEnrollment(clear: boolean) {
+    startTransition(async () => {
+      const res = await adminSetEnrollmentPeriod({
+        studentId: id,
+        start: clear ? null : start || null,
+        end: clear ? null : end || null,
+      });
+      if (res.ok) {
+        if (clear) {
+          setStart("");
+          setEnd("");
+          toast.success("등록 기간이 해제되었습니다.");
+        } else {
+          toast.success("등록 기간이 저장되었습니다.");
+        }
+      } else toast.error(res.message);
+    });
+  }
 
   function toggleDormant() {
     const next = status === UserStatus.ACTIVE ? UserStatus.DORMANT : UserStatus.ACTIVE;
@@ -84,7 +115,7 @@ export function MemberActions({ id, role, status, remainingLessons }: Props) {
     <div className="space-y-4">
       {tempPassword && (
         <div className="rounded-md border bg-amber-50 p-3 text-sm">
-          <p className="font-semibold">초기 비밀번호 = 로그인 ID</p>
+          <p className="font-semibold">초기 비밀번호 (휴대폰 끝 4자리)</p>
           <p className="mt-1 font-mono text-lg text-amber-900">{tempPassword}</p>
         </div>
       )}
@@ -108,6 +139,56 @@ export function MemberActions({ id, role, status, remainingLessons }: Props) {
           </>
         )}
       </div>
+
+      {role === Role.STUDENT && (
+        <div className="space-y-2 rounded-md border p-3">
+          <p className="text-sm font-semibold">
+            등록 기간{" "}
+            <span className="font-normal text-muted-foreground">
+              {enrollmentStart && enrollmentEnd
+                ? `(현재: ${enrollmentStart} ~ ${enrollmentEnd})`
+                : "(현재: 미설정 · 무제한)"}
+            </span>
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="space-y-1">
+              <Label htmlFor="enrollStart" className="text-xs">시작일</Label>
+              <Input
+                id="enrollStart"
+                type="date"
+                value={start}
+                max={end || undefined}
+                onChange={(e) => setStart(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="enrollEnd" className="text-xs">종료일</Label>
+              <Input
+                id="enrollEnd"
+                type="date"
+                value={end}
+                min={start || undefined}
+                onChange={(e) => setEnd(e.target.value)}
+                className="w-40"
+              />
+            </div>
+            <Button
+              onClick={() => saveEnrollment(false)}
+              disabled={pending || (!start && !end)}
+            >
+              저장
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => saveEnrollment(true)}
+              disabled={pending || (!enrollmentStart && !enrollmentEnd)}
+            >
+              기간 해제
+            </Button>
+          </div>
+        </div>
+      )}
 
       {role === Role.STUDENT && (
         <div className="space-y-2 rounded-md border p-3">

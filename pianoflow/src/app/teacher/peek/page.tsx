@@ -11,6 +11,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { DatePickerPanel } from "@/components/calendar/DatePickerPanel";
 import {
+  availabilityMap,
   formatKstDate,
   generateSlots,
   parseKstDate,
@@ -89,7 +90,10 @@ export default async function TeacherPeek({ searchParams }: PageProps) {
             <PeekSlots
               teacherId={selected.id}
               dateStr={dateStr}
-              weekdays={selected.availability.map((a) => a.weekday)}
+              availability={selected.availability.map((a) => ({
+                weekday: a.weekday,
+                hours: a.hours,
+              }))}
             />
           </CardContent>
         </Card>
@@ -101,11 +105,14 @@ export default async function TeacherPeek({ searchParams }: PageProps) {
 async function PeekSlots({
   teacherId,
   dateStr,
-  weekdays,
+  availability,
 }: {
   teacherId: string;
   dateStr: string;
-  weekdays: import("@/generated/prisma/enums").Weekday[];
+  availability: {
+    weekday: import("@/generated/prisma/enums").Weekday;
+    hours: number[];
+  }[];
 }) {
   const baseDate = parseKstDate(dateStr);
   const dayEnd = new Date(baseDate.getTime() + 24 * 60 * 60 * 1000);
@@ -125,7 +132,7 @@ async function PeekSlots({
 
   const slots = generateSlots({
     dateStr,
-    teacherWeekdays: weekdays,
+    availabilityByWeekday: availabilityMap(availability),
     bookedSlotIsos: booked.map((b) => b.slotDatetime.toISOString()),
     myActiveSlotIsos: [],
   });

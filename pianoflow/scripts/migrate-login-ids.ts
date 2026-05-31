@@ -1,7 +1,9 @@
 /**
  * 일회성 마이그레이션:
- * 기존 회원의 loginId를 새 규칙(숫자4자리 base → a,b,c… 접미사)으로 재정렬하고
- * 비밀번호를 새 loginId와 동일하게 재설정.
+ * 기존 회원의 loginId를 새 규칙(휴대폰에서 010을 뺀 8자리)으로 재설정하고,
+ * 비밀번호를 휴대폰 끝 4자리로 재설정한다.
+ *   예) 010-1234-5678 → loginId "12345678", password "5678"
+ * mustChangePassword는 현행 값을 유지한다(변경하지 않음).
  *
  * 사용:
  *   npx tsx scripts/migrate-login-ids.ts --dry-run   # 미리보기
@@ -12,87 +14,95 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 
-const SUFFIX_ALPHABET = "abcdefghijklmnopqrstuvwxyz";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
-function last4(phone: string): string {
-  return phone.replace(/\D/g, "").slice(-4);
+function digits(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+function newLoginId(phone: string): string {
+  return digits(phone).slice(-8);
+}
+function newPassword(phone: string): string {
+  return digits(phone).slice(-4);
 }
 
 async function main() {
   const dryRun = process.argv.includes("--dry-run");
 
   const users = await prisma.user.findMany({
-    select: { id: true, name: true, phone: true, loginId: true, createdAt: true },
+    select: { id: true, name: true, phone: true, loginId: true },
     orderBy: { createdAt: "asc" },
   });
 
-  const groups = new Map<string, typeof users>();
+  // 새 loginId 충돌 검사 (서로 다른 번호가 동일 8자리 → 수동 처리 필요)
+  const byNewId = new Map<string, typeof users>();
   for (const u of users) {
-    const key = last4(u.phone);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(u);
+    const id = newLoginId(u.phone);
+    if (!byNewId.has(id)) byNewId.set(id, []);
+    byNewId.get(id)!.push(u);
   }
 
-  let migrated = 0;
+  const targets: typeof users = [];
   let skipped = 0;
-
-  for (const [key, members] of groups) {
-    const expected = members.map((_, i) =>
-      i === 0 ? key : `${key}${SUFFIX_ALPHABET[i - 1]}`,
-    );
-
-    if (members.length > 1 + SUFFIX_ALPHABET.length) {
+  for (const [id, group] of byNewId) {
+    if (group.length > 1) {
       console.error(
-        `[SKIP] 그룹 ${key}: ${members.length}명 (한계 27명 초과). 수동 처리 필요.`,
+        `[SKIP] 새 ID ${id} 충돌: ${group
+          .map((g) => `${g.name}(${g.phone})`)
+          .join(", ")} — 수동 처리 필요.`,
       );
-      skipped += members.length;
+      skipped += group.length;
       continue;
     }
+    targets.push(group[0]);
+  }
 
-    const changes = members
-      .map((u, i) => ({ user: u, newId: expected[i] }))
-      .filter((c) => c.user.loginId !== c.newId);
+  const changes = targets
+    .map((u) => ({ user: u, newId: newLoginId(u.phone), newPw: newPassword(u.phone) }))
+    // loginId가 이미 동일하더라도 비밀번호는 항상 재설정 대상
+    .filter(Boolean);
 
-    if (changes.length === 0) continue;
+  console.log(`\n총 ${changes.length}명 처리 예정${skipped ? `, ${skipped}명 스킵` : ""}`);
+  for (const c of changes) {
+    const idMark = c.user.loginId === c.newId ? "(ID 유지)" : `${c.user.loginId} →`;
+    console.log(
+      `  ${c.user.name.padEnd(6)} ${idMark} ${c.newId}  pw=${c.newPw}`,
+    );
+  }
 
-    console.log(`\n[그룹 ${key}] ${changes.length}건 변경`);
-    for (const c of changes) {
-      console.log(`  ${c.user.loginId.padEnd(8)} → ${c.newId.padEnd(8)}  (${c.user.name})`);
-    }
-    if (dryRun) {
-      migrated += changes.length;
-      continue;
-    }
+  if (dryRun) {
+    console.log("\n[dry-run] 실제 변경 없음.");
+    await prisma.$disconnect();
+    return;
+  }
 
-    await prisma.$transaction(async (tx) => {
-      for (const c of changes) {
+  // 해시는 느리므로 트랜잭션 밖에서 미리 계산 (트랜잭션 타임아웃 방지)
+  const hashed = await Promise.all(
+    changes.map(async (c) => ({ ...c, hash: await bcrypt.hash(c.newPw, 10) })),
+  );
+
+  await prisma.$transaction(
+    async (tx) => {
+      // 1단계: 유니크 충돌 회피용 임시 loginId
+      for (const c of hashed) {
         await tx.user.update({
           where: { id: c.user.id },
           data: { loginId: `__migr_${c.user.id}` },
         });
       }
-      for (const c of changes) {
-        const hash = await bcrypt.hash(c.newId, 10);
+      // 2단계: 최종 loginId + 비밀번호(끝4자리)
+      for (const c of hashed) {
         await tx.user.update({
           where: { id: c.user.id },
-          data: {
-            loginId: c.newId,
-            password: hash,
-            mustChangePassword: false,
-          },
+          data: { loginId: c.newId, password: c.hash },
         });
       }
-    });
-    migrated += changes.length;
-  }
-
-  console.log(
-    `\n${dryRun ? "[dry-run] " : ""}총 ${migrated}건 변경 예정${
-      dryRun ? "" : " 완료"
-    }${skipped > 0 ? `, ${skipped}건 스킵(수동 필요)` : ""}`,
+    },
+    { timeout: 30000 },
   );
+
+  console.log(`\n✅ ${changes.length}명 마이그레이션 완료.`);
   await prisma.$disconnect();
 }
 

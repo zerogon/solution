@@ -22,6 +22,7 @@ import {
   UserStatus,
 } from "@/generated/prisma/enums";
 import {
+  availabilityMap,
   formatKstDate,
   generateSlots,
   parseKstDate,
@@ -81,7 +82,7 @@ export default async function AdminReservations({ searchParams }: PageProps) {
     });
     const slots = generateSlots({
       dateStr,
-      teacherWeekdays: selectedTeacher.availability.map((a) => a.weekday),
+      availabilityByWeekday: availabilityMap(selectedTeacher.availability),
       bookedSlotIsos: booked.map((b) => b.slotDatetime.toISOString()),
       myActiveSlotIsos: [],
     });

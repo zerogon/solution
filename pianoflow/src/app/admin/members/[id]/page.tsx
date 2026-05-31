@@ -10,7 +10,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Role, UserStatus } from "@/generated/prisma/enums";
+import { formatKstDate } from "@/lib/slots";
 import { MemberActions } from "./_MemberActions";
+import { TeacherCredentials } from "./_TeacherCredentials";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -58,14 +60,34 @@ export default async function MemberDetail({ params }: PageProps) {
             role={member.role}
             status={member.status}
             remainingLessons={member.remainingLessons}
+            enrollmentStart={
+              member.enrollmentStart ? formatKstDate(member.enrollmentStart) : null
+            }
+            enrollmentEnd={
+              member.enrollmentEnd ? formatKstDate(member.enrollmentEnd) : null
+            }
           />
         </CardContent>
       </Card>
 
       {member.role === Role.TEACHER && (
         <Card>
+          <CardHeader>
+            <CardTitle>로그인 정보</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TeacherCredentials
+              teacherId={member.id}
+              currentLoginId={member.loginId}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {member.role === Role.TEACHER && (
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>가용 요일</CardTitle>
+            <CardTitle>가용 요일/시간</CardTitle>
             <Link
               href={`/admin/teachers/${member.id}/availability`}
               className={buttonVariants({ size: "sm", variant: "outline" })}
@@ -80,7 +102,7 @@ export default async function MemberDetail({ params }: PageProps) {
               ) : (
                 member.availability.map((a) => (
                   <Badge key={a.id} variant="secondary">
-                    {a.weekday}
+                    {a.weekday} ({a.hours.length}시간)
                   </Badge>
                 ))
               )}

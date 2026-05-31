@@ -9,7 +9,9 @@ import {
   reservationCreateSchema,
 } from "@/lib/validators";
 import {
+  formatKstDate,
   isSameKstDay,
+  parseKstDate,
   SLOT_HOURS,
   weekdayOf,
 } from "@/lib/slots";
@@ -82,9 +84,14 @@ export async function createReservationAction(input: {
         throw new BookingError("선택한 선생님을 찾을 수 없습니다.");
       }
       const weekday = weekdayOf(slotDate);
-      const availableDays = teacher.availability.map((a) => a.weekday);
-      if (!availableDays.includes(weekday)) {
+      const availabilityRow = teacher.availability.find(
+        (a) => a.weekday === weekday,
+      );
+      if (!availabilityRow) {
         throw new BookingError("해당 요일은 예약할 수 없는 요일입니다.");
+      }
+      if (!availabilityRow.hours.includes(kstHour)) {
+        throw new BookingError("해당 시간은 예약할 수 없는 시간입니다.");
       }
 
       const student = await tx.user.findUnique({
@@ -95,6 +102,23 @@ export async function createReservationAction(input: {
       }
       if (student.status !== UserStatus.ACTIVE) {
         throw new BookingError("활성 상태의 회원만 예약할 수 있습니다.");
+      }
+      // 등록 기간 검증 (미설정이면 무제한 허용, 관리자 강제 예약은 우회)
+      if (!isAdminForce) {
+        const slotDayStart = parseKstDate(formatKstDate(slotDate));
+        if (
+          student.enrollmentStart &&
+          slotDayStart.getTime() < student.enrollmentStart.getTime()
+        ) {
+          throw new BookingError("등록 기간 시작 전에는 예약할 수 없습니다.");
+        }
+        if (
+          student.enrollmentEnd &&
+          slotDate.getTime() >=
+            student.enrollmentEnd.getTime() + 24 * 60 * 60 * 1000
+        ) {
+          throw new BookingError("등록 기간이 종료되어 예약할 수 없습니다.");
+        }
       }
       if (student.remainingLessons < 1 && !isAdminForce) {
         throw new BookingError("남은 레슨 횟수가 부족합니다.");

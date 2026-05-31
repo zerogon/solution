@@ -9,7 +9,10 @@ import { Role } from "@/generated/prisma/enums";
 
 export async function adminSetTeacherAvailability(input: {
   teacherId: string;
-  weekdays: import("@/generated/prisma/enums").Weekday[];
+  entries: {
+    weekday: import("@/generated/prisma/enums").Weekday;
+    hours: number[];
+  }[];
 }): Promise<ActionResult> {
   try {
     const session = await auth();
@@ -26,15 +29,19 @@ export async function adminSetTeacherAvailability(input: {
         where: { teacherId: parsed.data.teacherId },
       }),
       prisma.teacherAvailability.createMany({
-        data: parsed.data.weekdays.map((w) => ({
+        data: parsed.data.entries.map((e) => ({
           teacherId: parsed.data.teacherId,
-          weekday: w,
+          weekday: e.weekday,
+          hours: [...e.hours].sort((a, b) => a - b),
         })),
       }),
     ]);
 
     revalidatePath(`/admin/teachers/${input.teacherId}/availability`);
     revalidatePath("/admin/members");
+    revalidatePath("/student/book");
+    revalidatePath("/admin/reservations");
+    revalidatePath("/teacher/peek");
     return { ok: true };
   } catch (err) {
     return {

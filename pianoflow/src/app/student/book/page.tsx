@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import {
+  availabilityMap,
   formatKstDate,
   generateSlots,
   parseKstDate,
@@ -117,7 +118,7 @@ export default async function BookPage({ searchParams }: PageProps) {
 
     const slots = generateSlots({
       dateStr,
-      teacherWeekdays: selectedTeacher.availability.map((a) => a.weekday),
+      availabilityByWeekday: availabilityMap(selectedTeacher.availability),
       bookedSlotIsos: booked
         .filter((b) => !myIsoSet.has(b.slotDatetime.toISOString()))
         .map((b) => b.slotDatetime.toISOString()),
