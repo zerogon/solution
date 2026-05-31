@@ -32,7 +32,12 @@ export default async function BookPage({ searchParams }: PageProps) {
   if (!session?.user) redirect("/login");
 
   const sp = await searchParams;
-  const dateStr = sp.date ?? formatKstDate(new Date());
+  // 당일 예약 불가 → 기본 선택일은 내일(KST)
+  const todayStart = parseKstDate(formatKstDate(new Date()));
+  const tomorrowStr = formatKstDate(
+    new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
+  );
+  const dateStr = sp.date ?? tomorrowStr;
   const baseDate = parseKstDate(dateStr);
   const weekday = weekdayOf(baseDate);
 
@@ -68,6 +73,7 @@ export default async function BookPage({ searchParams }: PageProps) {
       id: true,
       slotDatetime: true,
       studentId: true,
+      isPrivate: true,
       teacher: { select: { name: true } },
       student: { select: { name: true } },
     },
@@ -80,6 +86,7 @@ export default async function BookPage({ searchParams }: PageProps) {
     teacherName: r.teacher.name,
     studentName: r.student.name,
     isMine: r.studentId === session.user.id,
+    isPrivate: r.isPrivate,
   }));
 
   let slotsArea: React.ReactNode = (

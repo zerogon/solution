@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
-  adminAdjustCredits,
+  adminAdjustLessons,
   adminResetPassword,
   adminSetStatus,
 } from "@/actions/members";
@@ -85,16 +85,16 @@ export function MemberActions({
     });
   }
 
-  function applyCredits() {
+  function applyLessons() {
     if (delta === 0) return;
     startTransition(async () => {
-      const res = await adminAdjustCredits({
+      const res = await adminAdjustLessons({
         studentId: id,
         delta,
         memo: memo || undefined,
       });
       if (res.ok) {
-        toast.success("크레딧이 조정되었습니다.");
+        toast.success("레슨이 조정되었습니다.");
         setDelta(0);
         setMemo("");
       } else toast.error(res.message);
@@ -192,7 +192,7 @@ export function MemberActions({
 
       {role === Role.STUDENT && (
         <div className="space-y-2 rounded-md border p-3">
-          <p className="text-sm font-semibold">크레딧 조정 (현재 {remainingLessons}회)</p>
+          <p className="text-sm font-semibold">레슨 조정 (현재 {remainingLessons}회)</p>
           <div className="flex items-end gap-2">
             <div className="space-y-1">
               <Label htmlFor="delta" className="text-xs">증감(+/-)</Label>
@@ -212,7 +212,7 @@ export function MemberActions({
                 onChange={(e) => setMemo(e.target.value)}
               />
             </div>
-            <Button onClick={applyCredits} disabled={pending || delta === 0}>
+            <Button onClick={applyLessons} disabled={pending || delta === 0}>
               적용
             </Button>
           </div>

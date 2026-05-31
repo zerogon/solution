@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ReservationStatus } from "@/generated/prisma/enums";
-import { formatKstDate, isSameKstDay } from "@/lib/slots";
+import { canStudentCancel, formatKstDate } from "@/lib/slots";
 import { CancelButton } from "../_CancelButton";
 
 function formatKstHM(d: Date) {
@@ -57,10 +57,10 @@ export default async function HistoryPage() {
                   <Badge variant="outline">취소됨</Badge>
                 ) : r.slotDatetime < now ? (
                   <Badge variant="secondary">완료</Badge>
-                ) : isSameKstDay(r.slotDatetime, now) ? (
-                  <Badge variant="outline">당일</Badge>
-                ) : (
+                ) : canStudentCancel(r.slotDatetime, now) ? (
                   <CancelButton reservationId={r.id} />
+                ) : (
+                  <Badge variant="outline">마감</Badge>
                 )}
               </div>
             </div>

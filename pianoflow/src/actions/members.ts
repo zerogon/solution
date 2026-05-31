@@ -6,7 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateLoginId, getPhoneLast4 } from "@/lib/login-id";
 import {
-  creditAdjustSchema,
+  lessonAdjustSchema,
   memberCreateSchema,
   memberUpdateSchema,
   teacherCredentialSchema,
@@ -135,14 +135,14 @@ export async function adminSetStatus(input: {
   }
 }
 
-export async function adminAdjustCredits(input: {
+export async function adminAdjustLessons(input: {
   studentId: string;
   delta: number;
   memo?: string;
 }): Promise<ActionResult> {
   try {
     const session = await requireAdmin();
-    const parsed = creditAdjustSchema.safeParse(input);
+    const parsed = lessonAdjustSchema.safeParse(input);
     if (!parsed.success) {
       return { ok: false, message: parsed.error.issues[0].message };
     }
@@ -176,7 +176,7 @@ export async function adminAdjustCredits(input: {
   } catch (err) {
     return {
       ok: false,
-      message: err instanceof Error ? err.message : "크레딧 조정에 실패했습니다.",
+      message: err instanceof Error ? err.message : "레슨 조정에 실패했습니다.",
     };
   }
 }

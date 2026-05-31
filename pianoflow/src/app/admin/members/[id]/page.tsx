@@ -114,7 +114,7 @@ export default async function MemberDetail({ params }: PageProps) {
       {member.role === Role.STUDENT && (
         <Card>
           <CardHeader>
-            <CardTitle>크레딧 로그</CardTitle>
+            <CardTitle>레슨 로그</CardTitle>
           </CardHeader>
           <CardContent className="space-y-1 text-sm">
             {member.creditLogs.length === 0 ? (

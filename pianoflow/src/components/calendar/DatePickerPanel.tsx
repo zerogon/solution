@@ -20,8 +20,10 @@ export function DatePickerPanel({ selectedDateStr, paramName = "date" }: Props) 
   const selected = parseKstDate(selectedDateStr);
 
   const today = new Date();
-  const minDate = parseKstDate(formatKstDate(today));
-  const maxDate = new Date(minDate.getTime() + 60 * 24 * 60 * 60 * 1000);
+  const todayStart = parseKstDate(formatKstDate(today));
+  // 당일 예약 불가 → 내일부터 선택 가능
+  const minDate = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+  const maxDate = new Date(todayStart.getTime() + 60 * 24 * 60 * 60 * 1000);
 
   return (
     <div className="mx-auto w-fit">

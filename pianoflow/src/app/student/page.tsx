@@ -12,8 +12,9 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ReservationStatus } from "@/generated/prisma/enums";
-import { isSameKstDay, formatKstDate } from "@/lib/slots";
+import { canStudentCancel, formatKstDate } from "@/lib/slots";
 import { CancelButton } from "./_CancelButton";
+import { VisibilitySwitch } from "./_VisibilitySwitch";
 
 function formatKstHourMinute(date: Date) {
   const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
@@ -31,7 +32,8 @@ export default async function StudentHome() {
   if (!me) redirect("/login");
 
   const now = new Date();
-  const upcoming = await prisma.reservation.findMany({
+  // 예정 레슨 전체 (공개 설정 섹션에서 전체 관리)
+  const allUpcoming = await prisma.reservation.findMany({
     where: {
       studentId: me.id,
       status: ReservationStatus.ACTIVE,
@@ -39,8 +41,8 @@ export default async function StudentHome() {
     },
     include: { teacher: true },
     orderBy: { slotDatetime: "asc" },
-    take: 5,
   });
+  const upcoming = allUpcoming.slice(0, 5);
   const next = upcoming[0];
 
   return (
@@ -75,10 +77,10 @@ export default async function StudentHome() {
                   {next.teacher.name} 선생님
                 </div>
               </div>
-              {!isSameKstDay(next.slotDatetime, now) ? (
+              {canStudentCancel(next.slotDatetime, now) ? (
                 <CancelButton reservationId={next.id} />
               ) : (
-                <Badge variant="outline">당일</Badge>
+                <Badge variant="outline">마감</Badge>
               )}
             </div>
           ) : (
@@ -108,11 +110,48 @@ export default async function StudentHome() {
                     {r.teacher.name} 선생님
                   </div>
                 </div>
-                {!isSameKstDay(r.slotDatetime, now) ? (
+                {canStudentCancel(r.slotDatetime, now) ? (
                   <CancelButton reservationId={r.id} />
                 ) : (
-                  <Badge variant="outline">당일</Badge>
+                  <Badge variant="outline">마감</Badge>
                 )}
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>레슨 공개 설정</CardTitle>
+          <CardDescription>
+            다른 학생에게 내 레슨 일정 공개 여부를 설정합니다.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {allUpcoming.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              설정할 예정 레슨이 없습니다.
+            </p>
+          ) : (
+            allUpcoming.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between rounded-md border px-3 py-2"
+              >
+                <div>
+                  <div className="text-sm font-medium">
+                    {formatKstDate(r.slotDatetime)}{" "}
+                    {formatKstHourMinute(r.slotDatetime)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {r.teacher.name} 선생님
+                  </div>
+                </div>
+                <VisibilitySwitch
+                  reservationId={r.id}
+                  isPrivate={r.isPrivate}
+                />
               </div>
             ))
           )}

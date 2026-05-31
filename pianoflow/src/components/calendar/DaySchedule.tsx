@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { kstHourOf } from "@/lib/slots";
+import { VisibilityBadgeToggle } from "./VisibilityBadgeToggle";
 
 export interface DayScheduleItem {
   id: string;
@@ -7,6 +8,7 @@ export interface DayScheduleItem {
   teacherName: string;
   studentName: string;
   isMine: boolean;
+  isPrivate: boolean;
 }
 
 interface Props {
@@ -43,23 +45,34 @@ export function DaySchedule({ dateStr, items }: Props) {
           </div>
           <div className="flex flex-1 flex-wrap gap-2">
             {groups.get(h)!.map((it) => (
-              <Badge
-                key={it.id}
-                variant={it.isMine ? "default" : "outline"}
-                className={
-                  it.isMine
-                    ? "px-2 py-1 text-xs font-medium ring-2 ring-primary/20 ring-offset-1 ring-offset-background"
-                    : "px-2 py-1 text-xs font-normal"
-                }
-              >
-                {it.studentName}
+              <span key={it.id} className="inline-flex items-center">
+                <Badge
+                  variant={it.isMine ? "default" : "outline"}
+                  className={
+                    it.isMine
+                      ? "px-2 py-1 text-xs font-medium ring-2 ring-primary/20 ring-offset-1 ring-offset-background"
+                      : "px-2 py-1 text-xs font-normal"
+                  }
+                >
+                  {it.isPrivate && !it.isMine ? (
+                    <span className="italic opacity-70">비공개</span>
+                  ) : (
+                    it.studentName
+                  )}
+                  {it.isMine && (
+                    <span className="ml-1 text-[10px] opacity-80">(나)</span>
+                  )}
+                  <span className="ml-1 opacity-70">
+                    · {it.teacherName} 선생님
+                  </span>
+                </Badge>
                 {it.isMine && (
-                  <span className="ml-1 text-[10px] opacity-80">(나)</span>
+                  <VisibilityBadgeToggle
+                    reservationId={it.id}
+                    isPrivate={it.isPrivate}
+                  />
                 )}
-                <span className="ml-1 opacity-70">
-                  · {it.teacherName} 선생님
-                </span>
-              </Badge>
+              </span>
             ))}
           </div>
         </li>

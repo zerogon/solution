@@ -109,7 +109,7 @@ export const enrollmentPeriodSchema = z
     path: ["end"],
   });
 
-export const creditAdjustSchema = z.object({
+export const lessonAdjustSchema = z.object({
   studentId: z.string().uuid(),
   delta: z.number().int(),
   memo: z.string().max(200).optional(),
@@ -123,4 +123,9 @@ export const reservationCreateSchema = z.object({
 
 export const reservationCancelSchema = z.object({
   reservationId: z.string().uuid(),
+});
+
+export const reservationVisibilitySchema = z.object({
+  reservationId: z.string().uuid(),
+  isPrivate: z.boolean(),
 });

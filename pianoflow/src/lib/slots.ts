@@ -4,6 +4,13 @@ export const SLOT_HOURS = [
   10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
 ] as const;
 
+/** 예약 행위가 허용되는 시각 창 (KST 자정 이후 경과 분) — 낮 12:00 ~ 밤 22:30 */
+export const BOOKING_OPEN_MIN = 12 * 60; // 12:00
+export const BOOKING_CLOSE_MIN = 22 * 60 + 30; // 22:30
+
+/** 레슨 당일 00:00 KST에서 90분 전 = 전날 22:30 KST */
+const CANCEL_DEADLINE_OFFSET_MS = 90 * 60 * 1000;
+
 export type SlotState = "available" | "booked" | "mine" | "unavailable";
 
 export interface Slot {
@@ -64,6 +71,23 @@ export function slotDatetime(dateStr: string, hour: number): Date {
 /** KST 기준 같은 달력 일자인지 */
 export function isSameKstDay(a: Date, b: Date): boolean {
   return formatKstDate(a) === formatKstDate(b);
+}
+
+/** KST 기준 자정 이후 경과 분(0-1439) */
+export function kstMinutesOfDay(date: Date): number {
+  const kst = new Date(date.getTime() + KST_OFFSET_MS);
+  return kst.getUTCHours() * 60 + kst.getUTCMinutes();
+}
+
+/** 레슨 취소 마감 시각(레슨 전날 22:30 KST) */
+export function cancelDeadline(slotDatetime: Date): Date {
+  const dayStartKst = parseKstDate(formatKstDate(slotDatetime)); // 레슨 당일 00:00 KST
+  return new Date(dayStartKst.getTime() - CANCEL_DEADLINE_OFFSET_MS);
+}
+
+/** 학생이 지금 취소 가능한지 (마감 전인지) */
+export function canStudentCancel(slotDatetime: Date, now: Date = new Date()): boolean {
+  return now.getTime() <= cancelDeadline(slotDatetime).getTime();
 }
 
 export interface GenerateSlotsArgs {

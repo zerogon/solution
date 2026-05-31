@@ -84,6 +84,7 @@ model Reservation {
   studentId     String            @map("student_id")
   slotDatetime  DateTime          @map("slot_datetime")
   status        ReservationStatus @default(ACTIVE)
+  isPrivate     Boolean           @default(false) @map("is_private")
   forcedByAdmin Boolean           @default(false) @map("forced_by_admin")
   cancelledAt   DateTime?         @map("cancelled_at")
   cancelledBy   String?           @map("cancelled_by")

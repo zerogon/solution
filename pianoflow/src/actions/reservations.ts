@@ -7,10 +7,15 @@ import { BookingError, type ActionResult } from "@/lib/errors";
 import {
   reservationCancelSchema,
   reservationCreateSchema,
+  reservationVisibilitySchema,
 } from "@/lib/validators";
 import {
+  BOOKING_CLOSE_MIN,
+  BOOKING_OPEN_MIN,
+  canStudentCancel,
   formatKstDate,
   isSameKstDay,
+  kstMinutesOfDay,
   parseKstDate,
   SLOT_HOURS,
   weekdayOf,
@@ -72,6 +77,24 @@ export async function createReservationAction(input: {
 
   if (slotDate.getTime() < Date.now() && !isAdminForce) {
     return { ok: false, message: "지난 시간에는 예약할 수 없습니다." };
+  }
+
+  // 당일 예약 불가 + 예약 행위 가능 시각 제한 (학생 한정, 관리자 강제 예약은 우회)
+  if (!isAdminForce) {
+    const now = new Date();
+    if (isSameKstDay(slotDate, now)) {
+      return {
+        ok: false,
+        message: "당일 예약은 불가합니다. 내일 이후 날짜를 선택해주세요.",
+      };
+    }
+    const nowMin = kstMinutesOfDay(now);
+    if (nowMin < BOOKING_OPEN_MIN || nowMin > BOOKING_CLOSE_MIN) {
+      return {
+        ok: false,
+        message: "예약은 낮 12시부터 밤 10시 30분 사이에만 가능합니다.",
+      };
+    }
   }
 
   try {
@@ -146,7 +169,7 @@ export async function createReservationAction(input: {
         },
       });
 
-      // 크레딧 차감 (관리자 강제 예약 시 옵션으로 차감)
+      // 레슨 차감 (관리자 강제 예약 시 옵션으로 차감)
       if (student.remainingLessons > 0) {
         await tx.user.update({
           where: { id: student.id },
@@ -219,9 +242,11 @@ export async function cancelReservationAction(input: {
         throw new BookingError("본인 예약만 취소할 수 있습니다.");
       }
 
-      // 학생은 당일 취소 불가 (관리자는 우회)
-      if (!isAdmin && isSameKstDay(reservation.slotDatetime, new Date())) {
-        throw new BookingError("당일 취소는 불가합니다.");
+      // 취소 마감: 레슨 전날 밤 10시 30분(KST)까지. 그 이후·당일은 불가 (관리자는 우회)
+      if (!isAdmin && !canStudentCancel(reservation.slotDatetime)) {
+        throw new BookingError(
+          "취소 마감(레슨 전날 밤 10시 30분)이 지났습니다.",
+        );
       }
 
       await tx.reservation.update({
@@ -233,7 +258,7 @@ export async function cancelReservationAction(input: {
         },
       });
 
-      // 크레딧 복구 (강제 예약이라 차감 안 됐을 수도 있으니 로그 기준)
+      // 레슨 복구 (강제 예약이라 차감 안 됐을 수도 있으니 로그 기준)
       const reserveLog = await tx.lessonCreditLog.findFirst({
         where: {
           reservationId: reservation.id,
@@ -278,4 +303,44 @@ export async function adminCancelOverrideAction(input: {
 }): Promise<ActionResult> {
   // 관리자 강제 취소 — cancelReservationAction이 ADMIN을 이미 우회 처리
   return cancelReservationAction(input);
+}
+
+export async function toggleReservationVisibilityAction(input: {
+  reservationId: string;
+  isPrivate: boolean;
+}): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user) {
+    return { ok: false, message: "로그인이 필요합니다." };
+  }
+
+  const parsed = reservationVisibilitySchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0].message };
+  }
+
+  const reservation = await prisma.reservation.findUnique({
+    where: { id: parsed.data.reservationId },
+    select: { id: true, studentId: true },
+  });
+  if (!reservation) {
+    return { ok: false, message: "예약을 찾을 수 없습니다." };
+  }
+
+  const isAdmin = session.user.role === Role.ADMIN;
+  const isOwner = reservation.studentId === session.user.id;
+  if (!isAdmin && !isOwner) {
+    return { ok: false, message: "본인 예약만 변경할 수 있습니다." };
+  }
+
+  await prisma.reservation.update({
+    where: { id: reservation.id },
+    data: { isPrivate: parsed.data.isPrivate },
+  });
+
+  revalidatePath("/student");
+  revalidatePath("/student/book");
+  revalidatePath("/student/history");
+
+  return { ok: true };
 }

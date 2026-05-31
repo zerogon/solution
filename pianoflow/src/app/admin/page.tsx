@@ -41,7 +41,7 @@ export default async function AdminHome({ searchParams }: PageProps) {
   const todayStart = parseKstDate(todayStr);
   const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
-  const [activeMembers, todayReservations, lowCredit, grouped, teachers] =
+  const [activeMembers, todayReservations, lowLessonStudents, grouped, teachers] =
     await Promise.all([
       prisma.user.count({ where: { status: UserStatus.ACTIVE } }),
       prisma.reservation.count({
@@ -74,7 +74,7 @@ export default async function AdminHome({ searchParams }: PageProps) {
   const stats = [
     { label: "활성 회원", value: activeMembers, suffix: "명" },
     { label: "오늘 예약", value: todayReservations, suffix: "건" },
-    { label: "크레딧 부족 학생", value: lowCredit, suffix: "명" },
+    { label: "레슨 부족 학생", value: lowLessonStudents, suffix: "명" },
   ];
 
   const countByTeacher = new Map(
@@ -158,7 +158,7 @@ export default async function AdminHome({ searchParams }: PageProps) {
         </CardHeader>
         <CardContent>
           <p className="mb-4 text-xs text-muted-foreground">
-            {monthLabel} ACTIVE 예약 기준 (취소 제외)
+            {monthLabel} 활성화된 예약 기준 (취소 제외)
           </p>
           {rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">선생님이 없습니다.</p>
