@@ -1,12 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -16,6 +11,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ReservationStatus } from "@/generated/prisma/enums";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { Users } from "lucide-react";
 
 export default async function TeacherStudents() {
   const session = await auth();
@@ -56,14 +54,16 @@ export default async function TeacherStudents() {
   );
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>내 학생</CardTitle>
-      </CardHeader>
-      <CardContent>
-        {rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">담당 학생이 아직 없습니다.</p>
-        ) : (
+    <div className="space-y-5">
+      <PageHeader
+        title="내 학생"
+        description="최근 200건의 예약을 기준으로 집계한 담당 학생입니다."
+      />
+      <Card>
+        <CardContent>
+          {rows.length === 0 ? (
+            <EmptyState icon={Users} title="담당 학생이 아직 없습니다" />
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -81,9 +81,10 @@ export default async function TeacherStudents() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        )}
-      </CardContent>
-    </Card>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }

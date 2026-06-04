@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { BookingError, type ActionResult } from "@/lib/errors";
 import {
+  reservationBulkVisibilitySchema,
   reservationCancelSchema,
   reservationCreateSchema,
   reservationVisibilitySchema,
@@ -335,6 +336,36 @@ export async function toggleReservationVisibilityAction(input: {
 
   await prisma.reservation.update({
     where: { id: reservation.id },
+    data: { isPrivate: parsed.data.isPrivate },
+  });
+
+  revalidatePath("/student");
+  revalidatePath("/student/book");
+  revalidatePath("/student/history");
+
+  return { ok: true };
+}
+
+export async function bulkSetReservationVisibilityAction(input: {
+  isPrivate: boolean;
+}): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user) {
+    return { ok: false, message: "로그인이 필요합니다." };
+  }
+
+  const parsed = reservationBulkVisibilitySchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0].message };
+  }
+
+  // 본인 소유의 다가오는 ACTIVE 예약만 일괄 변경 — WHERE 절이 소유권을 보장
+  await prisma.reservation.updateMany({
+    where: {
+      studentId: session.user.id,
+      status: ReservationStatus.ACTIVE,
+      slotDatetime: { gte: new Date() },
+    },
     data: { isPrivate: parsed.data.isPrivate },
   });
 

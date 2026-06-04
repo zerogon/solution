@@ -4,35 +4,31 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AgendaRail, type AgendaGroup } from "@/components/schedule/AgendaRail";
+import { EmptyState } from "@/components/empty-state";
+import { CalendarOff, CalendarPlus, Lock } from "lucide-react";
 import { ReservationStatus } from "@/generated/prisma/enums";
-import { canStudentCancel, formatKstDate } from "@/lib/slots";
+import { canStudentCancel, formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
 import { CancelButton } from "./_CancelButton";
-import { VisibilitySwitch } from "./_VisibilitySwitch";
+import { VisibilitySettings } from "./_VisibilitySettings";
 
-function formatKstHourMinute(date: Date) {
-  const kst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-  const h = String(kst.getUTCHours()).padStart(2, "0");
-  return `${h}:00`;
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+
+function dateTimeLabel(d: Date) {
+  const dateStr = formatKstDate(d);
+  const dow = DOW[new Date(parseKstDate(dateStr).getTime() + 9 * 3600000).getUTCDay()];
+  return `${dateStr.slice(5).replace("-", ".")} (${dow}) ${String(kstHourOf(d)).padStart(2, "0")}:00`;
 }
 
 export default async function StudentHome() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const me = await prisma.user.findUnique({
-    where: { id: session.user.id },
-  });
+  const me = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (!me) redirect("/login");
 
   const now = new Date();
-  // 예정 레슨 전체 (공개 설정 섹션에서 전체 관리)
   const allUpcoming = await prisma.reservation.findMany({
     where: {
       studentId: me.id,
@@ -42,121 +38,90 @@ export default async function StudentHome() {
     include: { teacher: true },
     orderBy: { slotDatetime: "asc" },
   });
-  const upcoming = allUpcoming.slice(0, 5);
-  const next = upcoming[0];
+  const upcoming = allUpcoming.slice(0, 6);
+
+  const groups: AgendaGroup[] = [
+    {
+      label: "다가오는 레슨",
+      items: upcoming.map((r, i) => ({
+        id: r.id,
+        time: dateTimeLabel(r.slotDatetime),
+        title: `${r.teacher.name} 선생님`,
+        tone: i === 0 ? ("accent" as const) : ("default" as const),
+        trailing: canStudentCancel(r.slotDatetime, now) ? (
+          <CancelButton reservationId={r.id} />
+        ) : (
+          <Badge variant="outline">
+            <Lock aria-hidden className="size-3" />
+            마감
+          </Badge>
+        ),
+      })),
+    },
+  ];
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>안녕하세요, {me.name}님</CardTitle>
-          <CardDescription>오늘도 즐거운 레슨 되세요.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3">
-          <Badge variant="secondary" className="text-sm">
-            남은 레슨: {me.remainingLessons}회
-          </Badge>
+    <div className="space-y-5">
+      {/* 상태 바 + 예약 CTA */}
+      <div className="rounded-lg border bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">
+              {me.name}님 · 남은 레슨
+            </p>
+            <p className="font-mono text-3xl font-semibold tracking-tight tabular-nums text-primary">
+              {me.remainingLessons}
+              <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">
+                회
+              </span>
+            </p>
+          </div>
           <Link href="/student/book" className={buttonVariants({ size: "lg" })}>
+            <CalendarPlus className="size-4" />
             예약하기
           </Link>
-        </CardContent>
-      </Card>
+        </div>
+        {me.enrollmentStart && me.enrollmentEnd && (
+          <div className="border-t px-4 py-2 text-[11px] tabular-nums text-muted-foreground">
+            등록기간 {formatKstDate(me.enrollmentStart).replace(/-/g, ".")} –{" "}
+            {formatKstDate(me.enrollmentEnd).replace(/-/g, ".")}
+          </div>
+        )}
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>다음 레슨</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {next ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-lg font-semibold">
-                  {formatKstDate(next.slotDatetime)} {formatKstHourMinute(next.slotDatetime)}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {next.teacher.name} 선생님
-                </div>
-              </div>
-              {canStudentCancel(next.slotDatetime, now) ? (
-                <CancelButton reservationId={next.id} />
-              ) : (
-                <Badge variant="outline">마감</Badge>
-              )}
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">예정된 레슨이 없습니다.</p>
-          )}
-        </CardContent>
-      </Card>
+      {/* 다가오는 레슨 타임라인 */}
+      {upcoming.length === 0 ? (
+        <Card>
+          <CardContent>
+            <EmptyState
+              icon={CalendarOff}
+              title="예정된 레슨이 없습니다"
+              description="예약하기에서 새 레슨을 예약해 보세요."
+            />
+          </CardContent>
+        </Card>
+      ) : (
+        <AgendaRail groups={groups} />
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>예정 예약</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {upcoming.length === 0 ? (
-            <p className="text-sm text-muted-foreground">예약이 없습니다.</p>
-          ) : (
-            upcoming.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between rounded-md border px-3 py-2"
-              >
-                <div>
-                  <div className="text-sm font-medium">
-                    {formatKstDate(r.slotDatetime)} {formatKstHourMinute(r.slotDatetime)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {r.teacher.name} 선생님
-                  </div>
-                </div>
-                {canStudentCancel(r.slotDatetime, now) ? (
-                  <CancelButton reservationId={r.id} />
-                ) : (
-                  <Badge variant="outline">마감</Badge>
-                )}
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>레슨 공개 설정</CardTitle>
-          <CardDescription>
-            다른 학생에게 내 레슨 일정 공개 여부를 설정합니다.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {allUpcoming.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              설정할 예정 레슨이 없습니다.
-            </p>
-          ) : (
-            allUpcoming.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between rounded-md border px-3 py-2"
-              >
-                <div>
-                  <div className="text-sm font-medium">
-                    {formatKstDate(r.slotDatetime)}{" "}
-                    {formatKstHourMinute(r.slotDatetime)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {r.teacher.name} 선생님
-                  </div>
-                </div>
-                <VisibilitySwitch
-                  reservationId={r.id}
-                  isPrivate={r.isPrivate}
-                />
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+      {/* 레슨 공개 설정 */}
+      {allUpcoming.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>레슨 공개 설정</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <VisibilitySettings
+              initial={allUpcoming.map((r) => ({
+                id: r.id,
+                label: dateTimeLabel(r.slotDatetime),
+                teacherName: r.teacher.name,
+                isPrivate: r.isPrivate,
+              }))}
+            />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

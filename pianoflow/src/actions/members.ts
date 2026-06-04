@@ -10,11 +10,13 @@ import {
   memberCreateSchema,
   memberUpdateSchema,
   teacherCredentialSchema,
+  teacherSpecialtySchema,
 } from "@/lib/validators";
 import type { ActionResult } from "@/lib/errors";
 import {
   CreditChangeReason,
   Role,
+  Specialty,
   UserStatus,
 } from "@/generated/prisma/enums";
 
@@ -32,11 +34,15 @@ export async function adminCreateMember(
 ): Promise<ActionResult<{ loginId: string; tempPassword: string }>> {
   try {
     await requireAdmin();
+    const role = formData.get("role");
     const parsed = memberCreateSchema.safeParse({
       name: formData.get("name"),
       phone: formData.get("phone"),
-      role: formData.get("role"),
+      role,
       remainingLessons: Number(formData.get("remainingLessons") ?? 0),
+      // 전공은 선생님에게만 적용 (체크박스 다중 선택)
+      specialties:
+        role === Role.TEACHER ? formData.getAll("specialties") : [],
     });
     if (!parsed.success) {
       return { ok: false, message: parsed.error.issues[0].message };
@@ -57,6 +63,7 @@ export async function adminCreateMember(
           role: parsed.data.role,
           status: UserStatus.ACTIVE,
           remainingLessons: parsed.data.remainingLessons,
+          specialties: parsed.data.specialties,
         },
       });
       revalidatePath("/admin/members");
@@ -235,6 +242,40 @@ export async function adminUpdateTeacherCredentials(input: {
     return {
       ok: false,
       message: err instanceof Error ? err.message : "자격증명 변경에 실패했습니다.",
+    };
+  }
+}
+
+export async function adminSetTeacherSpecialties(input: {
+  teacherId: string;
+  specialties: Specialty[];
+}): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const parsed = teacherSpecialtySchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, message: parsed.error.issues[0].message };
+    }
+
+    const teacher = await prisma.user.findUnique({
+      where: { id: parsed.data.teacherId },
+      select: { role: true },
+    });
+    if (!teacher || teacher.role !== Role.TEACHER) {
+      return { ok: false, message: "선생님을 찾을 수 없습니다." };
+    }
+
+    await prisma.user.update({
+      where: { id: parsed.data.teacherId },
+      data: { specialties: parsed.data.specialties },
+    });
+    revalidatePath("/admin/members");
+    revalidatePath(`/admin/members/${parsed.data.teacherId}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "전공 변경에 실패했습니다.",
     };
   }
 }

@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Role } from "@/generated/prisma/enums";
+import { SPECIALTY_LABEL, SPECIALTY_ORDER } from "@/lib/specialty";
 
 export default function NewMemberPage() {
   const router = useRouter();
@@ -46,14 +47,18 @@ export default function NewMemberPage() {
       <CardContent>
         {issued ? (
           <div className="space-y-4">
-            <div className="space-y-3 rounded-md border bg-amber-50 p-4 text-sm">
+            <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
               <div>
                 <p className="font-semibold">로그인 ID (휴대폰 8자리)</p>
-                <p className="mt-1 font-mono text-xl text-amber-900">{issued.loginId}</p>
+                <p className="mt-1 font-mono text-xl text-amber-900 dark:text-amber-300">
+                  {issued.loginId}
+                </p>
               </div>
               <div>
                 <p className="font-semibold">초기 비밀번호 (휴대폰 끝 4자리)</p>
-                <p className="mt-1 font-mono text-xl text-amber-900">{issued.tempPassword}</p>
+                <p className="mt-1 font-mono text-xl text-amber-900 dark:text-amber-300">
+                  {issued.tempPassword}
+                </p>
               </div>
               <p className="text-xs text-muted-foreground">
                 회원에게 전달해주세요.
@@ -99,6 +104,27 @@ export default function NewMemberPage() {
               </Select>
               <input type="hidden" name="role" value={role} />
             </div>
+            {role === Role.TEACHER && (
+              <div className="space-y-2">
+                <Label>전공 (복수 선택 가능)</Label>
+                <div className="flex flex-wrap gap-4">
+                  {SPECIALTY_ORDER.map((s) => (
+                    <label
+                      key={s}
+                      className="flex cursor-pointer items-center gap-2 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        name="specialties"
+                        value={s}
+                        className="size-4 accent-primary"
+                      />
+                      {SPECIALTY_LABEL[s]}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="remainingLessons">초기 레슨 횟수 (학생만)</Label>
               <Input

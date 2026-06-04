@@ -42,6 +42,12 @@ enum CreditChangeReason {
   ADMIN_ADJUST
 }
 
+enum Specialty {
+  CLASSICAL
+  JAZZ
+  ACCOMPANIMENT
+}
+
 model User {
   id                 String     @id @default(uuid())
   name               String
@@ -52,6 +58,7 @@ model User {
   role               Role       @default(STUDENT)
   status             UserStatus @default(ACTIVE)
   remainingLessons   Int        @default(0) @map("remaining_lessons")
+  specialties        Specialty[] @default([])
   enrollmentStart    DateTime?  @map("enrollment_start")
   enrollmentEnd      DateTime?  @map("enrollment_end")
   createdAt          DateTime   @default(now()) @map("created_at")

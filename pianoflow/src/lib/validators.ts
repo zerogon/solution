@@ -1,6 +1,10 @@
 import { z } from "zod";
-import { Role, Weekday } from "@/generated/prisma/enums";
+import { Role, Specialty, Weekday } from "@/generated/prisma/enums";
 import { SLOT_HOURS } from "@/lib/slots";
+
+export const specialtiesSchema = z
+  .array(z.nativeEnum(Specialty))
+  .default([]);
 
 const ALLOWED_HOURS = new Set<number>(SLOT_HOURS);
 
@@ -51,6 +55,12 @@ export const memberCreateSchema = z.object({
   phone: phoneSchema,
   role: z.nativeEnum(Role).default(Role.STUDENT),
   remainingLessons: z.number().int().min(0).default(0),
+  specialties: specialtiesSchema,
+});
+
+export const teacherSpecialtySchema = z.object({
+  teacherId: z.string().uuid(),
+  specialties: specialtiesSchema,
 });
 
 export const memberUpdateSchema = z.object({
@@ -127,5 +137,9 @@ export const reservationCancelSchema = z.object({
 
 export const reservationVisibilitySchema = z.object({
   reservationId: z.string().uuid(),
+  isPrivate: z.boolean(),
+});
+
+export const reservationBulkVisibilitySchema = z.object({
   isPrivate: z.boolean(),
 });

@@ -9,10 +9,12 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Role, UserStatus } from "@/generated/prisma/enums";
+import { Role } from "@/generated/prisma/enums";
 import { formatKstDate } from "@/lib/slots";
+import { MemberStatusBadge } from "@/components/member-status-badge";
 import { MemberActions } from "./_MemberActions";
 import { TeacherCredentials } from "./_TeacherCredentials";
+import { SpecialtyEditor } from "./_SpecialtyEditor";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -49,9 +51,7 @@ export default async function MemberDetail({ params }: PageProps) {
           </div>
           <div className="flex gap-2">
             <Badge variant="outline">{ROLE_LABEL[member.role]}</Badge>
-            <Badge variant={member.status === UserStatus.ACTIVE ? "secondary" : "outline"}>
-              {member.status}
-            </Badge>
+            <MemberStatusBadge status={member.status} />
           </div>
         </CardHeader>
         <CardContent>
@@ -69,6 +69,20 @@ export default async function MemberDetail({ params }: PageProps) {
           />
         </CardContent>
       </Card>
+
+      {member.role === Role.TEACHER && (
+        <Card>
+          <CardHeader>
+            <CardTitle>전공</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SpecialtyEditor
+              teacherId={member.id}
+              current={member.specialties}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {member.role === Role.TEACHER && (
         <Card>

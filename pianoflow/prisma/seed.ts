@@ -2,7 +2,7 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client.js";
-import { Role, UserStatus, Weekday } from "../src/generated/prisma/enums.js";
+import { Role, Specialty, UserStatus, Weekday } from "../src/generated/prisma/enums.js";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
@@ -29,6 +29,7 @@ async function createUser(input: {
   phone: string;
   role: Role;
   remainingLessons?: number;
+  specialties?: Specialty[];
   password?: string;
   mustChange?: boolean;
 }) {
@@ -45,6 +46,7 @@ async function createUser(input: {
       role: input.role,
       status: UserStatus.ACTIVE,
       remainingLessons: input.remainingLessons ?? 0,
+      specialties: input.specialties ?? [],
     },
   });
 }
@@ -70,11 +72,13 @@ async function main() {
   const teacherSpec: {
     name: string;
     phone: string;
+    specialties: Specialty[];
     weekdayHours: { weekday: Weekday; hours: number[] }[];
   }[] = [
     {
       name: "이소연",
       phone: "010-1111-1111",
+      specialties: [Specialty.CLASSICAL],
       weekdayHours: [
         { weekday: Weekday.MON, hours: ALL_HOURS },
         { weekday: Weekday.WED, hours: [14, 15, 16, 17, 18] }, // 오후만 오픈
@@ -85,6 +89,7 @@ async function main() {
     {
       name: "한상아",
       phone: "010-2222-2222",
+      specialties: [Specialty.JAZZ, Specialty.ACCOMPANIMENT],
       weekdayHours: [
         { weekday: Weekday.TUE, hours: ALL_HOURS },
         { weekday: Weekday.FRI, hours: ALL_HOURS },
@@ -94,6 +99,7 @@ async function main() {
     {
       name: "이승준",
       phone: "010-3333-3333",
+      specialties: [Specialty.CLASSICAL],
       weekdayHours: [
         { weekday: Weekday.TUE, hours: ALL_HOURS },
         { weekday: Weekday.WED, hours: ALL_HOURS },
@@ -107,6 +113,7 @@ async function main() {
       name: spec.name,
       phone: spec.phone,
       role: Role.TEACHER,
+      specialties: spec.specialties,
       password: "teacher1234",
     });
     await prisma.teacherAvailability.createMany({

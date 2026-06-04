@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { DatePickerPanel } from "@/components/calendar/DatePickerPanel";
+import { WeekStrip } from "@/components/schedule/WeekStrip";
 import { SlotGrid } from "@/components/calendar/SlotGrid";
 import {
   DaySchedule,
@@ -9,6 +9,9 @@ import {
 } from "@/components/calendar/DaySchedule";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
+import { EmptyState } from "@/components/empty-state";
+import { CalendarOff } from "lucide-react";
 import Link from "next/link";
 import {
   availabilityMap,
@@ -22,6 +25,7 @@ import {
   Role,
   UserStatus,
 } from "@/generated/prisma/enums";
+import { specialtyLabels } from "@/lib/specialty";
 
 interface PageProps {
   searchParams: Promise<{ date?: string; teacher?: string }>;
@@ -90,9 +94,11 @@ export default async function BookPage({ searchParams }: PageProps) {
   }));
 
   let slotsArea: React.ReactNode = (
-    <p className="text-sm text-muted-foreground">
-      선택한 날짜에 예약 가능한 선생님이 없습니다.
-    </p>
+    <EmptyState
+      icon={CalendarOff}
+      title="예약 가능한 선생님이 없습니다"
+      description="다른 날짜를 선택하면 가능한 선생님이 나타납니다."
+    />
   );
 
   let reservationByIso: Record<string, string> = {};
@@ -144,23 +150,29 @@ export default async function BookPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      <PageHeader
+        title="레슨 예약"
+        description="날짜와 선생님, 시간을 차례로 선택하세요."
+      />
+
       <Card>
         <CardHeader>
-          <CardTitle>1. 날짜 선택</CardTitle>
+          <StepTitle n={1}>날짜 선택</StepTitle>
         </CardHeader>
-        <CardContent className="flex justify-center">
-          <DatePickerPanel selectedDateStr={dateStr} />
+        <CardContent>
+          <WeekStrip selectedDateStr={dateStr} />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>2. 선생님 선택</CardTitle>
+          <StepTitle n={2}>선생님 선택</StepTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           {available.map((t) => {
             const active = t.id === selectedTeacher?.id;
+            const specialty = specialtyLabels(t.specialties);
             return (
               <Link
                 key={t.id}
@@ -168,7 +180,7 @@ export default async function BookPage({ searchParams }: PageProps) {
                   pathname: "/student/book",
                   query: { date: dateStr, teacher: t.id },
                 }}
-                className="contents"
+                className="flex flex-col items-center gap-0.5"
               >
                 <Badge
                   variant={active ? "default" : "outline"}
@@ -180,6 +192,18 @@ export default async function BookPage({ searchParams }: PageProps) {
                 >
                   {t.name}
                 </Badge>
+                {specialty && (
+                  <span
+                    className={
+                      "text-[11px] " +
+                      (t.isAvailableToday
+                        ? "text-muted-foreground"
+                        : "text-muted-foreground/40")
+                    }
+                  >
+                    {specialty}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -188,19 +212,30 @@ export default async function BookPage({ searchParams }: PageProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>3. 시간 선택</CardTitle>
+          <StepTitle n={3}>시간 선택</StepTitle>
         </CardHeader>
         <CardContent>{slotsArea}</CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>4. 같은 날 다른 학생 일정</CardTitle>
+          <StepTitle n={4}>같은 날 다른 학생 일정</StepTitle>
         </CardHeader>
         <CardContent>
           <DaySchedule dateStr={dateStr} items={dayScheduleItems} />
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function StepTitle({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <CardTitle className="flex items-center gap-2">
+      <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+        {n}
+      </span>
+      {children}
+    </CardTitle>
   );
 }

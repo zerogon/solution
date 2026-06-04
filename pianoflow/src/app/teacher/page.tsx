@@ -1,107 +1,118 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { PageHeader } from "@/components/page-header";
+import { WeekStrip } from "@/components/schedule/WeekStrip";
+import { DayTimeline, type TimelineItem } from "@/components/schedule/DayTimeline";
+import { AgendaRail, type AgendaGroup } from "@/components/schedule/AgendaRail";
 import { ReservationStatus } from "@/generated/prisma/enums";
-import { formatKstDate, parseKstDate } from "@/lib/slots";
+import { Shield } from "lucide-react";
+import { formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
 
-function formatKstHM(d: Date) {
-  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
-  return `${String(kst.getUTCHours()).padStart(2, "0")}:00`;
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+
+function hm(d: Date) {
+  return `${String(kstHourOf(d)).padStart(2, "0")}:00`;
+}
+function dowLabel(dateStr: string) {
+  const kst = new Date(parseKstDate(dateStr).getTime() + 9 * 3600000);
+  return DOW[kst.getUTCDay()];
+}
+function addDays(dateStr: string, n: number) {
+  return formatKstDate(new Date(parseKstDate(dateStr).getTime() + n * 86400000));
 }
 
-export default async function TeacherHome() {
+interface PageProps {
+  searchParams: Promise<{ date?: string }>;
+}
+
+export default async function TeacherHome({ searchParams }: PageProps) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+  const sp = await searchParams;
   const todayStr = formatKstDate(new Date());
-  const todayStart = parseKstDate(todayStr);
-  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-  const weekEnd = new Date(todayStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const selectedDate = sp.date ?? todayStr;
 
-  const today = await prisma.reservation.findMany({
-    where: {
-      teacherId: session.user.id,
-      status: ReservationStatus.ACTIVE,
-      slotDatetime: { gte: todayStart, lt: todayEnd },
-    },
-    include: { student: true },
-    orderBy: { slotDatetime: "asc" },
-  });
+  const selKst = new Date(parseKstDate(selectedDate).getTime() + 9 * 3600000);
+  const dow = selKst.getUTCDay();
+  const mondayStr = addDays(selectedDate, dow === 0 ? -6 : 1 - dow);
+  const weekStart = parseKstDate(mondayStr);
+  const weekEnd = parseKstDate(addDays(mondayStr, 7));
 
   const week = await prisma.reservation.findMany({
     where: {
       teacherId: session.user.id,
       status: ReservationStatus.ACTIVE,
-      slotDatetime: { gte: todayEnd, lt: weekEnd },
+      slotDatetime: { gte: weekStart, lt: weekEnd },
     },
     include: { student: true },
     orderBy: { slotDatetime: "asc" },
   });
 
-  // 주간 그룹화
-  const grouped = new Map<string, typeof week>();
+  const now = new Date();
+  const dayItems: TimelineItem[] = week
+    .filter((r) => formatKstDate(r.slotDatetime) === selectedDate)
+    .map((r) => ({
+      hour: kstHourOf(r.slotDatetime),
+      title: `${r.student.name} 학생`,
+      subtitle: r.forcedByAdmin ? "강제 예약" : "레슨",
+      tone: r.slotDatetime >= now ? "accent" : "muted",
+      icon: r.forcedByAdmin ? (
+        <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
+      ) : undefined,
+    }));
+
+  // 선택일을 제외한 그 주 나머지 일정
+  const otherByDate = new Map<string, typeof week>();
   for (const r of week) {
     const d = formatKstDate(r.slotDatetime);
-    const arr = grouped.get(d) ?? [];
+    if (d === selectedDate) continue;
+    const arr = otherByDate.get(d) ?? [];
     arr.push(r);
-    grouped.set(d, arr);
+    otherByDate.set(d, arr);
   }
+  const weekGroups: AgendaGroup[] = Array.from(otherByDate.entries()).map(
+    ([d, items]) => ({
+      label: `${d.slice(5).replace("-", ".")} (${dowLabel(d)})`,
+      items: items.map((r) => ({
+        id: r.id,
+        time: hm(r.slotDatetime),
+        title: `${r.student.name} 학생`,
+        tone: "default" as const,
+        icon: r.forcedByAdmin ? (
+          <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
+        ) : undefined,
+      })),
+    }),
+  );
+
+  const selLabel = `${selectedDate.slice(5).replace("-", ".")} (${dowLabel(selectedDate)})`;
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>오늘 일정 ({todayStr})</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {today.length === 0 ? (
-            <p className="text-sm text-muted-foreground">오늘 예약이 없습니다.</p>
-          ) : (
-            today.map((r) => (
-              <div
-                key={r.id}
-                className="flex items-center justify-between rounded-md border px-3 py-2"
-              >
-                <div className="text-sm font-medium">
-                  {formatKstHM(r.slotDatetime)}
-                </div>
-                <div className="text-sm">{r.student.name}</div>
-              </div>
-            ))
-          )}
-        </CardContent>
-      </Card>
+    <div className="space-y-5">
+      <PageHeader title="내 일정" description="주를 넘기며 날짜별 레슨을 확인하세요." />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>다가오는 주간 일정</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {grouped.size === 0 ? (
-            <p className="text-sm text-muted-foreground">예정된 일정이 없습니다.</p>
-          ) : (
-            Array.from(grouped.entries()).map(([dateStr, items]) => (
-              <div key={dateStr} className="space-y-1">
-                <div className="text-sm font-semibold">{dateStr}</div>
-                <div className="flex flex-wrap gap-2">
-                  {items.map((r) => (
-                    <Badge key={r.id} variant="secondary">
-                      {formatKstHM(r.slotDatetime)} · {r.student.name}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            ))
+      <WeekStrip selectedDateStr={selectedDate} />
+
+      <section className="space-y-2">
+        <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
+          {selLabel}
+          {selectedDate === todayStr && (
+            <span className="ml-1.5 text-xs font-medium text-primary">오늘</span>
           )}
-        </CardContent>
-      </Card>
+        </h2>
+        <DayTimeline items={dayItems} emptyHint="이 날은 예약된 레슨이 없습니다." />
+      </section>
+
+      {weekGroups.length > 0 && (
+        <section className="space-y-2">
+          <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
+            이번 주 다른 일정
+          </h2>
+          <AgendaRail groups={weekGroups} />
+        </section>
+      )}
     </div>
   );
 }

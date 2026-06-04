@@ -16,20 +16,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Role, UserStatus } from "@/generated/prisma/enums";
+import { Role } from "@/generated/prisma/enums";
 import { formatKstDate } from "@/lib/slots";
-
-const ROLE_LABEL: Record<Role, string> = {
-  ADMIN: "관리자",
-  TEACHER: "선생님",
-  STUDENT: "학생",
-};
-
-const STATUS_LABEL: Record<UserStatus, string> = {
-  ACTIVE: "활성",
-  DORMANT: "휴면",
-  WITHDRAWN: "탈퇴",
-};
+import { PageHeader } from "@/components/page-header";
+import { MemberStatusBadge } from "@/components/member-status-badge";
+import { SpecialtyBadges } from "@/components/specialty-badges";
+import { UserPlus, Search } from "lucide-react";
 
 const ROLE_FILTERS: { value: string; label: string }[] = [
   { value: "ALL", label: "전체" },
@@ -40,14 +32,6 @@ const ROLE_FILTERS: { value: string; label: string }[] = [
 
 interface PageProps {
   searchParams: Promise<{ q?: string; role?: string }>;
-}
-
-function StatusBadge({ status }: { status: UserStatus }) {
-  return (
-    <Badge variant={status === UserStatus.ACTIVE ? "secondary" : "outline"}>
-      {STATUS_LABEL[status]}
-    </Badge>
-  );
 }
 
 function DetailLink({ id }: { id: string }) {
@@ -94,28 +78,37 @@ export default async function MembersList({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="회원 관리"
+        description={`전체 ${members.length}명`}
+        action={
+          <Link
+            href="/admin/members/new"
+            className={buttonVariants({ size: "default" })}
+          >
+            <UserPlus className="size-4" />
+            회원 등록
+          </Link>
+        }
+      />
       <Card>
         <CardHeader className="gap-4">
-          <div className="flex flex-row items-center justify-between">
-            <CardTitle>회원 ({members.length}명)</CardTitle>
-            <Link
-              href="/admin/members/new"
-              className={buttonVariants({ size: "default" })}
-            >
-              + 회원 등록
-            </Link>
-          </div>
-
           <form method="get" className="flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              name="q"
-              defaultValue={q}
-              placeholder="이름 · 휴대폰 · 로그인 ID 검색"
-              className="min-w-56 flex-1 rounded-md border px-3 py-2 text-sm"
-            />
+            <div className="relative min-w-56 flex-1">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                type="text"
+                name="q"
+                defaultValue={q}
+                placeholder="이름 · 휴대폰 · 로그인 ID 검색"
+                className="h-9 w-full rounded-lg border bg-transparent pl-9 pr-3 text-sm transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+              />
+            </div>
             <input type="hidden" name="role" value={roleFilter} />
-            <button type="submit" className={buttonVariants({ size: "sm" })}>
+            <button type="submit" className={buttonVariants({ size: "default" })}>
               검색
             </button>
             {q && (
@@ -182,7 +175,7 @@ export default async function MembersList({ searchParams }: PageProps) {
                     <TableCell className="font-medium">{m.name}</TableCell>
                     <TableCell className="font-mono text-xs">{m.loginId}</TableCell>
                     <TableCell>
-                      <StatusBadge status={m.status} />
+                      <MemberStatusBadge status={m.status} />
                     </TableCell>
                     <TableCell className="text-right">{m.remainingLessons}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
@@ -221,6 +214,7 @@ export default async function MembersList({ searchParams }: PageProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>이름</TableHead>
+                  <TableHead>전공</TableHead>
                   <TableHead>로그인 ID</TableHead>
                   <TableHead>상태</TableHead>
                   <TableHead>가용 요일/시간</TableHead>
@@ -236,9 +230,12 @@ export default async function MembersList({ searchParams }: PageProps) {
                   return (
                     <TableRow key={m.id}>
                       <TableCell className="font-medium">{m.name}</TableCell>
+                      <TableCell>
+                        <SpecialtyBadges specialties={m.specialties} />
+                      </TableCell>
                       <TableCell className="font-mono text-xs">{m.loginId}</TableCell>
                       <TableCell>
-                        <StatusBadge status={m.status} />
+                        <MemberStatusBadge status={m.status} />
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {m.availability.length > 0
@@ -254,7 +251,7 @@ export default async function MembersList({ searchParams }: PageProps) {
                 {teachers.length === 0 && (
                   <TableRow>
                     <TableCell
-                      colSpan={5}
+                      colSpan={6}
                       className="text-center text-sm text-muted-foreground"
                     >
                       해당하는 선생님이 없습니다.
@@ -288,7 +285,7 @@ export default async function MembersList({ searchParams }: PageProps) {
                     <TableCell className="font-medium">{m.name}</TableCell>
                     <TableCell className="font-mono text-xs">{m.loginId}</TableCell>
                     <TableCell>
-                      <StatusBadge status={m.status} />
+                      <MemberStatusBadge status={m.status} />
                     </TableCell>
                     <TableCell className="text-right">
                       <DetailLink id={m.id} />

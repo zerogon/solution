@@ -1,3 +1,4 @@
+import { EyeOff } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { kstHourOf } from "@/lib/slots";
 import { VisibilityBadgeToggle } from "./VisibilityBadgeToggle";
@@ -55,7 +56,10 @@ export function DaySchedule({ dateStr, items }: Props) {
                   }
                 >
                   {it.isPrivate && !it.isMine ? (
-                    <span className="italic opacity-70">비공개</span>
+                    <span className="inline-flex items-center gap-1 italic opacity-70">
+                      <EyeOff aria-hidden className="size-3" />
+                      비공개
+                    </span>
                   ) : (
                     it.studentName
                   )}

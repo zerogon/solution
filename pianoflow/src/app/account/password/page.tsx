@@ -3,6 +3,7 @@
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { KeyRound } from "lucide-react";
 import { changePasswordAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +30,10 @@ export default function PasswordPage() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-muted px-4">
       <Card className="w-full max-w-sm">
-        <CardHeader>
+        <CardHeader className="items-center gap-2 pt-2 text-center">
+          <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+            <KeyRound className="size-5" />
+          </span>
           <CardTitle>비밀번호 변경</CardTitle>
           <p className="text-sm text-muted-foreground">
             첫 로그인 시 새 비밀번호를 설정해주세요.

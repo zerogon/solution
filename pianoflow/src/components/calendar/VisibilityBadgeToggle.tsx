@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -43,6 +44,11 @@ export function VisibilityBadgeToggle({
           pending && "opacity-60",
         )}
       >
+        {isPrivate ? (
+          <EyeOff aria-hidden className="size-3" />
+        ) : (
+          <Eye aria-hidden className="size-3" />
+        )}
         {isPrivate ? "비공개" : "공개"}
       </Badge>
     </button>

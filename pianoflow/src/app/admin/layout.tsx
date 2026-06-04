@@ -1,4 +1,5 @@
 import { RoleNav } from "@/components/RoleNav";
+import { BottomTabBar } from "@/components/BottomTabBar";
 import { requireRole } from "@/lib/auth-helpers";
 import { Role } from "@/generated/prisma/enums";
 
@@ -11,7 +12,10 @@ export default async function AdminLayout({
   return (
     <div className="flex min-h-dvh flex-col">
       <RoleNav />
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-6 pb-24 md:pb-8">
+        {children}
+      </main>
+      <BottomTabBar role={Role.ADMIN} />
     </div>
   );
 }

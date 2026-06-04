@@ -1,21 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   ReservationStatus,
   Role,
@@ -26,19 +12,18 @@ import {
   formatKstDate,
   generateSlots,
   parseKstDate,
+  kstHourOf,
 } from "@/lib/slots";
-import { DatePickerPanel } from "@/components/calendar/DatePickerPanel";
 import { SlotGrid } from "@/components/calendar/SlotGrid";
+import { PageHeader } from "@/components/page-header";
+import { WeekStrip } from "@/components/schedule/WeekStrip";
+import { DayTimeline, type TimelineItem } from "@/components/schedule/DayTimeline";
+import { Shield } from "lucide-react";
 import { AdminCancelButton } from "./_AdminCancelButton";
 import { AdminForceTeacherSelect } from "./_AdminForceTeacherSelect";
 
 interface PageProps {
   searchParams: Promise<{ date?: string; teacher?: string; student?: string }>;
-}
-
-function formatKstHM(d: Date) {
-  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
-  return `${String(kst.getUTCHours()).padStart(2, "0")}:00`;
 }
 
 export default async function AdminReservations({ searchParams }: PageProps) {
@@ -63,13 +48,24 @@ export default async function AdminReservations({ searchParams }: PageProps) {
         slotDatetime: { gte: baseDate, lt: dayEnd },
       },
       include: { teacher: true, student: true },
-      orderBy: [{ teacherId: "asc" }, { slotDatetime: "asc" }],
+      orderBy: [{ slotDatetime: "asc" }, { teacherId: "asc" }],
     }),
   ]);
 
   const selectedTeacher =
     teachers.find((t) => t.id === sp.teacher) ?? teachers[0] ?? null;
   const selectedStudentId = sp.student ?? students[0]?.id;
+
+  const timeline: TimelineItem[] = reservations.map((r) => ({
+    hour: kstHourOf(r.slotDatetime),
+    title: `${r.student.name} 학생`,
+    subtitle: `${r.teacher.name} 선생님 · ${r.forcedByAdmin ? "강제" : "일반"}`,
+    tone: r.forcedByAdmin ? "accent" : "default",
+    icon: r.forcedByAdmin ? (
+      <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
+    ) : undefined,
+    trailing: <AdminCancelButton reservationId={r.id} />,
+  }));
 
   let forceArea: React.ReactNode = null;
   if (selectedTeacher && selectedStudentId) {
@@ -100,67 +96,30 @@ export default async function AdminReservations({ searchParams }: PageProps) {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>날짜 선택</CardTitle>
-        </CardHeader>
-        <CardContent className="flex justify-center">
-          <DatePickerPanel selectedDateStr={dateStr} />
-        </CardContent>
-      </Card>
+      <PageHeader
+        title="예약 관리"
+        description="날짜별 예약 현황을 확인하고 강제 예약을 생성합니다."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{dateStr} 예약 현황 ({reservations.length}건)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>시간</TableHead>
-                <TableHead>선생님</TableHead>
-                <TableHead>학생</TableHead>
-                <TableHead>유형</TableHead>
-                <TableHead className="text-right">조치</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {reservations.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell>{formatKstHM(r.slotDatetime)}</TableCell>
-                  <TableCell>{r.teacher.name}</TableCell>
-                  <TableCell>{r.student.name}</TableCell>
-                  <TableCell>
-                    {r.forcedByAdmin ? (
-                      <Badge variant="outline">강제</Badge>
-                    ) : (
-                      <Badge variant="secondary">일반</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <AdminCancelButton reservationId={r.id} />
-                  </TableCell>
-                </TableRow>
-              ))}
-              {reservations.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                    예약이 없습니다.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <WeekStrip selectedDateStr={dateStr} />
+
+      <section className="space-y-2">
+        <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
+          {dateStr.slice(5).replace("-", ".")} 예약 현황
+          <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">
+            {reservations.length}건
+          </span>
+        </h2>
+        <DayTimeline items={timeline} emptyHint="이 날은 예약이 없습니다." />
+      </section>
 
       <Card>
         <CardHeader>
           <CardTitle>강제 예약 생성</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <span className="text-sm">선생님:</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">선생님</span>
             {teachers.map((t) => {
               const active = t.id === selectedTeacher?.id;
               return (
@@ -172,7 +131,10 @@ export default async function AdminReservations({ searchParams }: PageProps) {
                   }}
                   className="contents"
                 >
-                  <Badge variant={active ? "default" : "outline"} className="cursor-pointer">
+                  <Badge
+                    variant={active ? "default" : "outline"}
+                    className="cursor-pointer"
+                  >
                     {t.name}
                   </Badge>
                 </Link>
