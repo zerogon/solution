@@ -52,12 +52,17 @@ export default function RootLayout({
       className={`${notoSansKr.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
+        {/* Apply the stored theme before paint to avoid a flash of the wrong
+            theme. Rendered by this Server Component (not a client component), so
+            React 19 won't warn about a <script> in client render. Defaults to
+            light when nothing is stored. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');var d=t==='dark';var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){}})();",
+          }}
+        />
+        <ThemeProvider>
           {children}
           <Toaster richColors position="top-center" />
           <PwaInstallPrompt />
