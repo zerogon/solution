@@ -21,10 +21,31 @@ export const resortAccountUpdateSchema = resortAccountSchema.partial({
   password: true,
 });
 
-export const searchParamsSchema = z.object({
-  checkin: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  checkout: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  region: z.string().optional(),
-});
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD 형식이어야 합니다");
+
+export const searchParamsSchema = z
+  .object({
+    checkin: isoDate,
+    checkout: isoDate,
+    region: z.string().optional(),
+  })
+  .refine((v) => v.checkout > v.checkin, {
+    message: "체크아웃은 체크인 이후여야 합니다",
+    path: ["checkout"],
+  });
 
 export type SearchParamsInput = z.infer<typeof searchParamsSchema>;
+
+/** User-facing cache read: filter by branch (= ResortInventory.branchName). */
+export const inventoryQuerySchema = z
+  .object({
+    checkin: isoDate,
+    checkout: isoDate,
+    branch: z.string().optional(),
+  })
+  .refine((v) => v.checkout > v.checkin, {
+    message: "체크아웃은 체크인 이후여야 합니다",
+    path: ["checkout"],
+  });
+
+export type InventoryQueryInput = z.infer<typeof inventoryQuerySchema>;

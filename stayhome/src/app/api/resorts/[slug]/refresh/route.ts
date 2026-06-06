@@ -4,6 +4,9 @@ import { writeAudit } from "@/lib/audit";
 import { AuditAction, ResortSlug } from "@/generated/prisma/enums";
 import { runResortCrawl } from "@/crawlers/run";
 import { isCrawlerRegistered } from "@/crawlers/registry";
+import { searchParamsSchema } from "@/lib/validators";
+import { parseDate } from "@/lib/utils";
+import type { SearchParams } from "@/crawlers/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -17,7 +20,7 @@ function toSlug(raw: string): ResortSlug | null {
 }
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
   const session = await requireSession();
@@ -33,15 +36,35 @@ export async function POST(
     );
   }
 
+  // Optional JSON body { checkin, checkout, region } narrows the crawl to a
+  // user-specified window/branch. Absent body → defaultSearch() (today+7, all
+  // branches), preserving the admin RefreshButton behavior.
+  let search: SearchParams | undefined;
+  const raw = await req.json().catch(() => null);
+  if (raw != null) {
+    const parsed = searchParamsSchema.safeParse(raw);
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "invalid_search", issues: parsed.error.flatten() },
+        { status: 400 },
+      );
+    }
+    search = {
+      checkin: parseDate(parsed.data.checkin),
+      checkout: parseDate(parsed.data.checkout),
+      region: parsed.data.region,
+    };
+  }
+
   await writeAudit({
     actorId: session.user.id,
     actorEmail: session.user.email,
     action: AuditAction.MANUAL_REFRESH,
-    metadata: { slug },
+    metadata: { slug, ...(search ? { search: raw } : {}) },
   });
 
   try {
-    const result = await runResortCrawl(slug, { triggeredBy: "MANUAL" });
+    const result = await runResortCrawl(slug, { triggeredBy: "MANUAL", search });
     return NextResponse.json(result);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

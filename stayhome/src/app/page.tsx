@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth-helpers";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { SearchView } from "@/components/search/SearchView";
 
 export default async function HomePage() {
   const session = await requireSession();
@@ -23,26 +21,14 @@ export default async function HomePage() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle>통합 검색 (Phase D에서 구현 예정)</CardTitle>
-            <CardDescription>
-              현재는 인프라 구축 단계입니다. 먼저 관리 페이지에서 리조트 자격증명을 등록하세요.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex gap-2">
-            <Link href="/admin/accounts" className={cn(buttonVariants())}>
-              계정 관리
-            </Link>
-            <Link
-              href="/admin/crawl-logs"
-              className={cn(buttonVariants({ variant: "outline" }))}
-            >
-              크롤링 로그
-            </Link>
-          </CardContent>
-        </Card>
+      <main className="mx-auto max-w-5xl px-4 py-8">
+        <div className="mb-5">
+          <h1 className="text-lg font-semibold">롯데리조트 객실 조회</h1>
+          <p className="text-sm text-muted-foreground">
+            날짜와 지점을 선택해 잔여 객실을 확인하세요. 캐시에 없으면 지점 선택 후 ‘최신화’로 조회합니다.
+          </p>
+        </div>
+        <SearchView />
       </main>
     </div>
   );
