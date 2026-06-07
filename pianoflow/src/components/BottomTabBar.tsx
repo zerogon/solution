@@ -6,7 +6,13 @@ import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE, activeNavHref } from "./nav-items";
 import type { Role } from "@/generated/prisma/enums";
 
-export function BottomTabBar({ role }: { role: Role }) {
+export function BottomTabBar({
+  role,
+  badges,
+}: {
+  role: Role;
+  badges?: Record<string, number>;
+}) {
   const pathname = usePathname();
   const items = NAV_BY_ROLE[role] ?? [];
   const activeHref = activeNavHref(items, pathname);
@@ -16,6 +22,7 @@ export function BottomTabBar({ role }: { role: Role }) {
       <ul className="mx-auto flex max-w-3xl pb-[env(safe-area-inset-bottom)]">
         {items.map(({ href, label, icon: Icon }) => {
           const active = href === activeHref;
+          const count = badges?.[href] ?? 0;
           return (
             <li key={href} className="flex-1">
               <Link
@@ -30,11 +37,16 @@ export function BottomTabBar({ role }: { role: Role }) {
               >
                 <span
                   className={cn(
-                    "flex h-7 w-12 items-center justify-center rounded-full transition-colors",
+                    "relative flex h-7 w-12 items-center justify-center rounded-full transition-colors",
                     active && "bg-primary/10",
                   )}
                 >
                   <Icon className="size-5" strokeWidth={active ? 2.4 : 2} />
+                  {count > 0 && (
+                    <span className="absolute top-0 right-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] leading-none font-semibold text-white tabular-nums">
+                      {count > 9 ? "9+" : count}
+                    </span>
+                  )}
                 </span>
                 {label}
               </Link>

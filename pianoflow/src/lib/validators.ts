@@ -143,3 +143,12 @@ export const reservationVisibilitySchema = z.object({
 export const reservationBulkVisibilitySchema = z.object({
   isPrivate: z.boolean(),
 });
+
+export const reservationFeedbackSchema = z.object({
+  reservationId: z.string().uuid(),
+  feedback: z.string().max(1000), // 빈 문자열 허용 → 삭제 의미
+});
+
+export const markFeedbackReadSchema = z.object({
+  reservationId: z.string().uuid(),
+});

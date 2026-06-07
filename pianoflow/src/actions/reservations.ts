@@ -5,9 +5,11 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { BookingError, type ActionResult } from "@/lib/errors";
 import {
+  markFeedbackReadSchema,
   reservationBulkVisibilitySchema,
   reservationCancelSchema,
   reservationCreateSchema,
+  reservationFeedbackSchema,
   reservationVisibilitySchema,
 } from "@/lib/validators";
 import {
@@ -342,6 +344,80 @@ export async function toggleReservationVisibilityAction(input: {
   revalidatePath("/student");
   revalidatePath("/student/book");
   revalidatePath("/student/history");
+
+  return { ok: true };
+}
+
+export async function saveReservationFeedbackAction(input: {
+  reservationId: string;
+  feedback: string;
+}): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user) {
+    return { ok: false, message: "로그인이 필요합니다." };
+  }
+
+  const parsed = reservationFeedbackSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0].message };
+  }
+
+  const reservation = await prisma.reservation.findUnique({
+    where: { id: parsed.data.reservationId },
+    select: { id: true, teacherId: true },
+  });
+  if (!reservation) {
+    return { ok: false, message: "예약을 찾을 수 없습니다." };
+  }
+
+  // 담당 선생님 본인 또는 관리자만 피드백 작성 가능
+  const isAdmin = session.user.role === Role.ADMIN;
+  const isOwnTeacher =
+    session.user.role === Role.TEACHER &&
+    reservation.teacherId === session.user.id;
+  if (!isAdmin && !isOwnTeacher) {
+    return { ok: false, message: "담당 선생님만 피드백을 작성할 수 있습니다." };
+  }
+
+  const trimmed = parsed.data.feedback.trim();
+  // 저장/수정/삭제 모두 읽음 상태를 초기화 → 학생에게 새 피드백으로 다시 알림
+  await prisma.reservation.update({
+    where: { id: reservation.id },
+    data: trimmed
+      ? { feedback: trimmed, feedbackAt: new Date(), feedbackReadAt: null }
+      : { feedback: null, feedbackAt: null, feedbackReadAt: null },
+  });
+
+  revalidatePath("/teacher");
+  revalidatePath("/student", "layout");
+
+  return { ok: true };
+}
+
+export async function markFeedbackReadAction(input: {
+  reservationId: string;
+}): Promise<ActionResult> {
+  const session = await auth();
+  if (!session?.user) {
+    return { ok: false, message: "로그인이 필요합니다." };
+  }
+
+  const parsed = markFeedbackReadSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0].message };
+  }
+
+  // 본인 소유의 아직 안 읽은 피드백만 읽음 처리 — where절이 소유권/중복쓰기 방지
+  await prisma.reservation.updateMany({
+    where: {
+      id: parsed.data.reservationId,
+      studentId: session.user.id,
+      feedbackReadAt: null,
+    },
+    data: { feedbackReadAt: new Date() },
+  });
+
+  revalidatePath("/student", "layout");
 
   return { ok: true };
 }

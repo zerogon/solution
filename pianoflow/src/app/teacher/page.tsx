@@ -8,6 +8,7 @@ import { AgendaRail, type AgendaGroup } from "@/components/schedule/AgendaRail";
 import { ReservationStatus } from "@/generated/prisma/enums";
 import { Shield } from "lucide-react";
 import { formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
+import { LessonFeedbackDialog } from "@/components/lesson-feedback-dialog";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -51,6 +52,7 @@ export default async function TeacherHome({ searchParams }: PageProps) {
   });
 
   const now = new Date();
+  const selLabel = `${selectedDate.slice(5).replace("-", ".")} (${dowLabel(selectedDate)})`;
   const dayItems: TimelineItem[] = week
     .filter((r) => formatKstDate(r.slotDatetime) === selectedDate)
     .map((r) => ({
@@ -61,6 +63,15 @@ export default async function TeacherHome({ searchParams }: PageProps) {
       icon: r.forcedByAdmin ? (
         <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
       ) : undefined,
+      trailing: (
+        <LessonFeedbackDialog
+          editable
+          reservationId={r.id}
+          studentName={r.student.name}
+          whenLabel={`${selLabel} ${hm(r.slotDatetime)}`}
+          initialFeedback={r.feedback ?? ""}
+        />
+      ),
     }));
 
   // 선택일을 제외한 그 주 나머지 일정
@@ -83,11 +94,18 @@ export default async function TeacherHome({ searchParams }: PageProps) {
         icon: r.forcedByAdmin ? (
           <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
         ) : undefined,
+        trailing: (
+          <LessonFeedbackDialog
+            editable
+            reservationId={r.id}
+            studentName={r.student.name}
+            whenLabel={`${d.slice(5).replace("-", ".")} (${dowLabel(d)}) ${hm(r.slotDatetime)}`}
+            initialFeedback={r.feedback ?? ""}
+          />
+        ),
       })),
     }),
   );
-
-  const selLabel = `${selectedDate.slice(5).replace("-", ".")} (${dowLabel(selectedDate)})`;
 
   return (
     <div className="space-y-5">

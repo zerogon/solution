@@ -6,7 +6,11 @@ import { HeaderNav } from "@/components/HeaderNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { logoutAction } from "@/actions/auth";
 
-export async function RoleNav() {
+export async function RoleNav({
+  badges,
+}: {
+  badges?: Record<string, number>;
+}) {
   const session = await auth();
   if (!session?.user) return null;
   return (
@@ -22,7 +26,7 @@ export async function RoleNav() {
             </span>
             PianoFlow
           </Link>
-          <HeaderNav role={session.user.role} />
+          <HeaderNav role={session.user.role} badges={badges} />
         </div>
         <div className="flex items-center gap-1.5">
           <span className="hidden text-sm text-muted-foreground sm:inline">

@@ -93,6 +93,9 @@ model Reservation {
   status        ReservationStatus @default(ACTIVE)
   isPrivate     Boolean           @default(false) @map("is_private")
   forcedByAdmin Boolean           @default(false) @map("forced_by_admin")
+  feedback       String?          // 선생님이 남긴 수업 피드백
+  feedbackAt     DateTime?        @map("feedback_at")
+  feedbackReadAt DateTime?        @map("feedback_read_at") // 학생이 피드백을 확인한 시각
   cancelledAt   DateTime?         @map("cancelled_at")
   cancelledBy   String?           @map("cancelled_by")
   createdAt     DateTime          @default(now()) @map("created_at")

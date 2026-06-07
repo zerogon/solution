@@ -9,6 +9,7 @@ import { History, X, Check, Lock } from "lucide-react";
 import { ReservationStatus } from "@/generated/prisma/enums";
 import { canStudentCancel, formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
 import { CancelButton } from "../_CancelButton";
+import { LessonFeedbackDialog } from "@/components/lesson-feedback-dialog";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -46,29 +47,46 @@ export default async function HistoryPage() {
         const cancelled = r.status === ReservationStatus.CANCELLED;
         const past = r.slotDatetime < now;
         const tone: AgendaTone = cancelled || past ? "muted" : "default";
-        let trailing;
+        let status;
         if (cancelled)
-          trailing = (
+          status = (
             <Badge variant="destructive">
               <X aria-hidden className="size-3" />
               취소됨
             </Badge>
           );
         else if (past)
-          trailing = (
+          status = (
             <Badge variant="secondary">
               <Check aria-hidden className="size-3" />
               완료
             </Badge>
           );
         else if (canStudentCancel(r.slotDatetime, now))
-          trailing = <CancelButton reservationId={r.id} />;
+          status = <CancelButton reservationId={r.id} />;
         else
-          trailing = (
+          status = (
             <Badge variant="outline">
               <Lock aria-hidden className="size-3" />
               마감
             </Badge>
+          );
+        // 취소되지 않은 레슨에 선생님 피드백이 있으면 함께 노출
+        const trailing =
+          !cancelled && r.feedback ? (
+            <div className="flex items-center gap-2">
+              <LessonFeedbackDialog
+                editable={false}
+                unread={r.feedbackReadAt === null}
+                reservationId={r.id}
+                studentName={session.user.name ?? "학생"}
+                whenLabel={`${r.teacher.name} 선생님 · ${dateTimeLabel(r.slotDatetime)}`}
+                initialFeedback={r.feedback}
+              />
+              {status}
+            </div>
+          ) : (
+            status
           );
         return {
           id: r.id,
