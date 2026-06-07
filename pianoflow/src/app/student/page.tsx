@@ -10,6 +10,8 @@ import { EmptyState } from "@/components/empty-state";
 import { CalendarOff, CalendarPlus, Lock } from "lucide-react";
 import { ReservationStatus } from "@/generated/prisma/enums";
 import { canStudentCancel, formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
+import { listUnreadAnnouncements } from "@/lib/announcements";
+import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { CancelButton } from "./_CancelButton";
 import { VisibilitySettings } from "./_VisibilitySettings";
 
@@ -40,6 +42,8 @@ export default async function StudentHome() {
   });
   const upcoming = allUpcoming.slice(0, 6);
 
+  const unreadAnnouncements = await listUnreadAnnouncements(me.id);
+
   const groups: AgendaGroup[] = [
     {
       label: "다가오는 레슨",
@@ -62,6 +66,18 @@ export default async function StudentHome() {
 
   return (
     <div className="space-y-5">
+      {/* 안 읽은 공지 자동 팝업 (시각적 공간 차지 안 함) */}
+      <AnnouncementPopup
+        announcements={unreadAnnouncements.map((a) => ({
+          id: a.id,
+          title: a.title,
+          content: a.content,
+          isPinned: a.isPinned,
+          publishedAt: a.publishedAt,
+          createdAt: a.createdAt,
+        }))}
+      />
+
       {/* 상태 바 + 예약 CTA */}
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between gap-3 px-4 py-3.5">

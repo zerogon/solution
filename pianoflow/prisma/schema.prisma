@@ -70,6 +70,9 @@ model User {
   creditLogs      LessonCreditLog[]     @relation("StudentCreditLogs")
   actorCreditLogs LessonCreditLog[]     @relation("ActorCreditLogs")
 
+  authoredAnnouncements Announcement[]     @relation("AnnouncementAuthor")
+  announcementReads     AnnouncementRead[] @relation("UserAnnouncementReads")
+
   @@map("users")
 }
 
@@ -123,4 +126,36 @@ model LessonCreditLog {
 
   @@index([studentId, createdAt])
   @@map("lesson_credit_log")
+}
+
+model Announcement {
+  id          String    @id @default(uuid())
+  title       String
+  content     String
+  isPublished Boolean   @default(true) @map("is_published") // 게시(공개)/숨김(임시저장)
+  isPinned    Boolean   @default(false) @map("is_pinned") // 중요(상단 고정)
+  authorId    String?   @map("author_id")
+  publishedAt DateTime? @map("published_at") // 최초 게시 시각 — 정렬·'새 공지' 기준
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  author User?              @relation("AnnouncementAuthor", fields: [authorId], references: [id])
+  reads  AnnouncementRead[]
+
+  @@index([isPublished, isPinned, publishedAt])
+  @@map("announcements")
+}
+
+model AnnouncementRead {
+  id             String   @id @default(uuid())
+  announcementId String   @map("announcement_id")
+  userId         String   @map("user_id") // 읽은 사람(학생 또는 선생님)
+  readAt         DateTime @default(now()) @map("read_at")
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User         @relation("UserAnnouncementReads", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@index([userId])
+  @@map("announcement_reads")
 }

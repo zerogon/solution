@@ -6,6 +6,7 @@ import {
   Eye,
   LayoutDashboard,
   ClipboardList,
+  Megaphone,
   type LucideIcon,
 } from "lucide-react";
 import { Role } from "@/generated/prisma/enums";
@@ -16,17 +17,20 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   [Role.STUDENT]: [
     { href: "/student", label: "내 레슨", icon: Calendar },
     { href: "/student/book", label: "예약", icon: BookOpen },
+    { href: "/student/announcements", label: "공지", icon: Megaphone },
     { href: "/student/history", label: "내역", icon: History },
   ],
   [Role.TEACHER]: [
     { href: "/teacher", label: "내 일정", icon: Calendar },
     { href: "/teacher/students", label: "학생", icon: Users },
+    { href: "/teacher/announcements", label: "공지", icon: Megaphone },
     { href: "/teacher/peek", label: "다른 선생님", icon: Eye },
   ],
   [Role.ADMIN]: [
     { href: "/admin", label: "대시보드", icon: LayoutDashboard },
     { href: "/admin/members", label: "회원", icon: Users },
     { href: "/admin/reservations", label: "예약", icon: ClipboardList },
+    { href: "/admin/announcements", label: "공지", icon: Megaphone },
   ],
 };
 

@@ -152,3 +152,26 @@ export const reservationFeedbackSchema = z.object({
 export const markFeedbackReadSchema = z.object({
   reservationId: z.string().uuid(),
 });
+
+export const announcementCreateSchema = z.object({
+  title: z.string().min(1, "제목을 입력해주세요.").max(100, "제목이 너무 깁니다."),
+  content: z.string().min(1, "내용을 입력해주세요.").max(5000, "내용이 너무 깁니다."),
+  isPublished: z.boolean().default(true),
+  isPinned: z.boolean().default(false),
+});
+
+export const announcementUpdateSchema = announcementCreateSchema.extend({
+  id: z.string().uuid(),
+});
+
+export const announcementIdSchema = z.object({
+  id: z.string().uuid(),
+});
+
+export const markAnnouncementReadSchema = z.object({
+  announcementId: z.string().uuid(),
+});
+
+export const markAnnouncementsReadSchema = z.object({
+  announcementIds: z.array(z.string().uuid()).min(1),
+});

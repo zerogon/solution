@@ -2,6 +2,7 @@ import { RoleNav } from "@/components/RoleNav";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { requireRole } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
+import { getUnreadAnnouncementCount } from "@/lib/announcements";
 import { Role, ReservationStatus } from "@/generated/prisma/enums";
 
 export default async function StudentLayout({
@@ -11,16 +12,22 @@ export default async function StudentLayout({
 }) {
   const session = await requireRole(Role.STUDENT, Role.ADMIN);
 
-  // 안 읽은 선생님 피드백 개수 → 네비 '내역' 탭 빨간 배지
-  const unread = await prisma.reservation.count({
-    where: {
-      studentId: session.user.id,
-      status: ReservationStatus.ACTIVE,
-      feedback: { not: null },
-      feedbackReadAt: null,
-    },
-  });
-  const badges = { "/student/history": unread };
+  // 안 읽은 선생님 피드백 / 공지 개수 → 네비 탭 빨간 배지
+  const [unread, unreadAnnouncements] = await Promise.all([
+    prisma.reservation.count({
+      where: {
+        studentId: session.user.id,
+        status: ReservationStatus.ACTIVE,
+        feedback: { not: null },
+        feedbackReadAt: null,
+      },
+    }),
+    getUnreadAnnouncementCount(session.user.id),
+  ]);
+  const badges = {
+    "/student/history": unread,
+    "/student/announcements": unreadAnnouncements,
+  };
 
   return (
     <div className="flex min-h-dvh flex-col">
