@@ -100,7 +100,7 @@ function LoginForm() {
             />
           </div>
           <p className="text-xs text-muted-foreground">
-            관리자 계정: 00000000, 암호 : 0000 **임시 표시, 추후 삭제예정
+            
           </p>
         </div>
         <Button type="submit" className="h-11 w-full text-base" disabled={pending}>
