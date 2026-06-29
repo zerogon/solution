@@ -140,8 +140,8 @@ export function PwaInstallPrompt() {
         <SheetHeader className="flex flex-row items-start gap-3 pr-10">
           <div className="relative size-12 shrink-0 overflow-hidden rounded-2xl border border-border bg-background">
             <Image
-              src="/icons/icon-192.png"
-              alt="PianoFlow"
+              src="/icons/icon-mark.png"
+              alt="art'i Piano"
               fill
               sizes="48px"
               className="object-cover"

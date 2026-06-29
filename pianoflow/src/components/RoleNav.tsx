@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { Music } from "lucide-react";
+import Image from "next/image";
 import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { HeaderNav } from "@/components/HeaderNav";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { logoutAction } from "@/actions/auth";
 
 export async function RoleNav({
@@ -19,12 +18,18 @@ export async function RoleNav({
         <div className="flex items-center gap-5">
           <Link
             href="/"
-            className="flex items-center gap-2 font-heading text-base font-semibold tracking-tight"
+            aria-label="art'i Piano 홈"
+            className="flex items-center transition-opacity hover:opacity-80"
           >
-            <span className="flex size-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Music className="size-4" />
-            </span>
-            PianoFlow
+            <Image
+              src="/web-logo.png"
+              alt="art'i Piano"
+              width={416}
+              height={103}
+              priority
+              // mix-blend-multiply: 로고의 흰 배경을 헤더 색에 자연스럽게 녹여 흰 박스 제거
+              className="h-10 w-auto mix-blend-multiply"
+            />
           </Link>
           <HeaderNav role={session.user.role} badges={badges} />
         </div>
@@ -32,7 +37,6 @@ export async function RoleNav({
           <span className="hidden text-sm text-muted-foreground sm:inline">
             {session.user.name}
           </span>
-          <ThemeToggle />
           <form action={logoutAction}>
             <Button type="submit" size="sm" variant="outline">
               로그아웃

@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR, Geist_Mono } from "next/font/google";
 import { Toaster } from "@/components/ui/sonner";
 import { PwaInstallPrompt } from "@/components/PwaInstallPrompt";
-import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 const notoSansKr = Noto_Sans_KR({
@@ -18,25 +17,23 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "PianoFlow — 피아노 학원 레슨 예약",
+  title: "art'i Piano — 피아노 학원 레슨 예약",
   description: "약 50명 규모 피아노 학원의 레슨 예약 PWA",
   manifest: "/manifest.json",
   icons: {
-    icon: "/icons/icon-192.png",
-    apple: { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    icon: "/icons/favicon.png",
+    shortcut: "/icons/favicon.png",
+    apple: { url: "/icons/app-icon-192.png", sizes: "192x192", type: "image/png" },
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "PianoFlow",
+    title: "art'i Piano",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FCFCFD" },
-    { media: "(prefers-color-scheme: dark)", color: "#2A2B2E" },
-  ],
+  themeColor: "#FCFCFD",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -48,25 +45,13 @@ export default function RootLayout({
   return (
     <html
       lang="ko"
-      suppressHydrationWarning
+      style={{ colorScheme: "light" }}
       className={`${notoSansKr.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        {/* Apply the stored theme before paint to avoid a flash of the wrong
-            theme. Rendered by this Server Component (not a client component), so
-            React 19 won't warn about a <script> in client render. Defaults to
-            light when nothing is stored. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "(function(){try{var t=localStorage.getItem('theme');var d=t==='dark';var e=document.documentElement;e.classList.toggle('dark',d);e.style.colorScheme=d?'dark':'light';}catch(e){}})();",
-          }}
-        />
-        <ThemeProvider>
-          {children}
-          <Toaster richColors position="top-center" />
-          <PwaInstallPrompt />
-        </ThemeProvider>
+        {children}
+        <Toaster richColors position="top-center" />
+        <PwaInstallPrompt />
       </body>
     </html>
   );

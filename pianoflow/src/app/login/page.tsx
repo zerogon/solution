@@ -7,7 +7,7 @@ import { Loader2, Lock, User } from "lucide-react";
 import { toast } from "sonner";
 import { checkLoginId, loginAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -83,7 +83,6 @@ function LoginForm() {
     <>
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-2">
-          <Label htmlFor="loginId">로그인 ID</Label>
           <div className="relative">
             <User
               aria-hidden
@@ -95,13 +94,11 @@ function LoginForm() {
               inputMode="numeric"
               placeholder="휴대폰 번호 8자리 (010 제외)"
               autoComplete="username"
+              aria-label="로그인 ID"
               required
               className="h-11 pl-10 text-base"
             />
           </div>
-          <p className="text-xs text-muted-foreground">
-            
-          </p>
         </div>
         <Button type="submit" className="h-11 w-full text-base" disabled={pending}>
           {pending ? (
@@ -171,35 +168,25 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="relative flex min-h-dvh items-center justify-center bg-background px-4 py-10">
-      <div className="flex w-full max-w-sm flex-col items-center gap-6">
-        <div className="relative">
-          <div
-            aria-hidden
-            className="absolute inset-0 rounded-3xl bg-foreground/5 blur-2xl"
-          />
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
+      <Card className="w-full max-w-sm rounded-3xl bg-card shadow-xl shadow-black/5 ring-1 ring-border">
+        <CardHeader className="px-6 pt-8 pb-2">
           <Image
-            src="/icons/icon-192.png"
-            alt="PianoFlow 로고"
-            width={112}
-            height={112}
+            src="/web-logo.png"
+            alt="art'i Piano"
+            width={416}
+            height={103}
             priority
-            className="relative size-28 rounded-3xl bg-card shadow-2xl shadow-black/10 ring-4 ring-background dark:shadow-black/40 dark:ring-card"
+            // mix-blend-multiply: 로고의 흰 배경을 카드 색에 녹여 흰 박스 제거
+            className="mx-auto h-auto w-56 mix-blend-multiply"
           />
-        </div>
-
-        <Card className="w-full rounded-3xl bg-card shadow-xl shadow-black/5 ring-1 ring-border dark:shadow-black/40">
-          <CardHeader className="items-center gap-1 pt-6 pb-2 text-center">
-            <CardTitle className="text-3xl">PianoFlow</CardTitle>
-            <p className="text-sm text-muted-foreground">피아노 학원 레슨 예약</p>
-          </CardHeader>
-          <CardContent className="px-6 pt-2 pb-6">
-            <Suspense fallback={<div className="h-40 animate-pulse rounded-md bg-muted" />}>
-              <LoginForm />
-            </Suspense>
-          </CardContent>
-        </Card>
-      </div>
+        </CardHeader>
+        <CardContent className="px-6 pt-4 pb-8">
+          <Suspense fallback={<div className="h-40 animate-pulse rounded-md bg-muted" />}>
+            <LoginForm />
+          </Suspense>
+        </CardContent>
+      </Card>
     </div>
   );
 }

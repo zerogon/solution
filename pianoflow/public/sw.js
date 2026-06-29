@@ -17,14 +17,14 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "PianoFlow", body: event.data.text() };
+    payload = { title: "art'i Piano", body: event.data.text() };
   }
 
-  const title = payload.title || "PianoFlow";
+  const title = payload.title || "art'i Piano";
   const options = {
     body: payload.body,
-    icon: payload.icon || "/icons/icon-192.png",
-    badge: payload.badge || "/icons/icon-192.png",
+    icon: payload.icon || "/icons/app-icon-192.png",
+    badge: payload.badge || "/icons/icon-mark.png",
     data: payload.data,
   };
 
