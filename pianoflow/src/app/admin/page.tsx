@@ -118,17 +118,19 @@ export default async function AdminHome() {
         ))}
       </div>
 
-      <section className="space-y-2">
-        <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
-          오늘 예약 <span className="font-mono text-xs text-primary">{todayStr.slice(5).replace("-", ".")}</span>
-        </h2>
-        <DayTimeline items={todayTimeline} emptyHint="오늘 예약이 없습니다." />
-      </section>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+        <section className="space-y-2">
+          <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
+            오늘 예약 <span className="font-mono text-xs text-primary">{todayStr.slice(5).replace("-", ".")}</span>
+          </h2>
+          <DayTimeline items={todayTimeline} emptyHint="오늘 예약이 없습니다." />
+        </section>
 
-      <MonthlyTeacherLessons
-        initial={{ month, rows, total, max }}
-        currentMonth={currentMonth}
-      />
+        <MonthlyTeacherLessons
+          initial={{ month, rows, total, max }}
+          currentMonth={currentMonth}
+        />
+      </div>
     </div>
   );
 }

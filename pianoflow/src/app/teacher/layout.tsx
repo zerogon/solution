@@ -1,5 +1,4 @@
-import { RoleNav } from "@/components/RoleNav";
-import { BottomTabBar } from "@/components/BottomTabBar";
+import { AppShell } from "@/components/app-shell/AppShell";
 import { requireRole } from "@/lib/auth-helpers";
 import { getUnreadAnnouncementCount } from "@/lib/announcements";
 import { Role } from "@/generated/prisma/enums";
@@ -16,12 +15,8 @@ export default async function TeacherLayout({
   const badges = { "/teacher/announcements": unreadAnnouncements };
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <RoleNav badges={badges} />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24 md:pb-8">
-        {children}
-      </main>
-      <BottomTabBar role={Role.TEACHER} badges={badges} />
-    </div>
+    <AppShell role={Role.TEACHER} userName={session.user.name} badges={badges}>
+      {children}
+    </AppShell>
   );
 }

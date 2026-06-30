@@ -105,7 +105,7 @@ export default async function StudentHome() {
         )}
       </div>
 
-      {/* 다가오는 레슨 타임라인 */}
+      {/* 다가오는 레슨 + 공개 설정 */}
       {upcoming.length === 0 ? (
         <Card>
           <CardContent>
@@ -117,26 +117,25 @@ export default async function StudentHome() {
           </CardContent>
         </Card>
       ) : (
-        <AgendaRail groups={groups} />
-      )}
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+          <AgendaRail groups={groups} />
 
-      {/* 레슨 공개 설정 */}
-      {allUpcoming.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>레슨 공개 설정</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <VisibilitySettings
-              initial={allUpcoming.map((r) => ({
-                id: r.id,
-                label: dateTimeLabel(r.slotDatetime),
-                teacherName: r.teacher.name,
-                isPrivate: r.isPrivate,
-              }))}
-            />
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>레슨 공개 설정</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <VisibilitySettings
+                initial={allUpcoming.map((r) => ({
+                  id: r.id,
+                  label: dateTimeLabel(r.slotDatetime),
+                  teacherName: r.teacher.name,
+                  isPrivate: r.isPrivate,
+                }))}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

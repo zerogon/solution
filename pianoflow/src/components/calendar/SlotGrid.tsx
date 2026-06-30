@@ -29,19 +29,15 @@ interface Props {
   readOnly?: boolean;
 }
 
+// 슬롯 상태별 의미 색(라이트 전용). emerald=예약가능 / blue=내예약 / zinc=완료·불가.
+// 의미 구분을 위해 토큰 단색화하지 않고 유지한다.
 const STATE_STYLES: Record<Slot["state"], string> = {
   available:
-    "bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100 " +
-    "dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-500/40 dark:hover:bg-emerald-500/25",
-  booked:
-    "bg-zinc-200 text-zinc-500 border-zinc-300 cursor-not-allowed " +
-    "dark:bg-zinc-700/50 dark:text-zinc-400 dark:border-zinc-600/60",
-  mine:
-    "bg-blue-100 text-blue-900 border-blue-400 hover:bg-blue-200 " +
-    "dark:bg-blue-500/20 dark:text-blue-200 dark:border-blue-500/50 dark:hover:bg-blue-500/30",
+    "bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100",
+  booked: "bg-zinc-200 text-zinc-500 border-zinc-300 cursor-not-allowed",
+  mine: "bg-blue-100 text-blue-900 border-blue-400 hover:bg-blue-200",
   unavailable:
-    "bg-zinc-100 text-zinc-400 border-zinc-200 cursor-not-allowed opacity-60 " +
-    "dark:bg-zinc-800/40 dark:text-zinc-500 dark:border-zinc-700/50 dark:opacity-100",
+    "bg-zinc-100 text-zinc-400 border-zinc-200 cursor-not-allowed opacity-60",
 };
 
 const STATE_LABEL: Record<Slot["state"], string> = {

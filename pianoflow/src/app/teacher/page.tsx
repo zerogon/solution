@@ -9,6 +9,7 @@ import { ReservationStatus } from "@/generated/prisma/enums";
 import { Shield } from "lucide-react";
 import { formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
 import { LessonFeedbackDialog } from "@/components/lesson-feedback-dialog";
+import { cn } from "@/lib/utils";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -113,24 +114,31 @@ export default async function TeacherHome({ searchParams }: PageProps) {
 
       <WeekStrip selectedDateStr={selectedDate} />
 
-      <section className="space-y-2">
-        <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
-          {selLabel}
-          {selectedDate === todayStr && (
-            <span className="ml-1.5 text-xs font-medium text-primary">오늘</span>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+        <section
+          className={cn(
+            "space-y-2",
+            weekGroups.length === 0 && "lg:col-span-2",
           )}
-        </h2>
-        <DayTimeline items={dayItems} emptyHint="이 날은 예약된 레슨이 없습니다." />
-      </section>
-
-      {weekGroups.length > 0 && (
-        <section className="space-y-2">
+        >
           <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
-            이번 주 다른 일정
+            {selLabel}
+            {selectedDate === todayStr && (
+              <span className="ml-1.5 text-xs font-medium text-primary">오늘</span>
+            )}
           </h2>
-          <AgendaRail groups={weekGroups} />
+          <DayTimeline items={dayItems} emptyHint="이 날은 예약된 레슨이 없습니다." />
         </section>
-      )}
+
+        {weekGroups.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
+              이번 주 다른 일정
+            </h2>
+            <AgendaRail groups={weekGroups} />
+          </section>
+        )}
+      </div>
     </div>
   );
 }

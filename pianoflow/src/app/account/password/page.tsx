@@ -28,8 +28,8 @@ export default function PasswordPage() {
   }, [state, router]);
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-muted px-4">
-      <Card className="w-full max-w-sm">
+    <div className="flex min-h-dvh items-center justify-center bg-muted/40 px-4 py-10">
+      <Card className="w-full max-w-sm rounded-2xl shadow-sm">
         <CardHeader className="items-center gap-2 pt-2 text-center">
           <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
             <KeyRound className="size-5" />

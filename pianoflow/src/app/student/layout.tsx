@@ -1,5 +1,4 @@
-import { RoleNav } from "@/components/RoleNav";
-import { BottomTabBar } from "@/components/BottomTabBar";
+import { AppShell } from "@/components/app-shell/AppShell";
 import { requireRole } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { getUnreadAnnouncementCount } from "@/lib/announcements";
@@ -12,7 +11,7 @@ export default async function StudentLayout({
 }) {
   const session = await requireRole(Role.STUDENT, Role.ADMIN);
 
-  // 안 읽은 선생님 피드백 / 공지 개수 → 네비 탭 빨간 배지
+  // 안 읽은 선생님 피드백 / 공지 개수 → 네비 빨간 배지
   const [unread, unreadAnnouncements] = await Promise.all([
     prisma.reservation.count({
       where: {
@@ -30,12 +29,8 @@ export default async function StudentLayout({
   };
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <RoleNav badges={badges} />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-6 pb-24 md:pb-8">
-        {children}
-      </main>
-      <BottomTabBar role={Role.STUDENT} badges={badges} />
-    </div>
+    <AppShell role={Role.STUDENT} userName={session.user.name} badges={badges}>
+      {children}
+    </AppShell>
   );
 }

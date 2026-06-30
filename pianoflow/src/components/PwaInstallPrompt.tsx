@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { BellRing, Share, Smartphone, Zap } from "lucide-react";
+import { BellRing, Compass, Share, Smartphone, Zap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,6 +20,16 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 }
 
+// Capture beforeinstallprompt as early as the module loads — before the component's effect
+// runs — so a fast-firing event isn't missed and the "지금 설치" button can still appear.
+let deferredPrompt: BeforeInstallPromptEvent | null = null;
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredPrompt = e as BeforeInstallPromptEvent;
+  });
+}
+
 const DISMISS_DATE_KEY = "pianoflow:install-dismissed-date";
 
 type InstallMode =
@@ -28,6 +38,8 @@ type InstallMode =
   | "macSafari"
   | "firefoxAndroid"
   | "firefoxDesktop"
+  | "inAppAndroid"
+  | "inAppIos"
   | null;
 
 function getLocalDateString(date = new Date()): string {
@@ -43,6 +55,13 @@ function detectInstallMode(): InstallMode {
   const ua = window.navigator.userAgent;
   const platform = window.navigator.platform;
   const maxTouchPoints = window.navigator.maxTouchPoints ?? 0;
+
+  // In-app webview browsers (KakaoTalk/Naver/Line/Band, Instagram/Facebook) can't reliably
+  // "Add to Home Screen" — detect first since they also match the iOS/Android UA below.
+  // Android can escape to Chrome via an intent:// URL; iOS can only show manual guidance.
+  if (/kakaotalk|naver|instagram|fbav|fban|fb_iab|daumapps|line\/|band/i.test(ua)) {
+    return /android/i.test(ua) ? "inAppAndroid" : "inAppIos";
+  }
 
   // iPadOS 13+ Safari with "request desktop site" (default ON) reports a Mac UA,
   // so combine UA sniff with the touch-on-Mac heuristic.
@@ -100,9 +119,19 @@ export function PwaInstallPrompt() {
       return;
     }
 
+    // Use an event the module-scope listener may have already captured early.
+    if (deferredPrompt) {
+      setEvent(deferredPrompt);
+      setInstallMode("chrome");
+      setOpen(true);
+      return;
+    }
+
     const handler = (e: Event) => {
       e.preventDefault();
-      setEvent(e as BeforeInstallPromptEvent);
+      const evt = e as BeforeInstallPromptEvent;
+      deferredPrompt = evt;
+      setEvent(evt);
       setInstallMode("chrome");
       setOpen(true);
     };
@@ -132,6 +161,14 @@ export function PwaInstallPrompt() {
     await event.userChoice;
     setEvent(null);
     setOpen(false);
+  }
+
+  // 안드로이드 인앱(카카오/네이버 등) 웹뷰에서 intent:// URL로 같은 주소를 Chrome으로 띄운다.
+  function openInChrome() {
+    const { host, pathname, search, href } = window.location;
+    window.location.href =
+      `intent://${host}${pathname}${search}#Intent;scheme=https;` +
+      `package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(href)};end`;
   }
 
   return (
@@ -191,10 +228,23 @@ export function PwaInstallPrompt() {
                 지금 설치
               </Button>
             )}
+            {installMode === "inAppAndroid" && (
+              <Button onClick={openInChrome} className="flex-1">
+                Chrome에서 열기
+              </Button>
+            )}
           </div>
         </SheetFooter>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function StepBadge({ n }: { n: number }) {
+  return (
+    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[11px] font-semibold text-primary">
+      {n}
+    </span>
   );
 }
 
@@ -203,18 +253,60 @@ function InstallHint({ mode }: { mode: InstallMode }) {
 
   const content: Record<
     Exclude<InstallMode, null | "chrome">,
-    { title: string; body: ReactNode }
+    { icon: ReactNode; title: string; body: ReactNode }
   > = {
     ios: {
-      title: "Safari에서 설치",
+      icon: <Share className="size-3.5" />,
+      title: "Safari에서 홈 화면에 추가",
+      body: (
+        <ol className="mt-1.5 space-y-2">
+          <li className="flex items-center gap-2.5">
+            <StepBadge n={1} />
+            <span>
+              하단의{" "}
+              <IosShareIcon className="mx-0.5 inline-block size-3.5 align-text-bottom text-primary" />{" "}
+              <strong className="text-foreground">공유</strong> 버튼을 탭하세요
+            </span>
+          </li>
+          <li className="flex items-center gap-2.5">
+            <StepBadge n={2} />
+            <span>
+              <strong className="text-foreground">홈 화면에 추가</strong>를 선택하세요
+            </span>
+          </li>
+          <li className="flex items-center gap-2.5">
+            <StepBadge n={3} />
+            <span>
+              우측 상단의 <strong className="text-foreground">추가</strong>를 탭하세요
+            </span>
+          </li>
+        </ol>
+      ),
+    },
+    inAppIos: {
+      icon: <Compass className="size-3.5" />,
+      title: "인앱 브라우저에서는 설치할 수 없어요",
       body: (
         <>
-          하단의 <strong className="text-foreground">공유</strong> 버튼을 누른 뒤{" "}
-          <strong className="text-foreground">홈 화면에 추가</strong>를 선택해주세요.
+          우측 메뉴(<strong className="text-foreground">⋯</strong>)에서{" "}
+          <strong className="text-foreground">Safari로 열기</strong>를 선택한 뒤, 그 화면에서
+          홈 화면에 추가해주세요.
+        </>
+      ),
+    },
+    inAppAndroid: {
+      icon: <Compass className="size-3.5" />,
+      title: "인앱 브라우저에서는 설치할 수 없어요",
+      body: (
+        <>
+          아래 <strong className="text-foreground">Chrome에서 열기</strong>를 누르거나, 우측
+          메뉴(<strong className="text-foreground">⋯</strong>)에서{" "}
+          <strong className="text-foreground">다른 브라우저로 열기</strong>를 선택하세요.
         </>
       ),
     },
     macSafari: {
+      icon: <Share className="size-3.5" />,
       title: "Safari에서 설치",
       body: (
         <>
@@ -225,6 +317,7 @@ function InstallHint({ mode }: { mode: InstallMode }) {
       ),
     },
     firefoxAndroid: {
+      icon: <Share className="size-3.5" />,
       title: "Firefox에서 설치",
       body: (
         <>
@@ -235,6 +328,7 @@ function InstallHint({ mode }: { mode: InstallMode }) {
       ),
     },
     firefoxDesktop: {
+      icon: <Share className="size-3.5" />,
       title: "Firefox에서 빠르게 접속",
       body: (
         <>
@@ -246,15 +340,35 @@ function InstallHint({ mode }: { mode: InstallMode }) {
     },
   };
 
-  const { title, body } = content[mode];
+  const { icon, title, body } = content[mode];
 
   return (
     <div className="mx-4 mb-4 rounded-md border border-border bg-muted px-3 py-2.5 text-sm text-muted-foreground">
       <div className="mb-1 flex items-center gap-1.5 font-medium text-foreground">
-        <Share className="size-3.5" />
+        {icon}
         {title}
       </div>
       {body}
     </div>
+  );
+}
+
+function IosShareIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      className={className}
+    >
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+      <polyline points="16 6 12 2 8 6" />
+      <line x1="12" y1="2" x2="12" y2="15" />
+    </svg>
   );
 }

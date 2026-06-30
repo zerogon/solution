@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_BY_ROLE, activeNavHref } from "./nav-items";
+import { NavBadge } from "./nav-badge";
 import type { Role } from "@/generated/prisma/enums";
 
 export function BottomTabBar({
@@ -42,11 +43,7 @@ export function BottomTabBar({
                   )}
                 >
                   <Icon className="size-5" strokeWidth={active ? 2.4 : 2} />
-                  {count > 0 && (
-                    <span className="absolute top-0 right-2 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 font-mono text-[10px] leading-none font-semibold text-white tabular-nums">
-                      {count > 9 ? "9+" : count}
-                    </span>
-                  )}
+                  <NavBadge count={count} className="absolute top-0 right-2" />
                 </span>
                 {label}
               </Link>

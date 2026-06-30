@@ -27,6 +27,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -65,6 +66,7 @@
   --accent: oklch(0.95 0.025 274);
   --accent-foreground: oklch(0.45 0.14 273);
   --destructive: oklch(0.58 0.2 25);
+  --destructive-foreground: oklch(0.99 0.004 270);
   --border: oklch(0.91 0.004 265);
   --input: oklch(0.91 0.004 265);
   --ring: oklch(0.51 0.15 273);
@@ -74,6 +76,9 @@
   --chart-4: oklch(0.55 0.04 265);
   --chart-5: oklch(0.62 0.15 18);
   --radius: 0.5rem;
+  /* 앱 셸 지오메트리 */
+  --app-sidebar-w: 16rem;
+  --app-content-w: 64rem;
   --sidebar: oklch(0.985 0.002 260);
   --sidebar-foreground: oklch(0.22 0.006 270);
   --sidebar-primary: oklch(0.51 0.15 273);
@@ -101,6 +106,7 @@
   --accent: oklch(0.31 0.06 274);
   --accent-foreground: oklch(0.84 0.09 277);
   --destructive: oklch(0.65 0.18 25);
+  --destructive-foreground: oklch(0.99 0.004 270);
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 13%);
   --ring: oklch(0.66 0.15 276);

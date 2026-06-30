@@ -168,8 +168,8 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-10">
-      <Card className="w-full max-w-sm rounded-3xl bg-card shadow-xl shadow-black/5 ring-1 ring-border">
+    <div className="flex min-h-dvh items-center justify-center bg-muted/40 px-4 py-10">
+      <Card className="w-full max-w-sm rounded-2xl shadow-sm">
         <CardHeader className="px-6 pt-8 pb-2">
           <Image
             src="/web-logo.png"

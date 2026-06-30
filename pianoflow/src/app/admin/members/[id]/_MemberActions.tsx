@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Role, UserStatus } from "@/generated/prisma/enums";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { KeyRound } from "lucide-react";
 
 interface Props {
   id: string;
@@ -114,12 +116,13 @@ export function MemberActions({
   return (
     <div className="space-y-4">
       {tempPassword && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
-          <p className="font-semibold">초기 비밀번호 (휴대폰 끝 4자리)</p>
-          <p className="mt-1 font-mono text-lg text-amber-900 dark:text-amber-300">
-            {tempPassword}
-          </p>
-        </div>
+        <Alert variant="warning">
+          <KeyRound />
+          <AlertTitle>초기 비밀번호 (휴대폰 끝 4자리)</AlertTitle>
+          <AlertDescription>
+            <p className="font-mono text-lg tabular-nums">{tempPassword}</p>
+          </AlertDescription>
+        </Alert>
       )}
 
       <div className="flex flex-wrap gap-2">

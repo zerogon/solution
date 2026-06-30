@@ -17,6 +17,8 @@ import {
 } from "@/components/ui/select";
 import { Role } from "@/generated/prisma/enums";
 import { SPECIALTY_LABEL, SPECIALTY_ORDER } from "@/lib/specialty";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { KeyRound } from "lucide-react";
 
 export default function NewMemberPage() {
   const router = useRouter();
@@ -47,23 +49,27 @@ export default function NewMemberPage() {
       <CardContent>
         {issued ? (
           <div className="space-y-4">
-            <div className="space-y-3 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm dark:border-amber-900/50 dark:bg-amber-950/30">
-              <div>
-                <p className="font-semibold">로그인 ID (휴대폰 8자리)</p>
-                <p className="mt-1 font-mono text-xl text-amber-900 dark:text-amber-300">
-                  {issued.loginId}
-                </p>
-              </div>
-              <div>
-                <p className="font-semibold">초기 비밀번호 (휴대폰 끝 4자리)</p>
-                <p className="mt-1 font-mono text-xl text-amber-900 dark:text-amber-300">
-                  {issued.tempPassword}
-                </p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                회원에게 전달해주세요.
-              </p>
-            </div>
+            <Alert variant="warning">
+              <KeyRound />
+              <AlertTitle>로그인 정보가 발급되었습니다</AlertTitle>
+              <AlertDescription>
+                <div className="w-full space-y-3">
+                  <div>
+                    <p className="font-semibold">로그인 ID (휴대폰 8자리)</p>
+                    <p className="mt-0.5 font-mono text-xl tabular-nums">
+                      {issued.loginId}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="font-semibold">초기 비밀번호 (휴대폰 끝 4자리)</p>
+                    <p className="mt-0.5 font-mono text-xl tabular-nums">
+                      {issued.tempPassword}
+                    </p>
+                  </div>
+                  <p className="text-xs opacity-80">회원에게 전달해주세요.</p>
+                </div>
+              </AlertDescription>
+            </Alert>
             <div className="flex gap-2">
               <Button onClick={() => router.push("/admin/members")}>목록으로</Button>
               <Button
