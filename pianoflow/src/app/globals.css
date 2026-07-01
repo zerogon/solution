@@ -78,6 +78,7 @@
   --radius: 0.5rem;
   /* 앱 셸 지오메트리 */
   --app-sidebar-w: 16rem;
+  --app-sidebar-rail-w: 3.75rem;
   --app-content-w: 64rem;
   --sidebar: oklch(0.985 0.002 260);
   --sidebar-foreground: oklch(0.22 0.006 270);

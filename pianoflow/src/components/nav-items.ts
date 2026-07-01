@@ -13,6 +13,13 @@ import { Role } from "@/generated/prisma/enums";
 
 export type NavItem = { href: string; label: string; icon: LucideIcon };
 
+/** 역할 한글 라벨 (계정 메뉴 등에서 사용). 단일 출처 유지. */
+export const ROLE_LABEL: Record<Role, string> = {
+  [Role.ADMIN]: "관리자",
+  [Role.TEACHER]: "선생님",
+  [Role.STUDENT]: "학생",
+};
+
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   [Role.STUDENT]: [
     { href: "/student", label: "내 레슨", icon: Calendar },
