@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useId, useState, type ReactNode } from "react";
-import { BellRing, Compass, Share, Smartphone, Zap } from "lucide-react";
+import { Compass, Share } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -171,6 +171,12 @@ export function PwaInstallPrompt() {
       `package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(href)};end`;
   }
 
+  // iOS 인앱(카카오/인스타 등) 웹뷰에서 x-safari- 스킴으로 현재 주소를 Safari로 띄운다.
+  // (iOS엔 공식 "Safari로 열기" 스킴이 없어 best-effort이며, 미지원 웹뷰에선 무시될 수 있다.)
+  function openInSafari() {
+    window.location.href = `x-safari-${window.location.href}`;
+  }
+
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
       <SheetContent side="bottom" className="gap-0 pb-4 sm:mx-auto sm:max-w-md sm:rounded-t-2xl">
@@ -189,21 +195,6 @@ export function PwaInstallPrompt() {
             <SheetDescription>앱처럼 빠르게 접속하세요.</SheetDescription>
           </div>
         </SheetHeader>
-
-        <ul className="space-y-2 px-4 pb-4">
-          <li className="flex items-center gap-2.5 text-sm text-foreground">
-            <Zap className="size-4 text-primary" />
-            빠른 실행 속도
-          </li>
-          <li className="flex items-center gap-2.5 text-sm text-foreground">
-            <Smartphone className="size-4 text-primary" />
-            홈 화면 바로가기
-          </li>
-          <li className="flex items-center gap-2.5 text-sm text-foreground">
-            <BellRing className="size-4 text-primary" />
-            알림으로 일정 확인
-          </li>
-        </ul>
 
         <InstallHint mode={installMode} />
 
@@ -231,6 +222,11 @@ export function PwaInstallPrompt() {
             {installMode === "inAppAndroid" && (
               <Button onClick={openInChrome} className="flex-1">
                 Chrome에서 열기
+              </Button>
+            )}
+            {installMode === "inAppIos" && (
+              <Button onClick={openInSafari} className="flex-1">
+                Safari로 열기
               </Button>
             )}
           </div>
@@ -288,7 +284,8 @@ function InstallHint({ mode }: { mode: InstallMode }) {
       title: "인앱 브라우저에서는 설치할 수 없어요",
       body: (
         <>
-          우측 메뉴(<strong className="text-foreground">⋯</strong>)에서{" "}
+          아래 <strong className="text-foreground">Safari로 열기</strong>를 누르거나, 우측
+          메뉴(<strong className="text-foreground">⋯</strong>)에서{" "}
           <strong className="text-foreground">Safari로 열기</strong>를 선택한 뒤, 그 화면에서
           홈 화면에 추가해주세요.
         </>
