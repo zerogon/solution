@@ -65,6 +65,7 @@ export function WeekStrip({ selectedDateStr }: { selectedDateStr: string }) {
           const isToday = day === todayStr;
           const isSun = p.dow === 0;
           const isSat = p.dow === 6;
+          const isWeekend = isSat || isSun;
           return (
             <Link
               key={day}
@@ -72,6 +73,7 @@ export function WeekStrip({ selectedDateStr }: { selectedDateStr: string }) {
               aria-current={selected ? "date" : undefined}
               className={cn(
                 "flex flex-col items-center gap-1 py-2.5 text-center transition-colors",
+                !selected && isWeekend && "bg-muted/60",
                 !selected && "hover:bg-muted",
               )}
             >
