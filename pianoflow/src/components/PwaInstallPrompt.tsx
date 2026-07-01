@@ -49,6 +49,17 @@ function getLocalDateString(date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+// True if the user already chose "오늘 하루 보지 않기" today. Every path that opens the
+// sheet must consult this — Chrome can re-dispatch `beforeinstallprompt` after an in-session
+// dismissal (e.g. on client navigations), and without this guard the sheet would reopen.
+function isDismissedToday(): boolean {
+  try {
+    return window.localStorage.getItem(DISMISS_DATE_KEY) === getLocalDateString();
+  } catch {
+    return false;
+  }
+}
+
 function detectInstallMode(): InstallMode {
   if (typeof window === "undefined") return null;
 
@@ -101,8 +112,7 @@ export function PwaInstallPrompt() {
         .catch(() => {});
     }
 
-    const dismissedDate = window.localStorage.getItem(DISMISS_DATE_KEY);
-    if (dismissedDate && dismissedDate === getLocalDateString()) return;
+    if (isDismissedToday()) return;
 
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
@@ -131,6 +141,8 @@ export function PwaInstallPrompt() {
       e.preventDefault();
       const evt = e as BeforeInstallPromptEvent;
       deferredPrompt = evt;
+      // Chrome re-fires this event across navigations; respect an in-session dismissal.
+      if (isDismissedToday()) return;
       setEvent(evt);
       setInstallMode("chrome");
       setOpen(true);
@@ -141,7 +153,11 @@ export function PwaInstallPrompt() {
 
   function persistIfNeeded() {
     if (dontShowToday) {
-      window.localStorage.setItem(DISMISS_DATE_KEY, getLocalDateString());
+      try {
+        window.localStorage.setItem(DISMISS_DATE_KEY, getLocalDateString());
+      } catch {
+        // Storage can be unavailable (private mode / quota); dismissal just won't persist.
+      }
     }
   }
 
