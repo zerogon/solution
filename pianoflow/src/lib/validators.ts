@@ -50,13 +50,44 @@ export const changePasswordSchema = z
     path: ["confirmPassword"],
   });
 
-export const memberCreateSchema = z.object({
-  name: z.string().min(1, "이름을 입력해주세요.").max(30),
-  phone: phoneSchema,
-  role: z.nativeEnum(Role).default(Role.STUDENT),
-  remainingLessons: z.number().int().min(0).default(0),
-  specialties: specialtiesSchema,
-});
+const dateStrSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식(YYYY-MM-DD)이 올바르지 않습니다.");
+
+export const memberCreateSchema = z
+  .object({
+    name: z.string().min(1, "이름을 입력해주세요.").max(30),
+    phone: phoneSchema,
+    role: z.nativeEnum(Role).default(Role.STUDENT),
+    remainingLessons: z.number().int().min(0).default(0),
+    specialties: specialtiesSchema,
+    enrollmentStart: dateStrSchema.nullable().optional(),
+    enrollmentEnd: dateStrSchema.nullable().optional(),
+  })
+  .superRefine((d, ctx) => {
+    if (d.role !== Role.STUDENT) return;
+    if (!d.enrollmentStart) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "시작일을 입력해주세요.",
+        path: ["enrollmentStart"],
+      });
+    }
+    if (!d.enrollmentEnd) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "종료일을 입력해주세요.",
+        path: ["enrollmentEnd"],
+      });
+    }
+    if (d.enrollmentStart && d.enrollmentEnd && d.enrollmentStart > d.enrollmentEnd) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "종료일은 시작일 이후여야 합니다.",
+        path: ["enrollmentEnd"],
+      });
+    }
+  });
 
 export const teacherSpecialtySchema = z.object({
   teacherId: z.string().uuid(),
@@ -99,10 +130,6 @@ export const availabilitySchema = z.object({
       }
     }),
 });
-
-const dateStrSchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식(YYYY-MM-DD)이 올바르지 않습니다.");
 
 export const enrollmentPeriodSchema = z
   .object({

@@ -17,17 +17,37 @@ import {
 } from "@/components/ui/select";
 import { Role } from "@/generated/prisma/enums";
 import { SPECIALTY_LABEL, SPECIALTY_ORDER } from "@/lib/specialty";
+import { formatKstDate } from "@/lib/slots";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { KeyRound } from "lucide-react";
+
+/** YYYY-MM-DD 문자열에 1개월을 더한 날짜. 목표 월에 없는 일자는 말일로 클램프(예: 1/31 → 2/28). */
+function addOneMonth(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  if (!y || !m || !d) return dateStr;
+  const targetYear = m === 12 ? y + 1 : y;
+  const targetMonth = m === 12 ? 1 : m + 1; // 1-12
+  // 목표 월의 말일 = 그 다음 달 0일
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth, 0)).getUTCDate();
+  const day = Math.min(d, lastDay);
+  return `${targetYear}-${String(targetMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
 
 export default function NewMemberPage() {
   const router = useRouter();
   const [role, setRole] = useState<Role>(Role.STUDENT);
+  const [enrollStart, setEnrollStart] = useState("");
+  const [enrollEnd, setEnrollEnd] = useState("");
   const [state, formAction, pending] = useActionState(adminCreateMember, undefined);
   const [issued, setIssued] = useState<{
     loginId: string;
     tempPassword: string;
   } | null>(null);
+
+  // 시작일 기본값 = 등록 당일(KST). 하이드레이션 불일치 방지를 위해 마운트 후 설정.
+  useEffect(() => {
+    setEnrollStart((prev) => prev || formatKstDate(new Date()));
+  }, []);
 
   useEffect(() => {
     if (state?.ok && state.data) {
@@ -131,16 +151,65 @@ export default function NewMemberPage() {
                 </div>
               </div>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="remainingLessons">초기 레슨 횟수 (학생만)</Label>
-              <Input
-                id="remainingLessons"
-                name="remainingLessons"
-                type="number"
-                min={0}
-                defaultValue={0}
-              />
-            </div>
+            {role === Role.STUDENT && (
+              <>
+                <div className="space-y-2">
+                  <Label>등록 기간</Label>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="enrollmentStart" className="text-xs">
+                        시작일
+                      </Label>
+                      <Input
+                        id="enrollmentStart"
+                        name="enrollmentStart"
+                        type="date"
+                        required
+                        value={enrollStart}
+                        max={enrollEnd || undefined}
+                        onChange={(e) => setEnrollStart(e.target.value)}
+                        className="w-40"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="enrollmentEnd" className="text-xs">
+                        종료일
+                      </Label>
+                      <Input
+                        id="enrollmentEnd"
+                        name="enrollmentEnd"
+                        type="date"
+                        required
+                        value={enrollEnd}
+                        min={enrollStart || undefined}
+                        onChange={(e) => setEnrollEnd(e.target.value)}
+                        className="w-40"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!enrollEnd && !enrollStart}
+                      onClick={() =>
+                        setEnrollEnd((prev) => addOneMonth(prev || enrollStart))
+                      }
+                    >
+                      +1개월
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="remainingLessons">초기 레슨 횟수</Label>
+                  <Input
+                    id="remainingLessons"
+                    name="remainingLessons"
+                    type="number"
+                    min={0}
+                    defaultValue={0}
+                  />
+                </div>
+              </>
+            )}
             <Button type="submit" disabled={pending} className="w-full">
               {pending ? "등록 중..." : "등록"}
             </Button>

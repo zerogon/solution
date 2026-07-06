@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateLoginId, getPhoneLast4 } from "@/lib/login-id";
+import { parseKstDate } from "@/lib/slots";
 import {
   lessonAdjustSchema,
   memberCreateSchema,
@@ -43,6 +44,8 @@ export async function adminCreateMember(
       // 전공은 선생님에게만 적용 (체크박스 다중 선택)
       specialties:
         role === Role.TEACHER ? formData.getAll("specialties") : [],
+      enrollmentStart: formData.get("enrollmentStart") || null,
+      enrollmentEnd: formData.get("enrollmentEnd") || null,
     });
     if (!parsed.success) {
       return { ok: false, message: parsed.error.issues[0].message };
@@ -64,6 +67,14 @@ export async function adminCreateMember(
           status: UserStatus.ACTIVE,
           remainingLessons: parsed.data.remainingLessons,
           specialties: parsed.data.specialties,
+          ...(parsed.data.role === Role.STUDENT &&
+          parsed.data.enrollmentStart &&
+          parsed.data.enrollmentEnd
+            ? {
+                enrollmentStart: parseKstDate(parsed.data.enrollmentStart),
+                enrollmentEnd: parseKstDate(parsed.data.enrollmentEnd),
+              }
+            : {}),
         },
       });
       revalidatePath("/admin/members");
