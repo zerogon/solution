@@ -23,7 +23,9 @@ export const authConfig: NextAuthConfig = {
         pathname === "/login" ||
         pathname === "/manifest.json" ||
         pathname.startsWith("/icons/") ||
-        pathname.startsWith("/api/auth");
+        pathname.startsWith("/api/auth") ||
+        // Vercel Cron 호출 경로 — 세션 대신 라우트 내부에서 CRON_SECRET으로 인증
+        pathname.startsWith("/api/cron/");
       if (isPublic) return true;
 
       if (!auth?.user) {
