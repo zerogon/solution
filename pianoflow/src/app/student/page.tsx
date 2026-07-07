@@ -31,6 +31,13 @@ export default async function StudentHome() {
   if (!me) redirect("/login");
 
   const now = new Date();
+  const daysLeft = me.enrollmentEnd
+    ? Math.round(
+        (parseKstDate(formatKstDate(me.enrollmentEnd)).getTime() -
+          parseKstDate(formatKstDate(now)).getTime()) /
+          86_400_000,
+      )
+    : null;
   const allUpcoming = await prisma.reservation.findMany({
     where: {
       studentId: me.id,
@@ -97,10 +104,26 @@ export default async function StudentHome() {
             예약하기
           </Link>
         </div>
-        {me.enrollmentStart && me.enrollmentEnd && (
-          <div className="border-t px-4 py-2 text-[11px] tabular-nums text-muted-foreground">
-            등록기간 {formatKstDate(me.enrollmentStart).replace(/-/g, ".")} –{" "}
-            {formatKstDate(me.enrollmentEnd).replace(/-/g, ".")}
+        {me.enrollmentEnd && daysLeft !== null && (
+          <div className="flex items-center justify-between gap-3 border-t px-4 py-2 text-[11px] tabular-nums text-muted-foreground">
+            <span>
+              {me.enrollmentStart
+                ? `등록기간 ${formatKstDate(me.enrollmentStart).replace(/-/g, ".")} – ${formatKstDate(me.enrollmentEnd).replace(/-/g, ".")}`
+                : `마감일 ${formatKstDate(me.enrollmentEnd).replace(/-/g, ".")}`}
+            </span>
+            {daysLeft < 0 ? (
+              <span className="font-medium text-destructive">마감됨</span>
+            ) : daysLeft === 0 ? (
+              <span className="font-medium text-destructive">오늘 마감</span>
+            ) : daysLeft <= 7 ? (
+              <span className="font-mono font-medium text-amber-600">
+                마감 D-{daysLeft}
+              </span>
+            ) : (
+              <span className="font-mono font-medium text-primary">
+                D-{daysLeft}
+              </span>
+            )}
           </div>
         )}
       </div>
