@@ -13,6 +13,7 @@ import { Role } from "@/generated/prisma/enums";
 import { formatKstDate } from "@/lib/slots";
 import { MemberStatusBadge } from "@/components/member-status-badge";
 import { MemberActions } from "./_MemberActions";
+import { AdminCredentials } from "./_AdminCredentials";
 import { TeacherCredentials } from "./_TeacherCredentials";
 import { SpecialtyEditor } from "./_SpecialtyEditor";
 
@@ -55,18 +56,22 @@ export default async function MemberDetail({ params }: PageProps) {
           </div>
         </CardHeader>
         <CardContent>
-          <MemberActions
-            id={member.id}
-            role={member.role}
-            status={member.status}
-            remainingLessons={member.remainingLessons}
-            enrollmentStart={
-              member.enrollmentStart ? formatKstDate(member.enrollmentStart) : null
-            }
-            enrollmentEnd={
-              member.enrollmentEnd ? formatKstDate(member.enrollmentEnd) : null
-            }
-          />
+          {member.role === Role.ADMIN ? (
+            <AdminCredentials id={member.id} currentLoginId={member.loginId} />
+          ) : (
+            <MemberActions
+              id={member.id}
+              role={member.role}
+              status={member.status}
+              remainingLessons={member.remainingLessons}
+              enrollmentStart={
+                member.enrollmentStart ? formatKstDate(member.enrollmentStart) : null
+              }
+              enrollmentEnd={
+                member.enrollmentEnd ? formatKstDate(member.enrollmentEnd) : null
+              }
+            />
+          )}
         </CardContent>
       </Card>
 

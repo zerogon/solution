@@ -39,6 +39,17 @@ export const teacherCredentialSchema = z
     path: ["loginId"],
   });
 
+export const adminCredentialSchema = z
+  .object({
+    id: z.string().uuid(),
+    loginId: loginIdSchema.optional(),
+    newPassword: passwordSchema.optional(),
+  })
+  .refine((d) => d.loginId !== undefined || d.newPassword !== undefined, {
+    message: "변경할 로그인 ID 또는 비밀번호를 입력해주세요.",
+    path: ["loginId"],
+  });
+
 export const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, "현재 비밀번호를 입력해주세요."),

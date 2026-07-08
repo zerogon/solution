@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { generateLoginId, getPhoneLast4 } from "@/lib/login-id";
 import { parseKstDate } from "@/lib/slots";
 import {
+  adminCredentialSchema,
   lessonAdjustSchema,
   memberCreateSchema,
   memberUpdateSchema,
@@ -138,6 +139,15 @@ export async function adminSetStatus(input: {
 }): Promise<ActionResult> {
   try {
     await requireAdmin();
+    const target = await prisma.user.findUnique({
+      where: { id: input.id },
+      select: { role: true },
+    });
+    if (!target) return { ok: false, message: "사용자를 찾을 수 없습니다." };
+    // 관리자 계정은 휴면/탈퇴 대상이 아니다 (UI에서 버튼을 숨기지만 API도 차단)
+    if (target.role === Role.ADMIN) {
+      return { ok: false, message: "관리자 계정은 상태를 변경할 수 없습니다." };
+    }
     await prisma.user.update({
       where: { id: input.id },
       data: { status: input.status },
@@ -248,6 +258,64 @@ export async function adminUpdateTeacherCredentials(input: {
 
     revalidatePath("/admin/members");
     revalidatePath(`/admin/members/${parsed.data.teacherId}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "자격증명 변경에 실패했습니다.",
+    };
+  }
+}
+
+export async function adminUpdateAdminCredentials(input: {
+  id: string;
+  loginId?: string;
+  newPassword?: string;
+}): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const parsed = adminCredentialSchema.safeParse({
+      id: input.id,
+      loginId: input.loginId,
+      newPassword: input.newPassword,
+    });
+    if (!parsed.success) {
+      return { ok: false, message: parsed.error.issues[0].message };
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: parsed.data.id },
+      select: { role: true },
+    });
+    if (!target || target.role !== Role.ADMIN) {
+      return { ok: false, message: "관리자 계정을 찾을 수 없습니다." };
+    }
+
+    const data: { loginId?: string; password?: string } = {};
+    if (parsed.data.loginId !== undefined) data.loginId = parsed.data.loginId;
+    if (parsed.data.newPassword !== undefined) {
+      data.password = await bcrypt.hash(parsed.data.newPassword, 10);
+    }
+
+    try {
+      await prisma.user.update({
+        where: { id: parsed.data.id },
+        data,
+      });
+    } catch (err) {
+      if (
+        typeof err === "object" &&
+        err !== null &&
+        "code" in err &&
+        (err as { code?: string }).code === "P2002"
+      ) {
+        return { ok: false, message: "이미 사용 중인 로그인 ID입니다." };
+      }
+      throw err;
+    }
+
+    revalidatePath("/admin/members");
+    revalidatePath(`/admin/members/${parsed.data.id}`);
     return { ok: true };
   } catch (err) {
     return {
