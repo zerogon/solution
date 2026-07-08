@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { Slot } from "@/lib/slots";
+import { ACCENT_AVAILABLE, type TeacherAccent } from "@/lib/teacher-accent";
 import {
   createReservationAction,
   cancelReservationAction,
@@ -27,13 +28,13 @@ interface Props {
   asAdmin?: boolean;
   studentId?: string; // 관리자 강제 예약 시 학생 지정
   readOnly?: boolean;
+  /** 예약 가능 슬롯의 선생님별 강조색 (기본 emerald) */
+  accent?: TeacherAccent;
 }
 
-// 슬롯 상태별 의미 색(라이트 전용). emerald=예약가능 / blue=내예약 / zinc=완료·불가.
+// 슬롯 상태별 의미 색(라이트 전용). available=선생님별 accent(기본 emerald) / blue=내예약 / zinc=완료·불가.
 // 의미 구분을 위해 토큰 단색화하지 않고 유지한다.
-const STATE_STYLES: Record<Slot["state"], string> = {
-  available:
-    "bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100",
+const STATE_STYLES: Record<Exclude<Slot["state"], "available">, string> = {
   booked: "bg-zinc-200 text-zinc-500 border-zinc-300 cursor-not-allowed",
   mine: "bg-blue-100 text-blue-900 border-blue-400 hover:bg-blue-200",
   unavailable:
@@ -56,6 +57,7 @@ export function SlotGrid({
   asAdmin = false,
   studentId,
   readOnly = false,
+  accent = "emerald",
 }: Props) {
   const [pendingSlot, setPendingSlot] = useState<Slot | null>(null);
   const [pending, startTransition] = useTransition();
@@ -104,7 +106,9 @@ export function SlotGrid({
             }
             className={cn(
               "rounded-lg border px-3 py-3 text-sm font-medium transition",
-              STATE_STYLES[slot.state],
+              slot.state === "available"
+                ? ACCENT_AVAILABLE[accent]
+                : STATE_STYLES[slot.state],
             )}
           >
             <div className="text-base font-semibold">

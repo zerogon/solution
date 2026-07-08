@@ -8,10 +8,10 @@ import {
   type DayScheduleItem,
 } from "@/components/calendar/DaySchedule";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
-import { CalendarOff } from "lucide-react";
+import { CalendarOff, CircleCheck } from "lucide-react";
+import { cn } from "@/lib/utils";
 import Link from "next/link";
 import {
   availabilityMap,
@@ -26,6 +26,7 @@ import {
   UserStatus,
 } from "@/generated/prisma/enums";
 import { specialtyLabels } from "@/lib/specialty";
+import { ACCENT_DOT, teacherAccentAt } from "@/lib/teacher-accent";
 
 interface PageProps {
   searchParams: Promise<{ date?: string; teacher?: string }>;
@@ -54,10 +55,11 @@ export default async function BookPage({ searchParams }: PageProps) {
     orderBy: { name: "asc" },
   });
 
-  // 선택한 날짜의 요일에 가능한 선생님만 활성화
-  const available = teachers.map((t) => ({
+  // 선택한 날짜의 요일에 가능한 선생님만 활성화. accent는 이름순 인덱스로 고정 배정.
+  const available = teachers.map((t, i) => ({
     ...t,
     isAvailableToday: t.availability.some((a) => a.weekday === weekday),
+    accent: teacherAccentAt(i),
   }));
 
   const selectedTeacher =
@@ -145,6 +147,7 @@ export default async function BookPage({ searchParams }: PageProps) {
         dateStr={dateStr}
         slots={slots}
         reservationByIso={reservationByIso}
+        accent={selectedTeacher.accent}
       />
     );
   }
@@ -169,10 +172,37 @@ export default async function BookPage({ searchParams }: PageProps) {
         <CardHeader>
           <StepTitle n={2}>선생님 선택</StepTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap gap-2">
+        <CardContent className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {available.map((t) => {
             const active = t.id === selectedTeacher?.id;
             const specialty = specialtyLabels(t.specialties);
+            if (!t.isAvailableToday) {
+              return (
+                <div
+                  key={t.id}
+                  aria-disabled="true"
+                  className="flex min-h-14 items-center justify-between gap-2 rounded-lg border border-dashed p-3 opacity-50 select-none"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        aria-hidden
+                        className={cn(
+                          "size-2 shrink-0 rounded-full",
+                          ACCENT_DOT[t.accent],
+                        )}
+                      />
+                      <span className="truncate text-sm font-medium">
+                        {t.name}
+                      </span>
+                    </div>
+                    <div className="truncate text-[11px] text-muted-foreground">
+                      {specialty ? `${specialty} · ` : ""}이 요일 불가
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             return (
               <Link
                 key={t.id}
@@ -180,29 +210,43 @@ export default async function BookPage({ searchParams }: PageProps) {
                   pathname: "/student/book",
                   query: { date: dateStr, teacher: t.id },
                 }}
-                className="flex flex-col items-center gap-0.5"
+                aria-current={active ? "true" : undefined}
+                className={cn(
+                  "flex min-h-14 items-center justify-between gap-2 rounded-lg border p-3 transition-colors",
+                  active
+                    ? "border-primary bg-primary/5 ring-1 ring-primary"
+                    : "border-border bg-card hover:border-primary/40 hover:bg-muted/50",
+                )}
               >
-                <Badge
-                  variant={active ? "default" : "outline"}
-                  className={
-                    !t.isAvailableToday
-                      ? "opacity-40 line-through"
-                      : "cursor-pointer text-sm py-1.5 px-3"
-                  }
-                >
-                  {t.name}
-                </Badge>
-                {specialty && (
-                  <span
-                    className={
-                      "text-[11px] " +
-                      (t.isAvailableToday
-                        ? "text-muted-foreground"
-                        : "text-muted-foreground/40")
-                    }
-                  >
-                    {specialty}
-                  </span>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "size-2 shrink-0 rounded-full",
+                        ACCENT_DOT[t.accent],
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        "truncate text-sm font-medium",
+                        active && "text-primary",
+                      )}
+                    >
+                      {t.name}
+                    </span>
+                  </div>
+                  {specialty && (
+                    <div className="truncate text-xs text-muted-foreground">
+                      {specialty}
+                    </div>
+                  )}
+                </div>
+                {active && (
+                  <CircleCheck
+                    aria-hidden
+                    className="size-4 shrink-0 text-primary"
+                  />
                 )}
               </Link>
             );

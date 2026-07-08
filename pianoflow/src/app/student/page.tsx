@@ -14,13 +14,27 @@ import { listUnreadAnnouncements } from "@/lib/announcements";
 import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { CancelButton } from "./_CancelButton";
 import { VisibilitySettings } from "./_VisibilitySettings";
+import { NextLessonCard } from "./_NextLessonCard";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
-function dateTimeLabel(d: Date) {
+function dateLabel(d: Date) {
   const dateStr = formatKstDate(d);
   const dow = DOW[new Date(parseKstDate(dateStr).getTime() + 9 * 3600000).getUTCDay()];
-  return `${dateStr.slice(5).replace("-", ".")} (${dow}) ${String(kstHourOf(d)).padStart(2, "0")}:00`;
+  return `${dateStr.slice(5).replace("-", ".")} (${dow})`;
+}
+
+function dateTimeLabel(d: Date) {
+  return `${dateLabel(d)} ${String(kstHourOf(d)).padStart(2, "0")}:00`;
+}
+
+/** KST 자정 기준 날짜 차이(일) */
+function kstDaysBetween(from: Date, to: Date) {
+  return Math.round(
+    (parseKstDate(formatKstDate(to)).getTime() -
+      parseKstDate(formatKstDate(from)).getTime()) /
+      86_400_000,
+  );
 }
 
 export default async function StudentHome() {
@@ -31,13 +45,7 @@ export default async function StudentHome() {
   if (!me) redirect("/login");
 
   const now = new Date();
-  const daysLeft = me.enrollmentEnd
-    ? Math.round(
-        (parseKstDate(formatKstDate(me.enrollmentEnd)).getTime() -
-          parseKstDate(formatKstDate(now)).getTime()) /
-          86_400_000,
-      )
-    : null;
+  const daysLeft = me.enrollmentEnd ? kstDaysBetween(now, me.enrollmentEnd) : null;
   const allUpcoming = await prisma.reservation.findMany({
     where: {
       studentId: me.id,
@@ -51,22 +59,26 @@ export default async function StudentHome() {
 
   const unreadAnnouncements = await listUnreadAnnouncements(me.id);
 
+  const [next, ...rest] = upcoming;
+
+  const cancelOrLocked = (r: (typeof upcoming)[number]) =>
+    canStudentCancel(r.slotDatetime, now) ? (
+      <CancelButton reservationId={r.id} />
+    ) : (
+      <Badge variant="outline">
+        <Lock aria-hidden className="size-3" />
+        마감
+      </Badge>
+    );
+
   const groups: AgendaGroup[] = [
     {
-      label: "다가오는 레슨",
-      items: upcoming.map((r, i) => ({
+      label: "이후 레슨",
+      items: rest.map((r) => ({
         id: r.id,
         time: dateTimeLabel(r.slotDatetime),
         title: `${r.teacher.name} 선생님`,
-        tone: i === 0 ? ("accent" as const) : ("default" as const),
-        trailing: canStudentCancel(r.slotDatetime, now) ? (
-          <CancelButton reservationId={r.id} />
-        ) : (
-          <Badge variant="outline">
-            <Lock aria-hidden className="size-3" />
-            마감
-          </Badge>
-        ),
+        trailing: cancelOrLocked(r),
       })),
     },
   ];
@@ -129,7 +141,7 @@ export default async function StudentHome() {
       </div>
 
       {/* 다가오는 레슨 + 공개 설정 */}
-      {upcoming.length === 0 ? (
+      {!next ? (
         <Card>
           <CardContent>
             <EmptyState
@@ -140,25 +152,35 @@ export default async function StudentHome() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
-          <AgendaRail groups={groups} />
+        <>
+          <NextLessonCard
+            dateLabel={dateLabel(next.slotDatetime)}
+            timeLabel={`${String(kstHourOf(next.slotDatetime)).padStart(2, "0")}:00`}
+            teacherName={next.teacher.name}
+            daysUntil={kstDaysBetween(now, next.slotDatetime)}
+            action={cancelOrLocked(next)}
+          />
 
-          <Card>
-            <CardHeader>
-              <CardTitle>레슨 공개 설정</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <VisibilitySettings
-                initial={allUpcoming.map((r) => ({
-                  id: r.id,
-                  label: dateTimeLabel(r.slotDatetime),
-                  teacherName: r.teacher.name,
-                  isPrivate: r.isPrivate,
-                }))}
-              />
-            </CardContent>
-          </Card>
-        </div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">
+            {rest.length > 0 && <AgendaRail groups={groups} />}
+
+            <Card>
+              <CardHeader>
+                <CardTitle>레슨 공개 설정</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <VisibilitySettings
+                  initial={allUpcoming.map((r) => ({
+                    id: r.id,
+                    label: dateTimeLabel(r.slotDatetime),
+                    teacherName: r.teacher.name,
+                    isPrivate: r.isPrivate,
+                  }))}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
     </div>
   );
