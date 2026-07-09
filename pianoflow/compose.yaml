@@ -1,0 +1,25 @@
+# 로컬 개발용 Postgres. 운영은 Vercel Neon을 사용하며 이 컨테이너와 무관하다.
+#   npm run db:local:up      # 시작
+#   npm run db:local:down    # 정지 (데이터는 pgdata 볼륨에 유지)
+#   docker compose down -v   # 볼륨까지 삭제 (완전 초기화)
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: pianoflow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pianoflow
+      POSTGRES_PASSWORD: pianoflow
+      POSTGRES_DB: pianoflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pianoflow -d pianoflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

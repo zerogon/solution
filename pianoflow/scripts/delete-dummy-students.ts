@@ -8,7 +8,7 @@
  * FK 안전 순서로 의존 레코드(예약/크레딧)를 먼저 지운다.
  * (teacher_availability, announcement_reads는 onDelete: Cascade라 자동 정리)
  */
-import "dotenv/config";
+import "./load-env";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { Role } from "../src/generated/prisma/enums.js";

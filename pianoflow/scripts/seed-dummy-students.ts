@@ -8,7 +8,7 @@
  * 로그인ID = 전화 끝 8자리(00500001~00500050), 비밀번호 student1234.
  * 삭제는 scripts/delete-dummy-students.ts (phone startsWith "010-0050-").
  */
-import "dotenv/config";
+import "./load-env";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client.js";

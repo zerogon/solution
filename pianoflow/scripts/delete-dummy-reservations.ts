@@ -8,7 +8,7 @@
  * 학생 remainingLessons는 seed-dummy-students.ts 초기값(4)으로 복원한다.
  * (학생 계정 자체는 유지 — 계정까지 지우려면 delete-dummy-students.ts 사용)
  */
-import "dotenv/config";
+import "./load-env";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 import { Role } from "../src/generated/prisma/enums.js";

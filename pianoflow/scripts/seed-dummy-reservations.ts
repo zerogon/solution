@@ -9,7 +9,7 @@
  * 예약마다 LessonCreditLog 기록(RESERVE/-1, 취소 시 CANCEL/+1)으로 크레딧 정합성 유지.
  * 삭제는 scripts/delete-dummy-reservations.ts.
  */
-import "dotenv/config";
+import "./load-env";
 import { randomUUID } from "node:crypto";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client.js";

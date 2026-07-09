@@ -7,7 +7,13 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:local:up": "docker compose up -d",
+    "db:local:down": "docker compose down",
+    "db:local:migrate": "tsx scripts/assert-local-db.ts && prisma migrate deploy",
+    "db:local:seed": "tsx scripts/assert-local-db.ts && prisma db seed",
+    "db:local:dummy": "tsx scripts/assert-local-db.ts && tsx scripts/seed-dummy-students.ts && tsx scripts/seed-dummy-reservations.ts",
+    "db:local:reset": "tsx scripts/assert-local-db.ts && prisma migrate reset --force"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
