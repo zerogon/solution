@@ -69,16 +69,24 @@ export default async function AdminReservations({ searchParams }: PageProps) {
 
   let forceArea: React.ReactNode = null;
   if (selectedTeacher && selectedStudentId) {
-    const booked = await prisma.reservation.findMany({
-      where: {
-        teacherId: selectedTeacher.id,
-        status: ReservationStatus.ACTIVE,
-        slotDatetime: { gte: baseDate, lt: dayEnd },
-      },
-    });
+    const [booked, exception] = await Promise.all([
+      prisma.reservation.findMany({
+        where: {
+          teacherId: selectedTeacher.id,
+          status: ReservationStatus.ACTIVE,
+          slotDatetime: { gte: baseDate, lt: dayEnd },
+        },
+      }),
+      prisma.teacherScheduleException.findUnique({
+        where: {
+          teacherId_date: { teacherId: selectedTeacher.id, date: baseDate },
+        },
+      }),
+    ]);
     const slots = generateSlots({
       dateStr,
       availabilityByWeekday: availabilityMap(selectedTeacher.availability),
+      overrideHours: exception ? exception.hours : undefined,
       bookedSlotIsos: booked.map((b) => b.slotDatetime.toISOString()),
       myActiveSlotIsos: [],
     });

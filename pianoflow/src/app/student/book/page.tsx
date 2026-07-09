@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import Link from "next/link";
 import {
   availabilityMap,
-  formatKstDate,
+  bookingHorizon,
   generateSlots,
   parseKstDate,
   weekdayOf,
@@ -37,30 +37,46 @@ export default async function BookPage({ searchParams }: PageProps) {
   if (!session?.user) redirect("/login");
 
   const sp = await searchParams;
-  // 당일 예약 불가 → 기본 선택일은 내일(KST)
-  const todayStart = parseKstDate(formatKstDate(new Date()));
-  const tomorrowStr = formatKstDate(
-    new Date(todayStart.getTime() + 24 * 60 * 60 * 1000),
-  );
-  const dateStr = sp.date ?? tomorrowStr;
+  // 당일 예약 불가 → 기본 선택일은 내일(KST). 예약 가능 창(4주치)을 벗어난 날짜는 클램프.
+  const { minDateStr, maxDateStr } = bookingHorizon(new Date());
+  const requested = sp.date ?? minDateStr;
+  const dateStr =
+    requested < minDateStr
+      ? minDateStr
+      : requested > maxDateStr
+        ? maxDateStr
+        : requested;
   const baseDate = parseKstDate(dateStr);
   const weekday = weekdayOf(baseDate);
 
-  const teachers = await prisma.user.findMany({
-    where: {
-      role: Role.TEACHER,
-      status: UserStatus.ACTIVE,
-    },
-    include: { availability: true },
-    orderBy: { name: "asc" },
-  });
+  const [teachers, exceptions] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        role: Role.TEACHER,
+        status: UserStatus.ACTIVE,
+      },
+      include: { availability: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.teacherScheduleException.findMany({
+      where: { date: baseDate },
+      select: { teacherId: true, hours: true },
+    }),
+  ]);
+  const overrideByTeacher = new Map(
+    exceptions.map((e) => [e.teacherId, e.hours]),
+  );
 
-  // 선택한 날짜의 요일에 가능한 선생님만 활성화. accent는 이름순 인덱스로 고정 배정.
-  const available = teachers.map((t, i) => ({
-    ...t,
-    isAvailableToday: t.availability.some((a) => a.weekday === weekday),
-    accent: teacherAccentAt(i),
-  }));
+  // 선택한 날짜에 가능한 선생님만 활성화. 날짜 예외가 있으면 요일 기본값을 덮어쓴다.
+  // accent는 이름순 인덱스로 고정 배정.
+  const available = teachers.map((t, i) => {
+    const override = overrideByTeacher.get(t.id);
+    const isAvailableToday =
+      override !== undefined
+        ? override.length > 0
+        : t.availability.some((a) => a.weekday === weekday);
+    return { ...t, isAvailableToday, accent: teacherAccentAt(i) };
+  });
 
   const selectedTeacher =
     available.find((t) => t.id === sp.teacher && t.isAvailableToday) ??
@@ -134,6 +150,9 @@ export default async function BookPage({ searchParams }: PageProps) {
     const slots = generateSlots({
       dateStr,
       availabilityByWeekday: availabilityMap(selectedTeacher.availability),
+      overrideHours: overrideByTeacher.has(selectedTeacher.id)
+        ? overrideByTeacher.get(selectedTeacher.id)
+        : undefined,
       bookedSlotIsos: booked
         .filter((b) => !myIsoSet.has(b.slotDatetime.toISOString()))
         .map((b) => b.slotDatetime.toISOString()),
@@ -197,7 +216,7 @@ export default async function BookPage({ searchParams }: PageProps) {
                       </span>
                     </div>
                     <div className="truncate text-[11px] text-muted-foreground">
-                      {specialty ? `${specialty} · ` : ""}이 요일 불가
+                      {specialty ? `${specialty} · ` : ""}이 날짜 불가
                     </div>
                   </div>
                 </div>

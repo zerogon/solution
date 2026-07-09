@@ -4,7 +4,7 @@ import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { formatKstDate, parseKstDate } from "@/lib/slots";
+import { bookingHorizon, formatKstDate, parseKstDate } from "@/lib/slots";
 
 interface Props {
   selectedDateStr: string;
@@ -23,7 +23,8 @@ export function DatePickerPanel({ selectedDateStr, paramName = "date" }: Props) 
   const todayStart = parseKstDate(formatKstDate(today));
   // 당일 예약 불가 → 내일부터 선택 가능
   const minDate = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
-  const maxDate = new Date(todayStart.getTime() + 60 * 24 * 60 * 60 * 1000);
+  // 예약 가능 창: 이번 주 월요일 기준 4주치 (4주차 일요일까지)
+  const maxDate = parseKstDate(bookingHorizon(today).maxDateStr);
 
   return (
     <div className="mx-auto w-fit">

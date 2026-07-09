@@ -39,20 +39,26 @@ export default async function TeacherPeek({ searchParams }: PageProps) {
   if (selected) {
     const dayStart = parseKstDate(dateStr);
     const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-    const booked = await prisma.reservation.findMany({
-      where: {
-        teacherId: selected.id,
-        status: ReservationStatus.ACTIVE,
-        slotDatetime: { gte: dayStart, lt: dayEnd },
-      },
-      include: { student: true },
-    });
+    const [booked, exception] = await Promise.all([
+      prisma.reservation.findMany({
+        where: {
+          teacherId: selected.id,
+          status: ReservationStatus.ACTIVE,
+          slotDatetime: { gte: dayStart, lt: dayEnd },
+        },
+        include: { student: true },
+      }),
+      prisma.teacherScheduleException.findUnique({
+        where: { teacherId_date: { teacherId: selected.id, date: dayStart } },
+      }),
+    ]);
     const bookedMap = new Map(
       booked.map((b) => [b.slotDatetime.toISOString(), b.student.name]),
     );
     const slots = generateSlots({
       dateStr,
       availabilityByWeekday: availabilityMap(selected.availability),
+      overrideHours: exception ? exception.hours : undefined,
       bookedSlotIsos: booked.map((b) => b.slotDatetime.toISOString()),
       myActiveSlotIsos: [],
     });

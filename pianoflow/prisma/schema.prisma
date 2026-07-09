@@ -64,7 +64,8 @@ model User {
   createdAt          DateTime   @default(now()) @map("created_at")
   updatedAt          DateTime   @updatedAt @map("updated_at")
 
-  availability    TeacherAvailability[]
+  availability      TeacherAvailability[]
+  scheduleExceptions TeacherScheduleException[]
   studentBookings Reservation[]         @relation("StudentReservations")
   teacherBookings Reservation[]         @relation("TeacherReservations")
   creditLogs      LessonCreditLog[]     @relation("StudentCreditLogs")
@@ -86,6 +87,21 @@ model TeacherAvailability {
 
   @@unique([teacherId, weekday])
   @@map("teacher_availability")
+}
+
+// 특정 날짜에 대한 요일 기본 스케줄의 일회성 예외.
+// hours = 그날 예약 가능 시각. 빈 배열 = 휴무. 있으면 요일 기본값을 완전히 덮어쓴다.
+model TeacherScheduleException {
+  id        String   @id @default(uuid())
+  teacherId String   @map("teacher_id")
+  date      DateTime @map("date") // 해당 KST 일자 자정의 UTC (parseKstDate 규약과 동일)
+  hours     Int[]    @default([])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  teacher User @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, date])
+  @@map("teacher_schedule_exception")
 }
 
 model Reservation {

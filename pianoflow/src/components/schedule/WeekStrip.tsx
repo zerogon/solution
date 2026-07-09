@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatKstDate, parseKstDate } from "@/lib/slots";
+import { bookingHorizon, formatKstDate, parseKstDate } from "@/lib/slots";
 
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -26,6 +26,11 @@ export function WeekStrip({ selectedDateStr }: { selectedDateStr: string }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(mondayStr, i));
   const todayStr = formatKstDate(new Date());
 
+  // 예약 가능 창: 이번 주 ~ 4주차. 창 밖으로 넘어가는 주 이동 화살표는 잠근다.
+  const { mondayStr: thisWeekMonday, maxDateStr } = bookingHorizon(new Date());
+  const prevDisabled = mondayStr <= thisWeekMonday;
+  const nextDisabled = addDays(mondayStr, 7) > maxDateStr;
+
   const firstP = kstParts(days[0]);
   const lastP = kstParts(days[6]);
   const rangeLabel =
@@ -42,21 +47,39 @@ export function WeekStrip({ selectedDateStr }: { selectedDateStr: string }) {
   return (
     <div className="rounded-lg border bg-card">
       <div className="flex items-center justify-between px-3 py-2.5">
-        <Link
-          href={hrefFor(addDays(selectedDateStr, -7))}
-          aria-label="이전 주"
-          className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <ChevronLeft className="size-4" />
-        </Link>
+        {prevDisabled ? (
+          <span
+            aria-disabled
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground/40"
+          >
+            <ChevronLeft className="size-4" />
+          </span>
+        ) : (
+          <Link
+            href={hrefFor(addDays(selectedDateStr, -7))}
+            aria-label="이전 주"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ChevronLeft className="size-4" />
+          </Link>
+        )}
         <span className="text-sm font-medium tabular-nums">{rangeLabel}</span>
-        <Link
-          href={hrefFor(addDays(selectedDateStr, 7))}
-          aria-label="다음 주"
-          className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <ChevronRight className="size-4" />
-        </Link>
+        {nextDisabled ? (
+          <span
+            aria-disabled
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground/40"
+          >
+            <ChevronRight className="size-4" />
+          </span>
+        ) : (
+          <Link
+            href={hrefFor(addDays(selectedDateStr, 7))}
+            aria-label="다음 주"
+            className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <ChevronRight className="size-4" />
+          </Link>
+        )}
       </div>
       <div className="grid grid-cols-7 border-t">
         {days.map((day) => {

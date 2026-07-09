@@ -15,6 +15,7 @@ import {
 import {
   BOOKING_CLOSE_MIN,
   BOOKING_OPEN_MIN,
+  bookingHorizon,
   canStudentCancel,
   formatKstDate,
   isSameKstDay,
@@ -82,6 +83,11 @@ export async function createReservationAction(input: {
     return { ok: false, message: "지난 시간에는 예약할 수 없습니다." };
   }
 
+  // 예약 가능 창(이번 주 월요일 기준 4주치) 상한 검증 — 관리자 강제 예약은 우회
+  if (!isAdminForce && formatKstDate(slotDate) > bookingHorizon().maxDateStr) {
+    return { ok: false, message: "예약은 최대 4주 뒤까지만 가능합니다." };
+  }
+
   // 당일 예약 불가 + 예약 행위 가능 시각 제한 (학생 한정, 관리자 강제 예약은 우회)
   if (!isAdminForce) {
     const now = new Date();
@@ -110,13 +116,25 @@ export async function createReservationAction(input: {
         throw new BookingError("선택한 선생님을 찾을 수 없습니다.");
       }
       const weekday = weekdayOf(slotDate);
+      // 날짜 예외가 있으면 요일 기본값을 덮어쓴다. (없으면 요일 기본값)
+      const exception = await tx.teacherScheduleException.findUnique({
+        where: {
+          teacherId_date: {
+            teacherId,
+            date: parseKstDate(formatKstDate(slotDate)),
+          },
+        },
+      });
       const availabilityRow = teacher.availability.find(
         (a) => a.weekday === weekday,
       );
-      if (!availabilityRow) {
-        throw new BookingError("해당 요일은 예약할 수 없는 요일입니다.");
+      const effectiveHours = exception
+        ? exception.hours
+        : (availabilityRow?.hours ?? []);
+      if (effectiveHours.length === 0) {
+        throw new BookingError("해당 날짜는 예약할 수 없습니다.");
       }
-      if (!availabilityRow.hours.includes(kstHour)) {
+      if (!effectiveHours.includes(kstHour)) {
         throw new BookingError("해당 시간은 예약할 수 없는 시간입니다.");
       }
 

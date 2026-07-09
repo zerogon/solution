@@ -57,6 +57,32 @@ export function weekdayOf(date: Date): Weekday {
   return WEEKDAY_MAP[kst.getUTCDay()];
 }
 
+/** 예약 가능 주차 수 (이번 주 포함). 튜닝 지점. */
+export const BOOKING_WEEKS_AHEAD = 4;
+
+/**
+ * 예약 가능 창 (KST). 이번 주 월요일을 앵커로 4주차 일요일까지.
+ * 요청 시점마다 재계산되므로 매주 월요일 0시(KST)에 창이 자동으로 한 주 전진한다.
+ */
+export function bookingHorizon(now: Date = new Date()): {
+  mondayStr: string; // 이번 주 월요일 (오늘 포함 주)
+  minDateStr: string; // 예약 가능한 가장 이른 날 = 내일 (당일 예약 불가)
+  maxDateStr: string; // 예약 가능한 가장 늦은 날(포함) = 4주차 일요일
+} {
+  const todayStr = formatKstDate(now);
+  const dow = new Date(
+    parseKstDate(todayStr).getTime() + KST_OFFSET_MS,
+  ).getUTCDay(); // 0=일 .. 6=토
+  const addStr = (s: string, n: number) =>
+    formatKstDate(new Date(parseKstDate(s).getTime() + n * 86400000));
+  const mondayStr = addStr(todayStr, dow === 0 ? -6 : 1 - dow);
+  return {
+    mondayStr,
+    minDateStr: addStr(todayStr, 1),
+    maxDateStr: addStr(mondayStr, BOOKING_WEEKS_AHEAD * 7 - 1), // +27
+  };
+}
+
 /** KST 기준 시(0-23) */
 export function kstHourOf(date: Date): number {
   return new Date(date.getTime() + KST_OFFSET_MS).getUTCHours();
@@ -93,6 +119,7 @@ export function canStudentCancel(slotDatetime: Date, now: Date = new Date()): bo
 export interface GenerateSlotsArgs {
   dateStr: string;                  // KST 기준 선택 일자
   availabilityByWeekday: Map<Weekday, number[]>; // 요일 → 예약 가능 시각. 없으면 그날 불가
+  overrideHours?: number[] | null;  // 날짜 예외. undefined=예외없음(요일 기본), []=휴무, [..]=지정
   bookedSlotIsos: string[];         // 이미 예약된 슬롯의 ISO 문자열
   myActiveSlotIsos: string[];       // 내가 ACTIVE로 잡은 슬롯
   now?: Date;                       // 테스트용 시각 주입
@@ -105,20 +132,40 @@ export function availabilityMap(
   return new Map(rows.map((r) => [r.weekday, r.hours]));
 }
 
+/**
+ * 특정 날짜의 유효 예약 가능 시각을 결정. 날짜 예외가 있으면 요일 기본값을 완전히 덮어쓴다.
+ * @returns 그날 가능한 시각 배열(빈 배열=휴무). 요일 기본값도 없으면 undefined.
+ */
+export function resolveDayHours(
+  dateStr: string,
+  availabilityByWeekday: Map<Weekday, number[]>,
+  overrideHours?: number[] | null,
+): number[] | undefined {
+  if (overrideHours !== undefined && overrideHours !== null) {
+    return overrideHours;
+  }
+  return availabilityByWeekday.get(weekdayOf(parseKstDate(dateStr)));
+}
+
 export function generateSlots({
   dateStr,
   availabilityByWeekday,
+  overrideHours,
   bookedSlotIsos,
   myActiveSlotIsos,
   now = new Date(),
 }: GenerateSlotsArgs): Slot[] {
   const baseDate = parseKstDate(dateStr);
-  const weekday = weekdayOf(baseDate);
-  const allowedHours = availabilityByWeekday.get(weekday);
+  const allowedHours = resolveDayHours(
+    dateStr,
+    availabilityByWeekday,
+    overrideHours,
+  );
   const isAvailableDay = allowedHours !== undefined && allowedHours.length > 0;
   const hourSet = new Set(allowedHours ?? []);
   const isToday = isSameKstDay(baseDate, now);
   const isPast = baseDate.getTime() < parseKstDate(formatKstDate(now)).getTime();
+  const isBeyondHorizon = dateStr > bookingHorizon(now).maxDateStr;
 
   const booked = new Set(bookedSlotIsos);
   const mine = new Set(myActiveSlotIsos);
@@ -127,7 +174,7 @@ export function generateSlots({
     const slot = slotDatetime(dateStr, hour);
     const iso = slot.toISOString();
 
-    if (!isAvailableDay || isPast) {
+    if (!isAvailableDay || isPast || isBeyondHorizon) {
       return { hour, iso, state: "unavailable" as const };
     }
     if (isToday && slot.getTime() <= now.getTime()) {

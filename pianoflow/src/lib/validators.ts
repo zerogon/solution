@@ -142,6 +142,23 @@ export const availabilitySchema = z.object({
     }),
 });
 
+export const scheduleExceptionSchema = z.object({
+  teacherId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식이 올바르지 않습니다."),
+  // 빈 배열 허용(= 휴무). 요일 기본값을 완전히 덮어쓴다.
+  hours: z.array(
+    z
+      .number()
+      .int()
+      .refine((h) => ALLOWED_HOURS.has(h), "허용되지 않은 시간입니다."),
+  ),
+});
+
+export const scheduleExceptionClearSchema = z.object({
+  teacherId: z.string().uuid(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식이 올바르지 않습니다."),
+});
+
 export const enrollmentPeriodSchema = z
   .object({
     studentId: z.string().uuid(),
