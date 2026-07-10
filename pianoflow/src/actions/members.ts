@@ -163,6 +163,47 @@ export async function adminSetStatus(input: {
   }
 }
 
+export async function adminDeleteStudent(input: {
+  id: string;
+}): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const target = await prisma.user.findUnique({
+      where: { id: input.id },
+      select: { role: true, status: true },
+    });
+    if (!target) return { ok: false, message: "사용자를 찾을 수 없습니다." };
+    // 안전장치: 탈퇴 상태의 수강생만 영구 삭제 가능 (UI에서도 그 경우에만 노출)
+    if (target.role !== Role.STUDENT) {
+      return { ok: false, message: "수강생만 삭제할 수 있습니다." };
+    }
+    if (target.status !== UserStatus.WITHDRAWN) {
+      return { ok: false, message: "탈퇴 처리된 수강생만 삭제할 수 있습니다." };
+    }
+
+    // FK 안전 순서로 의존 레코드 정리 후 계정 삭제 (delete-all-students.ts와 동일)
+    await prisma.$transaction([
+      prisma.announcement.updateMany({
+        where: { authorId: input.id },
+        data: { authorId: null },
+      }),
+      prisma.lessonCreditLog.deleteMany({
+        where: { OR: [{ studentId: input.id }, { actorId: input.id }] },
+      }),
+      prisma.reservation.deleteMany({ where: { studentId: input.id } }),
+      prisma.user.delete({ where: { id: input.id } }),
+    ]);
+
+    revalidatePath("/admin/members");
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "삭제에 실패했습니다.",
+    };
+  }
+}
+
 export async function adminAdjustLessons(input: {
   studentId: string;
   delta: number;

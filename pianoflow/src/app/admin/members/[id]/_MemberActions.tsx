@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   adminAdjustLessons,
+  adminDeleteStudent,
   adminResetPassword,
   adminSetStatus,
 } from "@/actions/members";
@@ -38,6 +40,7 @@ export function MemberActions({
   const [start, setStart] = useState(enrollmentStart ?? "");
   const [end, setEnd] = useState(enrollmentEnd ?? "");
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
 
   function saveEnrollment(clear: boolean) {
     startTransition(async () => {
@@ -87,6 +90,20 @@ export function MemberActions({
     });
   }
 
+  function remove() {
+    const confirmed = window.confirm(
+      "이 수강생을 영구 삭제하시겠습니까?\n예약·레슨 기록이 함께 삭제되며 되돌릴 수 없습니다.",
+    );
+    if (!confirmed) return;
+    startTransition(async () => {
+      const res = await adminDeleteStudent({ id });
+      if (res.ok) {
+        toast.success("수강생이 삭제되었습니다.");
+        router.push("/admin/members");
+      } else toast.error(res.message);
+    });
+  }
+
   function applyLessons() {
     if (delta === 0) return;
     startTransition(async () => {
@@ -127,9 +144,16 @@ export function MemberActions({
 
       <div className="flex flex-wrap gap-2">
         {status === UserStatus.WITHDRAWN ? (
-          <Button variant="outline" onClick={restore} disabled={pending}>
-            활성화 (복구)
-          </Button>
+          <>
+            <Button variant="outline" onClick={restore} disabled={pending}>
+              활성화 (복구)
+            </Button>
+            {role === Role.STUDENT && (
+              <Button variant="destructive" onClick={remove} disabled={pending}>
+                삭제
+              </Button>
+            )}
+          </>
         ) : (
           <>
             <Button variant="outline" onClick={toggleDormant} disabled={pending}>
