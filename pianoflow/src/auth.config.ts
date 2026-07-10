@@ -13,6 +13,7 @@ export const authConfig: NextAuthConfig = {
   },
   session: {
     strategy: "jwt",
+    maxAge: 60 * 60 * 24 * 30, // 30일 — "로그인 유지" 체크 시 지속 기간
   },
   trustHost: true,
   callbacks: {

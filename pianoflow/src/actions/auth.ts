@@ -1,6 +1,7 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
 import { auth, signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import {
@@ -10,6 +11,31 @@ import {
 } from "@/lib/validators";
 import type { ActionResult } from "@/lib/errors";
 import { Role, UserStatus } from "@/generated/prisma/enums";
+
+// dev/http: "authjs.session-token", prod/https: "__Secure-authjs.session-token"
+const SESSION_TOKEN_BASE = ["authjs.session-token", "__Secure-authjs.session-token"];
+
+/**
+ * "로그인 유지하기" 미체크 시 호출. next-auth가 발급한 세션 토큰 쿠키의 만료를
+ * 제거해, 브라우저 종료 시 사라지는 세션 쿠키로 강등한다. (next-auth v5는 요청별
+ * 쿠키 만료 제어를 기본 지원하지 않아, 로그인 직후 쿠키를 재작성한다.)
+ */
+async function demoteSessionTokenToSessionScope() {
+  const store = await cookies();
+  for (const c of store.getAll()) {
+    const isToken = SESSION_TOKEN_BASE.some(
+      (n) => c.name === n || c.name.startsWith(n + "."), // 청크(.0/.1) 포함
+    );
+    if (!isToken) continue;
+    store.set(c.name, c.value, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: c.name.startsWith("__Secure-"), // __Secure- 접두사는 secure 필수
+      // maxAge/expires 생략 → 세션 쿠키
+    });
+  }
+}
 
 export async function loginAction(
   _prev: ActionResult | undefined,
@@ -24,12 +50,16 @@ export async function loginAction(
     return { ok: false, message: parsed.error.issues[0].message };
   }
 
+  const rememberMe = formData.get("rememberMe") === "true";
+
   try {
     await signIn("credentials", {
       loginId: parsed.data.loginId,
       password: parsed.data.password ?? "",
       redirect: false,
     });
+    // 체크(기본)면 next-auth 기본 30일 지속 쿠키 유지, 미체크면 세션 쿠키로 강등
+    if (!rememberMe) await demoteSessionTokenToSessionScope();
     return { ok: true };
   } catch {
     return { ok: false, message: "로그인 ID 또는 비밀번호가 올바르지 않습니다." };

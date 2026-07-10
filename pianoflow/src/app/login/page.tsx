@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { checkLoginId, loginAction } from "@/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -26,6 +27,7 @@ function LoginForm() {
   // 비밀번호 팝업 대상 loginId (선생님/관리자). null이면 팝업 닫힘.
   const [pwTarget, setPwTarget] = useState<string | null>(null);
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
 
   function goAfterLogin() {
     const from = params.get("from") ?? "/";
@@ -37,6 +39,7 @@ function LoginForm() {
     const fd = new FormData();
     fd.set("loginId", loginId);
     if (pw !== undefined) fd.set("password", pw);
+    fd.set("rememberMe", rememberMe ? "true" : "false");
     const res = await loginAction(undefined, fd);
     if (res.ok) {
       goAfterLogin();
@@ -99,6 +102,16 @@ function LoginForm() {
               className="h-11 pl-10 text-base"
             />
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id="rememberMe"
+            checked={rememberMe}
+            onCheckedChange={(v) => setRememberMe(v === true)}
+          />
+          <Label htmlFor="rememberMe" className="text-sm font-normal text-muted-foreground">
+            로그인 유지하기
+          </Label>
         </div>
         <Button type="submit" className="h-11 w-full text-base" disabled={pending}>
           {pending ? (
