@@ -61,6 +61,7 @@ model User {
   specialties        Specialty[] @default([])
   enrollmentStart    DateTime?  @map("enrollment_start")
   enrollmentEnd      DateTime?  @map("enrollment_end")
+  note               String?    @map("note")
   createdAt          DateTime   @default(now()) @map("created_at")
   updatedAt          DateTime   @updatedAt @map("updated_at")
 

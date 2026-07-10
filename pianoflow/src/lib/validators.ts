@@ -74,6 +74,7 @@ export const memberCreateSchema = z
     specialties: specialtiesSchema,
     enrollmentStart: dateStrSchema.nullable().optional(),
     enrollmentEnd: dateStrSchema.nullable().optional(),
+    note: z.string().max(500, "비고는 500자 이하로 입력해주세요.").optional(),
   })
   .superRefine((d, ctx) => {
     if (d.role !== Role.STUDENT) return;
@@ -110,6 +111,11 @@ export const memberUpdateSchema = z.object({
   phone: phoneSchema.optional(),
   role: z.nativeEnum(Role).optional(),
   remainingLessons: z.number().int().min(0).optional(),
+});
+
+export const memberNoteSchema = z.object({
+  id: z.string().uuid(),
+  note: z.string().max(500, "비고는 500자 이하로 입력해주세요.").nullable(),
 });
 
 export const availabilitySchema = z.object({

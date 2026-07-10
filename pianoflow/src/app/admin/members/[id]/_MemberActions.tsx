@@ -7,6 +7,7 @@ import {
   adminAdjustLessons,
   adminDeleteStudent,
   adminResetPassword,
+  adminSetMemberNote,
   adminSetStatus,
 } from "@/actions/members";
 import { adminSetEnrollmentPeriod } from "@/actions/enrollment";
@@ -22,6 +23,7 @@ interface Props {
   role: Role;
   status: UserStatus;
   remainingLessons: number;
+  note: string | null;
   enrollmentStart: string | null;
   enrollmentEnd: string | null;
 }
@@ -31,16 +33,26 @@ export function MemberActions({
   role,
   status,
   remainingLessons,
+  note: initialNote,
   enrollmentStart,
   enrollmentEnd,
 }: Props) {
   const [delta, setDelta] = useState(0);
   const [memo, setMemo] = useState("");
+  const [note, setNote] = useState(initialNote ?? "");
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [start, setStart] = useState(enrollmentStart ?? "");
   const [end, setEnd] = useState(enrollmentEnd ?? "");
   const [pending, startTransition] = useTransition();
   const router = useRouter();
+
+  function saveNote() {
+    startTransition(async () => {
+      const res = await adminSetMemberNote({ id, note: note || null });
+      if (res.ok) toast.success("비고가 저장되었습니다.");
+      else toast.error(res.message);
+    });
+  }
 
   function saveEnrollment(clear: boolean) {
     startTransition(async () => {
@@ -167,6 +179,33 @@ export function MemberActions({
             </Button>
           </>
         )}
+      </div>
+
+      <div className="space-y-2 rounded-md border p-3">
+        <Label htmlFor="note" className="text-sm font-semibold">
+          비고
+        </Label>
+        <textarea
+          id="note"
+          value={note}
+          onChange={(e) => setNote(e.target.value.slice(0, 500))}
+          rows={3}
+          maxLength={500}
+          placeholder="예: 9월 초 등록 예정, 상담 완료"
+          disabled={pending}
+          className="w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 dark:bg-input/30"
+        />
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            {note.length}/500
+          </span>
+          <Button
+            onClick={saveNote}
+            disabled={pending || note === (initialNote ?? "")}
+          >
+            비고 저장
+          </Button>
+        </div>
       </div>
 
       {role === Role.STUDENT && (

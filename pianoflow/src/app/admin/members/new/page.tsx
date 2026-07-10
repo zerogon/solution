@@ -130,6 +130,17 @@ export default function NewMemberPage() {
               </Select>
               <input type="hidden" name="role" value={role} />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="note">비고 (선택)</Label>
+              <textarea
+                id="note"
+                name="note"
+                rows={3}
+                maxLength={500}
+                placeholder="예: 9월 초 등록 예정, 상담 완료"
+                className="w-full resize-y rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 dark:bg-input/30"
+              />
+            </div>
             {role === Role.TEACHER && (
               <div className="space-y-2">
                 <Label>전공 (복수 선택 가능)</Label>

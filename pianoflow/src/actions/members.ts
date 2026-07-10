@@ -10,6 +10,7 @@ import {
   adminCredentialSchema,
   lessonAdjustSchema,
   memberCreateSchema,
+  memberNoteSchema,
   memberUpdateSchema,
   teacherCredentialSchema,
   teacherSpecialtySchema,
@@ -47,6 +48,7 @@ export async function adminCreateMember(
         role === Role.TEACHER ? formData.getAll("specialties") : [],
       enrollmentStart: formData.get("enrollmentStart") || null,
       enrollmentEnd: formData.get("enrollmentEnd") || null,
+      note: formData.get("note") || undefined,
     });
     if (!parsed.success) {
       return { ok: false, message: parsed.error.issues[0].message };
@@ -68,6 +70,7 @@ export async function adminCreateMember(
           status: UserStatus.ACTIVE,
           remainingLessons: parsed.data.remainingLessons,
           specialties: parsed.data.specialties,
+          note: parsed.data.note?.trim() || null,
           ...(parsed.data.role === Role.STUDENT &&
           parsed.data.enrollmentStart &&
           parsed.data.enrollmentEnd
@@ -129,6 +132,38 @@ export async function adminUpdateMember(input: {
     return {
       ok: false,
       message: err instanceof Error ? err.message : "수정에 실패했습니다.",
+    };
+  }
+}
+
+export async function adminSetMemberNote(input: {
+  id: string;
+  note: string | null;
+}): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const parsed = memberNoteSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, message: parsed.error.issues[0].message };
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id: parsed.data.id },
+      select: { id: true },
+    });
+    if (!target) return { ok: false, message: "사용자를 찾을 수 없습니다." };
+
+    await prisma.user.update({
+      where: { id: parsed.data.id },
+      data: { note: parsed.data.note?.trim() || null },
+    });
+    revalidatePath("/admin/members");
+    revalidatePath(`/admin/members/${parsed.data.id}`);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "비고 저장에 실패했습니다.",
     };
   }
 }

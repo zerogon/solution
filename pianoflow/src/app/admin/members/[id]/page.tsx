@@ -64,6 +64,7 @@ export default async function MemberDetail({ params }: PageProps) {
               role={member.role}
               status={member.status}
               remainingLessons={member.remainingLessons}
+              note={member.note}
               enrollmentStart={
                 member.enrollmentStart ? formatKstDate(member.enrollmentStart) : null
               }

@@ -172,7 +172,14 @@ export default async function MembersList({ searchParams }: PageProps) {
               <TableBody>
                 {students.map((m) => (
                   <TableRow key={m.id}>
-                    <TableCell className="font-medium">{m.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {m.name}
+                      {m.note && (
+                        <p className="max-w-[16rem] truncate text-xs font-normal text-muted-foreground">
+                          {m.note}
+                        </p>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{m.loginId}</TableCell>
                     <TableCell>
                       <MemberStatusBadge status={m.status} />
