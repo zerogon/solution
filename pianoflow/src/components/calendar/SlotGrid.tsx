@@ -2,7 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Repeat } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -12,12 +15,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import type { Slot } from "@/lib/slots";
+import { parseKstDate, weekdayOf, type Slot } from "@/lib/slots";
 import { ACCENT_AVAILABLE, type TeacherAccent } from "@/lib/teacher-accent";
 import {
   createReservationAction,
   cancelReservationAction,
 } from "@/actions/reservations";
+import { createRecurringAction } from "@/actions/recurring";
 
 interface Props {
   teacherId: string;
@@ -60,7 +64,12 @@ export function SlotGrid({
   accent = "emerald",
 }: Props) {
   const [pendingSlot, setPendingSlot] = useState<Slot | null>(null);
+  const [recurring, setRecurring] = useState(false);
   const [pending, startTransition] = useTransition();
+
+  // 고정 등록 모드: 관리자 + 체크 + 예약 가능(신규) 슬롯
+  const isRecurringCreate =
+    asAdmin && recurring && pendingSlot?.state !== "mine";
 
   function onClick(slot: Slot) {
     if (readOnly) return;
@@ -78,6 +87,18 @@ export function SlotGrid({
         const res = await cancelReservationAction({ reservationId });
         if (res.ok) toast.success("예약이 취소되었습니다.");
         else toast.error(res.message);
+      } else if (asAdmin && recurring && studentId) {
+        const res = await createRecurringAction({
+          studentId,
+          teacherId,
+          weekday: weekdayOf(parseKstDate(dateStr)),
+          hour: slot.hour,
+        });
+        if (res.ok)
+          toast.success(
+            `고정 예약이 등록되었습니다. (예약 ${res.data?.created ?? 0}건 생성)`,
+          );
+        else toast.error(res.message);
       } else {
         const res = await createReservationAction({
           teacherId,
@@ -93,6 +114,23 @@ export function SlotGrid({
 
   return (
     <>
+      {asAdmin && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border border-dashed bg-muted/30 px-3 py-2">
+          <Checkbox
+            id="recurring-toggle"
+            checked={recurring}
+            onCheckedChange={(v) => setRecurring(v === true)}
+          />
+          <Label
+            htmlFor="recurring-toggle"
+            className="flex items-center gap-1.5 text-sm font-normal"
+          >
+            <Repeat aria-hidden className="size-3.5 text-primary/70" />
+            이 시간을 매주 고정으로 등록
+          </Label>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-5">
         {slots.map((slot) => (
           <button
@@ -128,13 +166,19 @@ export function SlotGrid({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {pendingSlot?.state === "mine" ? "예약 취소" : "예약 확인"}
+              {pendingSlot?.state === "mine"
+                ? "예약 취소"
+                : isRecurringCreate
+                  ? "고정 예약 등록"
+                  : "예약 확인"}
             </DialogTitle>
             <DialogDescription>
               {teacherName} 선생님 · {dateStr} {pendingSlot?.hour}:00
               {pendingSlot?.state === "mine"
                 ? " 예약을 취소하시겠습니까?"
-                : " 예약을 진행하시겠습니까?"}
+                : isRecurringCreate
+                  ? " — 매주 같은 요일·시간으로 고정 예약합니다. 진행하시겠습니까?"
+                  : " 예약을 진행하시겠습니까?"}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

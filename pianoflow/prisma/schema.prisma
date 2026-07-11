@@ -69,6 +69,8 @@ model User {
   scheduleExceptions TeacherScheduleException[]
   studentBookings Reservation[]         @relation("StudentReservations")
   teacherBookings Reservation[]         @relation("TeacherReservations")
+  recurringAsTeacher RecurringReservation[] @relation("TeacherRecurring")
+  recurringAsStudent RecurringReservation[] @relation("StudentRecurring")
   creditLogs      LessonCreditLog[]     @relation("StudentCreditLogs")
   actorCreditLogs LessonCreditLog[]     @relation("ActorCreditLogs")
 
@@ -118,14 +120,42 @@ model Reservation {
   feedbackReadAt DateTime?        @map("feedback_read_at") // 학생이 피드백을 확인한 시각
   cancelledAt   DateTime?         @map("cancelled_at")
   cancelledBy   String?           @map("cancelled_by")
+  recurringId   String?           @map("recurring_id") // 고정 예약 템플릿에서 실체화된 예약이면 그 템플릿 id
   createdAt     DateTime          @default(now()) @map("created_at")
 
-  teacher User @relation("TeacherReservations", fields: [teacherId], references: [id])
-  student User @relation("StudentReservations", fields: [studentId], references: [id])
+  teacher   User                  @relation("TeacherReservations", fields: [teacherId], references: [id])
+  student   User                  @relation("StudentReservations", fields: [studentId], references: [id])
+  recurring RecurringReservation? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
 
   @@index([teacherId, slotDatetime])
   @@index([studentId, slotDatetime])
+  @@index([recurringId])
   @@map("reservations")
+}
+
+// 매주 같은 요일·시각에 반복되는 "고정 예약" 템플릿.
+// 롤링 예약 창(bookingHorizon)이 전진할 때 materializeRecurringReservations가
+// 이 규칙을 개별 Reservation 행으로 멱등 실체화한다.
+model RecurringReservation {
+  id                String    @id @default(uuid())
+  teacherId         String    @map("teacher_id")
+  studentId         String    @map("student_id")
+  weekday           Weekday
+  hour              Int
+  active            Boolean   @default(true)
+  // 이 KST 일자(자정 UTC)까지 실체화를 시도 완료. write 최소화용 포인터. parseKstDate 규약과 동일.
+  materializedUntil DateTime? @map("materialized_until")
+  createdBy         String?   @map("created_by") // 등록한 관리자 id → LessonCreditLog.actorId
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  teacher      User          @relation("TeacherRecurring", fields: [teacherId], references: [id], onDelete: Cascade)
+  student      User          @relation("StudentRecurring", fields: [studentId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
+
+  @@index([active])
+  @@index([studentId])
+  @@map("recurring_reservations")
 }
 
 model LessonCreditLog {

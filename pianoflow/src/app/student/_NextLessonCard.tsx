@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Repeat } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export function NextLessonCard({
@@ -7,12 +8,14 @@ export function NextLessonCard({
   teacherName,
   daysUntil,
   action,
+  isRecurring = false,
 }: {
   dateLabel: string;
   timeLabel: string;
   teacherName: string;
   daysUntil: number;
   action: ReactNode;
+  isRecurring?: boolean;
 }) {
   return (
     <div className="rounded-lg border border-primary/25 bg-primary/5">
@@ -27,6 +30,12 @@ export function NextLessonCard({
             ) : (
               <Badge variant="outline" className="font-mono tabular-nums">
                 D-{daysUntil}
+              </Badge>
+            )}
+            {isRecurring && (
+              <Badge variant="secondary">
+                <Repeat aria-hidden className="size-3" />
+                고정
               </Badge>
             )}
           </div>

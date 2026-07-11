@@ -7,9 +7,10 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AgendaRail, type AgendaGroup } from "@/components/schedule/AgendaRail";
 import { EmptyState } from "@/components/empty-state";
-import { CalendarOff, CalendarPlus, Lock } from "lucide-react";
+import { CalendarOff, CalendarPlus, Lock, Repeat } from "lucide-react";
 import { ReservationStatus } from "@/generated/prisma/enums";
 import { canStudentCancel, formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
+import { ensureRecurringMaterialized } from "@/lib/recurring";
 import { listUnreadAnnouncements } from "@/lib/announcements";
 import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { CancelButton } from "./_CancelButton";
@@ -43,6 +44,8 @@ export default async function StudentHome() {
 
   const me = await prisma.user.findUnique({ where: { id: session.user.id } });
   if (!me) redirect("/login");
+
+  await ensureRecurringMaterialized();
 
   const now = new Date();
   const daysLeft = me.enrollmentEnd ? kstDaysBetween(now, me.enrollmentEnd) : null;
@@ -78,6 +81,9 @@ export default async function StudentHome() {
         id: r.id,
         time: dateTimeLabel(r.slotDatetime),
         title: `${r.teacher.name} 선생님`,
+        icon: r.recurringId ? (
+          <Repeat aria-hidden className="size-3.5 shrink-0 text-primary/70" />
+        ) : undefined,
         trailing: cancelOrLocked(r),
       })),
     },
@@ -159,6 +165,7 @@ export default async function StudentHome() {
             teacherName={next.teacher.name}
             daysUntil={kstDaysBetween(now, next.slotDatetime)}
             action={cancelOrLocked(next)}
+            isRecurring={next.recurringId != null}
           />
 
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-2 lg:items-start">

@@ -196,6 +196,25 @@ export const reservationCancelSchema = z.object({
   reservationId: z.string().uuid(),
 });
 
+export const recurringCreateSchema = z.object({
+  studentId: z.string().uuid(),
+  teacherId: z.string().uuid(),
+  weekday: z.nativeEnum(Weekday),
+  hour: z
+    .number()
+    .int()
+    .refine((h) => ALLOWED_HOURS.has(h), "허용되지 않은 시간입니다."),
+});
+
+export const recurringIdSchema = z.object({
+  id: z.string().uuid(),
+});
+
+export const recurringDeleteSchema = z.object({
+  id: z.string().uuid(),
+  cancelFuture: z.boolean(),
+});
+
 export const reservationVisibilitySchema = z.object({
   reservationId: z.string().uuid(),
   isPrivate: z.boolean(),

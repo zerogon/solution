@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { BookingError, type ActionResult } from "@/lib/errors";
+import {
+  BookingError,
+  isPrismaUniqueViolation,
+  type ActionResult,
+} from "@/lib/errors";
+import { resolveEffectiveHours } from "@/lib/recurring";
 import {
   markFeedbackReadSchema,
   reservationBulkVisibilitySchema,
@@ -22,7 +27,6 @@ import {
   kstMinutesOfDay,
   parseKstDate,
   SLOT_HOURS,
-  weekdayOf,
 } from "@/lib/slots";
 import {
   CreditChangeReason,
@@ -30,17 +34,6 @@ import {
   Role,
   UserStatus,
 } from "@/generated/prisma/enums";
-
-const PRISMA_UNIQUE_VIOLATION = "P2002";
-
-function isPrismaUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    (err as { code?: string }).code === PRISMA_UNIQUE_VIOLATION
-  );
-}
 
 export async function createReservationAction(input: {
   teacherId: string;
@@ -110,27 +103,16 @@ export async function createReservationAction(input: {
     const reservation = await prisma.$transaction(async (tx) => {
       const teacher = await tx.user.findUnique({
         where: { id: teacherId },
-        include: { availability: true },
       });
       if (!teacher || teacher.role !== Role.TEACHER) {
         throw new BookingError("선택한 선생님을 찾을 수 없습니다.");
       }
-      const weekday = weekdayOf(slotDate);
       // 날짜 예외가 있으면 요일 기본값을 덮어쓴다. (없으면 요일 기본값)
-      const exception = await tx.teacherScheduleException.findUnique({
-        where: {
-          teacherId_date: {
-            teacherId,
-            date: parseKstDate(formatKstDate(slotDate)),
-          },
-        },
-      });
-      const availabilityRow = teacher.availability.find(
-        (a) => a.weekday === weekday,
+      const effectiveHours = await resolveEffectiveHours(
+        tx,
+        teacherId,
+        formatKstDate(slotDate),
       );
-      const effectiveHours = exception
-        ? exception.hours
-        : (availabilityRow?.hours ?? []);
       if (effectiveHours.length === 0) {
         throw new BookingError("해당 날짜는 예약할 수 없습니다.");
       }

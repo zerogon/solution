@@ -6,8 +6,9 @@ import { WeekStrip } from "@/components/schedule/WeekStrip";
 import { DayTimeline, type TimelineItem } from "@/components/schedule/DayTimeline";
 import { AgendaRail, type AgendaGroup } from "@/components/schedule/AgendaRail";
 import { ReservationStatus } from "@/generated/prisma/enums";
-import { Shield } from "lucide-react";
+import { Repeat, Shield } from "lucide-react";
 import { formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
+import { ensureRecurringMaterialized } from "@/lib/recurring";
 import { LessonFeedbackDialog } from "@/components/lesson-feedback-dialog";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,8 @@ export default async function TeacherHome({ searchParams }: PageProps) {
   const weekStart = parseKstDate(mondayStr);
   const weekEnd = parseKstDate(addDays(mondayStr, 7));
 
+  await ensureRecurringMaterialized();
+
   const week = await prisma.reservation.findMany({
     where: {
       teacherId: session.user.id,
@@ -59,10 +62,16 @@ export default async function TeacherHome({ searchParams }: PageProps) {
     .map((r) => ({
       hour: kstHourOf(r.slotDatetime),
       title: `${r.student.name} 학생`,
-      subtitle: r.forcedByAdmin ? "강제 예약" : "레슨",
+      subtitle: r.forcedByAdmin
+        ? "강제 예약"
+        : r.recurringId
+          ? "고정 레슨"
+          : "레슨",
       tone: r.slotDatetime >= now ? "accent" : "muted",
       icon: r.forcedByAdmin ? (
         <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
+      ) : r.recurringId ? (
+        <Repeat aria-hidden className="size-3.5 shrink-0 text-primary/70" />
       ) : undefined,
       trailing: (
         <LessonFeedbackDialog
@@ -94,6 +103,8 @@ export default async function TeacherHome({ searchParams }: PageProps) {
         tone: "default" as const,
         icon: r.forcedByAdmin ? (
           <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
+        ) : r.recurringId ? (
+          <Repeat aria-hidden className="size-3.5 shrink-0 text-primary/70" />
         ) : undefined,
         trailing: (
           <LessonFeedbackDialog

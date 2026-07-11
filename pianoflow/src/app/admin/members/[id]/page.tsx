@@ -9,13 +9,14 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { Role } from "@/generated/prisma/enums";
+import { Role, UserStatus } from "@/generated/prisma/enums";
 import { formatKstDate } from "@/lib/slots";
 import { MemberStatusBadge } from "@/components/member-status-badge";
 import { MemberActions } from "./_MemberActions";
 import { AdminCredentials } from "./_AdminCredentials";
 import { TeacherCredentials } from "./_TeacherCredentials";
 import { SpecialtyEditor } from "./_SpecialtyEditor";
+import { RecurringSection } from "./_RecurringSection";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -41,6 +42,49 @@ export default async function MemberDetail({ params }: PageProps) {
     },
   });
   if (!member) notFound();
+
+  let recurringCard: React.ReactNode = null;
+  if (member.role === Role.STUDENT) {
+    const [teachers, templates] = await Promise.all([
+      prisma.user.findMany({
+        where: { role: Role.TEACHER, status: UserStatus.ACTIVE },
+        include: { availability: true },
+        orderBy: { name: "asc" },
+      }),
+      prisma.recurringReservation.findMany({
+        where: { studentId: member.id },
+        include: { teacher: { select: { name: true } } },
+        orderBy: [{ active: "desc" }, { weekday: "asc" }, { hour: "asc" }],
+      }),
+    ]);
+    recurringCard = (
+      <Card>
+        <CardHeader>
+          <CardTitle>고정 예약</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RecurringSection
+            studentId={member.id}
+            teachers={teachers.map((t) => ({
+              id: t.id,
+              name: t.name,
+              availability: t.availability.map((a) => ({
+                weekday: a.weekday,
+                hours: a.hours,
+              })),
+            }))}
+            templates={templates.map((t) => ({
+              id: t.id,
+              teacherName: t.teacher.name,
+              weekday: t.weekday,
+              hour: t.hour,
+              active: t.active,
+            }))}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -130,6 +174,8 @@ export default async function MemberDetail({ params }: PageProps) {
           </CardContent>
         </Card>
       )}
+
+      {recurringCard}
 
       {member.role === Role.STUDENT && (
         <Card>

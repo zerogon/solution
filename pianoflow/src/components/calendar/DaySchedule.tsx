@@ -1,4 +1,4 @@
-import { EyeOff } from "lucide-react";
+import { EyeOff, Repeat } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { kstHourOf } from "@/lib/slots";
 import {
@@ -14,6 +14,7 @@ export interface DayScheduleItem {
   studentName: string;
   isMine: boolean;
   isPrivate: boolean;
+  isRecurring: boolean;
 }
 
 interface Props {
@@ -38,6 +39,8 @@ export function DaySchedule({ dateStr, items }: Props) {
     icon:
       it.isPrivate && !it.isMine ? (
         <EyeOff aria-hidden className="size-3.5 text-muted-foreground" />
+      ) : it.isRecurring ? (
+        <Repeat aria-hidden className="size-3.5 shrink-0 text-primary/70" />
       ) : undefined,
     trailing: it.isMine ? (
       <span className="flex items-center gap-1">

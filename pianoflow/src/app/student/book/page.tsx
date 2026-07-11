@@ -20,6 +20,7 @@ import {
   parseKstDate,
   weekdayOf,
 } from "@/lib/slots";
+import { ensureRecurringMaterialized } from "@/lib/recurring";
 import {
   ReservationStatus,
   Role,
@@ -48,6 +49,8 @@ export default async function BookPage({ searchParams }: PageProps) {
         : requested;
   const baseDate = parseKstDate(dateStr);
   const weekday = weekdayOf(baseDate);
+
+  await ensureRecurringMaterialized();
 
   const [teachers, exceptions] = await Promise.all([
     prisma.user.findMany({
@@ -96,6 +99,7 @@ export default async function BookPage({ searchParams }: PageProps) {
       slotDatetime: true,
       studentId: true,
       isPrivate: true,
+      recurringId: true,
       teacher: { select: { name: true } },
       student: { select: { name: true } },
     },
@@ -109,6 +113,7 @@ export default async function BookPage({ searchParams }: PageProps) {
     studentName: r.student.name,
     isMine: r.studentId === session.user.id,
     isPrivate: r.isPrivate,
+    isRecurring: r.recurringId != null,
   }));
 
   let slotsArea: React.ReactNode = (

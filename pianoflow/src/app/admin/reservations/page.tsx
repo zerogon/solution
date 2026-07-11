@@ -14,11 +14,12 @@ import {
   parseKstDate,
   kstHourOf,
 } from "@/lib/slots";
+import { ensureRecurringMaterialized } from "@/lib/recurring";
 import { SlotGrid } from "@/components/calendar/SlotGrid";
 import { PageHeader } from "@/components/page-header";
 import { WeekStrip } from "@/components/schedule/WeekStrip";
 import { DayTimeline, type TimelineItem } from "@/components/schedule/DayTimeline";
-import { Shield } from "lucide-react";
+import { Repeat, Shield } from "lucide-react";
 import { AdminCancelButton } from "./_AdminCancelButton";
 import { AdminForceTeacherSelect } from "./_AdminForceTeacherSelect";
 
@@ -31,6 +32,8 @@ export default async function AdminReservations({ searchParams }: PageProps) {
   const dateStr = sp.date ?? formatKstDate(new Date());
   const baseDate = parseKstDate(dateStr);
   const dayEnd = new Date(baseDate.getTime() + 24 * 60 * 60 * 1000);
+
+  await ensureRecurringMaterialized();
 
   const [teachers, students, reservations] = await Promise.all([
     prisma.user.findMany({
@@ -59,10 +62,14 @@ export default async function AdminReservations({ searchParams }: PageProps) {
   const timeline: TimelineItem[] = reservations.map((r) => ({
     hour: kstHourOf(r.slotDatetime),
     title: `${r.student.name} 학생`,
-    subtitle: `${r.teacher.name} 선생님 · ${r.forcedByAdmin ? "강제" : "일반"}`,
-    tone: r.forcedByAdmin ? "accent" : "default",
+    subtitle: `${r.teacher.name} 선생님 · ${
+      r.forcedByAdmin ? "강제" : r.recurringId ? "고정" : "일반"
+    }`,
+    tone: r.forcedByAdmin || r.recurringId ? "accent" : "default",
     icon: r.forcedByAdmin ? (
       <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
+    ) : r.recurringId ? (
+      <Repeat aria-hidden className="size-3.5 shrink-0 text-primary/70" />
     ) : undefined,
     trailing: <AdminCancelButton reservationId={r.id} />,
   }));
