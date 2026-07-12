@@ -4,13 +4,8 @@ import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { auth, signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import {
-  changePasswordSchema,
-  loginIdSchema,
-  loginSchema,
-} from "@/lib/validators";
+import { changePasswordSchema, loginSchema } from "@/lib/validators";
 import type { ActionResult } from "@/lib/errors";
-import { Role, UserStatus } from "@/generated/prisma/enums";
 
 // dev/http: "authjs.session-token", prod/https: "__Secure-authjs.session-token"
 const SESSION_TOKEN_BASE = ["authjs.session-token", "__Secure-authjs.session-token"];
@@ -43,7 +38,6 @@ export async function loginAction(
 ): Promise<ActionResult> {
   const parsed = loginSchema.safeParse({
     loginId: formData.get("loginId"),
-    // 비밀번호 미입력(학생) 시 null이 들어오므로 undefined로 정규화
     password: formData.get("password") ?? undefined,
   });
   if (!parsed.success) {
@@ -55,7 +49,7 @@ export async function loginAction(
   try {
     await signIn("credentials", {
       loginId: parsed.data.loginId,
-      password: parsed.data.password ?? "",
+      password: parsed.data.password,
       redirect: false,
     });
     // 체크(기본)면 next-auth 기본 30일 지속 쿠키 유지, 미체크면 세션 쿠키로 강등
@@ -64,26 +58,6 @@ export async function loginAction(
   } catch {
     return { ok: false, message: "로그인 ID 또는 비밀번호가 올바르지 않습니다." };
   }
-}
-
-/**
- * 로그인 ID 사전 조회. 학생은 비밀번호 없이 로그인하므로 화면에서
- * 비밀번호 팝업 노출 여부를 판단하기 위해 사용한다.
- */
-export async function checkLoginId(
-  loginId: string,
-): Promise<{ found: boolean; needsPassword: boolean }> {
-  const parsed = loginIdSchema.safeParse(loginId);
-  if (!parsed.success) return { found: false, needsPassword: false };
-
-  const user = await prisma.user.findUnique({
-    where: { loginId: parsed.data },
-    select: { role: true, status: true },
-  });
-  if (!user || user.status !== UserStatus.ACTIVE) {
-    return { found: false, needsPassword: false };
-  }
-  return { found: true, needsPassword: user.role !== Role.STUDENT };
 }
 
 export async function logoutAction() {

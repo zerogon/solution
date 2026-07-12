@@ -36,7 +36,8 @@ export default function PasswordPage() {
           </span>
           <CardTitle>비밀번호 변경</CardTitle>
           <p className="text-sm text-muted-foreground">
-            첫 로그인 시 새 비밀번호를 설정해주세요.
+            초기 비밀번호는 휴대폰 번호 뒤 4자리입니다. 새 비밀번호로 변경할 수
+            있어요.
           </p>
         </CardHeader>
         <CardContent>

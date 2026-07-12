@@ -24,8 +24,7 @@ export const loginIdSchema = z
 
 export const loginSchema = z.object({
   loginId: loginIdSchema,
-  // 학생은 비밀번호 없이 로그인 → 선택값. 선생님/관리자는 authorize에서 필수 처리.
-  password: z.string().optional(),
+  password: z.string().min(1, "비밀번호를 입력해주세요."),
 });
 
 export const teacherCredentialSchema = z

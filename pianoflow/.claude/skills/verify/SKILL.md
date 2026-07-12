@@ -10,7 +10,7 @@ description: pianoflow 앱을 실제로 띄워 변경을 눈으로 확인하는 
 - 타입체크: `npx tsc --noEmit`
 
 ## 로그인 (NextAuth v5 Credentials, curl)
-계정: 시드 기준 loginId = 휴대폰에서 010 뺀 8자리. **DB에 따라 관리자 비밀번호가 다름**: 로컬 Docker DB(seed.ts 그대로)는 `admin1234`, Neon dev DB는 기본 규칙(휴대폰 끝 4자리) `0000` — 관리자 loginId는 둘 다 `00000000`. 로컬 더미 학생은 `00500001`~ / `student1234`.
+계정: 시드 기준 loginId = 휴대폰에서 010 뺀 8자리. **모든 역할이 비밀번호 필수** (학생 포함, 초기값은 휴대폰 끝 4자리). **DB에 따라 관리자 비밀번호가 다름**: 로컬 Docker DB(seed.ts 그대로)는 `admin1234`, Neon dev DB는 기본 규칙(휴대폰 끝 4자리) `0000` — 관리자 loginId는 둘 다 `00000000`. 로컬 더미 학생은 `00500001`~ — 비밀번호는 현재 로컬 DB 기준 끝 4자리(`0001`~). (seed-dummy-students.ts 명시값은 `student1234`지만 초기화를 거쳐 끝 4자리로 바뀐 상태 — 안 맞으면 둘 다 시도)
 
 ```bash
 JAR=cookies.txt

@@ -3,8 +3,8 @@
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { KeyRound, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { AppSidebar } from "./AppSidebar";
 import { AccountMenu } from "./AccountMenu";
 import { BottomTabBar } from "@/components/BottomTabBar";
@@ -151,6 +151,16 @@ export function AppShell({
           <span className="hidden text-sm text-muted-foreground sm:inline">
             {userName}
           </span>
+          <Link
+            href="/account/password"
+            aria-label="비밀번호 변경"
+            className={cn(
+              buttonVariants({ size: "icon-sm", variant: "ghost" }),
+              "text-muted-foreground",
+            )}
+          >
+            <KeyRound className="size-4" />
+          </Link>
           <LogoutButton />
         </div>
       </header>

@@ -1,7 +1,8 @@
 "use client";
 
 import { useTransition } from "react";
-import { ChevronsUpDown, LogOut } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ChevronsUpDown, KeyRound, LogOut } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -29,6 +30,7 @@ export function AccountMenu({
   role: Role;
   collapsed?: boolean;
 }) {
+  const router = useRouter();
   const roleLabel = ROLE_LABEL[role] ?? "";
   const initial = userName.trim().charAt(0) || "?";
   const [, startTransition] = useTransition();
@@ -73,6 +75,10 @@ export function AccountMenu({
           <span className="text-xs text-muted-foreground">{roleLabel}</span>
         </div>
         <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push("/account/password")}>
+          <KeyRound />
+          비밀번호 변경
+        </DropdownMenuItem>
         <DropdownMenuItem
           variant="destructive"
           onClick={() => startTransition(() => logoutAction())}
