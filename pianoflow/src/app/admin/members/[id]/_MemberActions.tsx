@@ -23,6 +23,8 @@ interface Props {
   role: Role;
   status: UserStatus;
   remainingLessons: number;
+  /** 미래 예약에 잡혀 있어 이미 차감된 횟수 (표시용) */
+  reservedFuture: number;
   note: string | null;
   enrollmentStart: string | null;
   enrollmentEnd: string | null;
@@ -33,6 +35,7 @@ export function MemberActions({
   role,
   status,
   remainingLessons,
+  reservedFuture,
   note: initialNote,
   enrollmentStart,
   enrollmentEnd,
@@ -260,7 +263,16 @@ export function MemberActions({
 
       {role === Role.STUDENT && (
         <div className="space-y-2 rounded-md border p-3">
-          <p className="text-sm font-semibold">레슨 조정 (현재 {remainingLessons}회)</p>
+          <p className="text-sm font-semibold">
+            레슨 조정 (남은 {remainingLessons + reservedFuture}회
+            {reservedFuture > 0 && (
+              <span className="font-normal text-muted-foreground">
+                {" "}
+                · 예약됨 {reservedFuture}회
+              </span>
+            )}
+            )
+          </p>
           <div className="flex items-end gap-2">
             <div className="space-y-1">
               <Label htmlFor="delta" className="text-xs">증감(+/-)</Label>

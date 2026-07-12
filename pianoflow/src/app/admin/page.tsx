@@ -138,7 +138,8 @@ export default async function AdminHome() {
       icon: CalendarCheck,
     },
     {
-      label: "레슨 부족 학생",
+      // 미래 예약분을 더한 표시값이 아니라 실제 예약 가능 잔액 기준 — 충전 안내 대상 탐지 목적
+      label: "충전 필요 학생 (예약 가능 2회 미만)",
       value: lowLessonStudents,
       suffix: "명",
       icon: TrendingDown,

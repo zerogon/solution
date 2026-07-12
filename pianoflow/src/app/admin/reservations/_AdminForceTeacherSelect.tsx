@@ -9,7 +9,12 @@ import {
   ComboboxItem,
 } from "@/components/ui/combobox";
 
-type StudentOption = { id: string; name: string; remaining: number };
+type StudentOption = {
+  id: string;
+  name: string;
+  remaining: number;
+  reserved: number;
+};
 
 export function AdminForceTeacherSelect({
   students,
@@ -57,7 +62,8 @@ export function AdminForceTeacherSelect({
             const s = studentById.get(id);
             return (
               <ComboboxItem key={id} value={id}>
-                {s?.name} (남은 {s?.remaining ?? 0}회)
+                {s?.name} (남은 {(s?.remaining ?? 0) + (s?.reserved ?? 0)}회
+                {s?.reserved ? ` · 예약됨 ${s.reserved}회` : ""})
               </ComboboxItem>
             );
           }}

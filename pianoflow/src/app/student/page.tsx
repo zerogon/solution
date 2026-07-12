@@ -11,6 +11,7 @@ import { CalendarOff, CalendarPlus, Lock, Repeat } from "lucide-react";
 import { ReservationStatus } from "@/generated/prisma/enums";
 import { canStudentCancel, formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
 import { ensureRecurringMaterialized } from "@/lib/recurring";
+import { reservedFutureCount } from "@/lib/credits";
 import { listUnreadAnnouncements } from "@/lib/announcements";
 import { AnnouncementPopup } from "@/components/announcements/AnnouncementPopup";
 import { CancelButton } from "./_CancelButton";
@@ -48,6 +49,7 @@ export default async function StudentHome() {
   await ensureRecurringMaterialized();
 
   const now = new Date();
+  const reserved = await reservedFutureCount(me.id, now);
   const daysLeft = me.enrollmentEnd ? kstDaysBetween(now, me.enrollmentEnd) : null;
   const allUpcoming = await prisma.reservation.findMany({
     where: {
@@ -111,9 +113,12 @@ export default async function StudentHome() {
               {me.name}님 · 남은 레슨
             </p>
             <p className="font-mono text-3xl font-semibold tracking-tight tabular-nums text-primary">
-              {me.remainingLessons}
+              {me.remainingLessons + reserved}
               <span className="ml-1 font-sans text-sm font-normal text-muted-foreground">
                 회
+                {reserved > 0 && (
+                  <span className="ml-1 tabular-nums">· 예약됨 {reserved}회</span>
+                )}
               </span>
             </p>
           </div>

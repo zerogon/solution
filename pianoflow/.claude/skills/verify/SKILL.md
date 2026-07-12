@@ -6,11 +6,11 @@ description: pianoflow 앱을 실제로 띄워 변경을 눈으로 확인하는 
 # pianoflow 검증 레시피
 
 ## 빌드/실행
-- `npm run dev` → http://localhost:3000 (Ready ~1초, .env의 Neon Postgres 사용)
+- `npm run dev` → http://localhost:3000 (Ready ~1초). `.env.local`이 있으면 로컬 Docker Postgres(5433), 없으면 .env의 Neon 사용
 - 타입체크: `npx tsc --noEmit`
 
 ## 로그인 (NextAuth v5 Credentials, curl)
-계정: 시드 기준 loginId = 휴대폰에서 010 뺀 8자리. **주의: 실제 dev DB의 관리자 비밀번호는 seed.ts의 `admin1234`가 아니라 기본 규칙(휴대폰 끝 4자리)인 `0000`** — 관리자 `00000000` / `0000`. 학생은 비밀번호 없이 loginId만으로 로그인.
+계정: 시드 기준 loginId = 휴대폰에서 010 뺀 8자리. **DB에 따라 관리자 비밀번호가 다름**: 로컬 Docker DB(seed.ts 그대로)는 `admin1234`, Neon dev DB는 기본 규칙(휴대폰 끝 4자리) `0000` — 관리자 loginId는 둘 다 `00000000`. 로컬 더미 학생은 `00500001`~ / `student1234`.
 
 ```bash
 JAR=cookies.txt

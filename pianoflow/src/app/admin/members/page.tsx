@@ -18,6 +18,8 @@ import {
 } from "@/components/ui/table";
 import { Role } from "@/generated/prisma/enums";
 import { formatKstDate } from "@/lib/slots";
+import { reservedFutureCounts } from "@/lib/credits";
+import { RemainingLessonsLabel } from "@/components/remaining-lessons-label";
 import { PageHeader } from "@/components/page-header";
 import { MemberStatusBadge } from "@/components/member-status-badge";
 import { SpecialtyBadges } from "@/components/specialty-badges";
@@ -71,6 +73,7 @@ export default async function MembersList({ searchParams }: PageProps) {
   });
 
   const students = members.filter((m) => m.role === Role.STUDENT);
+  const reservedMap = await reservedFutureCounts(students.map((s) => s.id));
   const teachers = members.filter((m) => m.role === Role.TEACHER);
   const admins = members.filter((m) => m.role === Role.ADMIN);
 
@@ -184,7 +187,12 @@ export default async function MembersList({ searchParams }: PageProps) {
                     <TableCell>
                       <MemberStatusBadge status={m.status} />
                     </TableCell>
-                    <TableCell className="text-right">{m.remainingLessons}</TableCell>
+                    <TableCell className="text-right">
+                      <RemainingLessonsLabel
+                        remaining={m.remainingLessons}
+                        reserved={reservedMap.get(m.id) ?? 0}
+                      />
+                    </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {m.enrollmentStart && m.enrollmentEnd
                         ? `${formatKstDate(m.enrollmentStart)} ~ ${formatKstDate(m.enrollmentEnd)}`

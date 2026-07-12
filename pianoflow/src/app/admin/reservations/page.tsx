@@ -15,6 +15,7 @@ import {
   kstHourOf,
 } from "@/lib/slots";
 import { ensureRecurringMaterialized } from "@/lib/recurring";
+import { reservedFutureCounts } from "@/lib/credits";
 import { SlotGrid } from "@/components/calendar/SlotGrid";
 import { PageHeader } from "@/components/page-header";
 import { WeekStrip } from "@/components/schedule/WeekStrip";
@@ -54,6 +55,8 @@ export default async function AdminReservations({ searchParams }: PageProps) {
       orderBy: [{ slotDatetime: "asc" }, { teacherId: "asc" }],
     }),
   ]);
+
+  const reservedMap = await reservedFutureCounts(students.map((s) => s.id));
 
   const selectedTeacher =
     teachers.find((t) => t.id === sp.teacher) ?? teachers[0] ?? null;
@@ -157,7 +160,12 @@ export default async function AdminReservations({ searchParams }: PageProps) {
             })}
           </div>
           <AdminForceTeacherSelect
-            students={students.map((s) => ({ id: s.id, name: s.name, remaining: s.remainingLessons }))}
+            students={students.map((s) => ({
+              id: s.id,
+              name: s.name,
+              remaining: s.remainingLessons,
+              reserved: reservedMap.get(s.id) ?? 0,
+            }))}
             currentStudentId={selectedStudentId}
             dateStr={dateStr}
             teacherId={selectedTeacher?.id}

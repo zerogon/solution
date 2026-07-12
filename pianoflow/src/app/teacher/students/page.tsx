@@ -11,6 +11,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ReservationStatus } from "@/generated/prisma/enums";
+import { reservedFutureCounts } from "@/lib/credits";
+import { RemainingLessonsLabel } from "@/components/remaining-lessons-label";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Users } from "lucide-react";
@@ -49,6 +51,8 @@ export default async function TeacherStudents() {
     }
   }
 
+  const reservedMap = await reservedFutureCounts([...byStudent.keys()]);
+
   const rows = Array.from(byStudent.entries()).sort((a, b) =>
     a[1].name.localeCompare(b[1].name, "ko"),
   );
@@ -77,7 +81,12 @@ export default async function TeacherStudents() {
                 <TableRow key={id}>
                   <TableCell>{info.name}</TableCell>
                   <TableCell className="text-right">{info.count}회</TableCell>
-                  <TableCell className="text-right">{info.remaining}회</TableCell>
+                  <TableCell className="text-right">
+                    <RemainingLessonsLabel
+                      remaining={info.remaining}
+                      reserved={reservedMap.get(id) ?? 0}
+                    />
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

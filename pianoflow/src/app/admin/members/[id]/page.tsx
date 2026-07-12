@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Role, UserStatus } from "@/generated/prisma/enums";
 import { formatKstDate } from "@/lib/slots";
+import { reservedFutureCount } from "@/lib/credits";
 import { MemberStatusBadge } from "@/components/member-status-badge";
 import { MemberActions } from "./_MemberActions";
 import { AdminCredentials } from "./_AdminCredentials";
@@ -42,6 +43,9 @@ export default async function MemberDetail({ params }: PageProps) {
     },
   });
   if (!member) notFound();
+
+  const reservedFuture =
+    member.role === Role.STUDENT ? await reservedFutureCount(member.id) : 0;
 
   let recurringCard: React.ReactNode = null;
   if (member.role === Role.STUDENT) {
@@ -108,6 +112,7 @@ export default async function MemberDetail({ params }: PageProps) {
               role={member.role}
               status={member.status}
               remainingLessons={member.remainingLessons}
+              reservedFuture={reservedFuture}
               note={member.note}
               enrollmentStart={
                 member.enrollmentStart ? formatKstDate(member.enrollmentStart) : null

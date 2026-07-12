@@ -9,6 +9,7 @@ import {
   type ActionResult,
 } from "@/lib/errors";
 import { resolveEffectiveHours } from "@/lib/recurring";
+import { reservedFutureCount } from "@/lib/credits";
 import {
   markFeedbackReadSchema,
   reservationBulkVisibilitySchema,
@@ -147,7 +148,14 @@ export async function createReservationAction(input: {
         }
       }
       if (student.remainingLessons < 1 && !isAdminForce) {
-        throw new BookingError("남은 레슨 횟수가 부족합니다.");
+        // 화면 표시값은 미래 예약분을 더해 보여주므로, 표시상 잔여가 있어 보여도
+        // 실잔액이 0일 수 있다 — 원인을 함께 안내한다.
+        const reserved = await reservedFutureCount(student.id, new Date(), tx);
+        throw new BookingError(
+          reserved > 0
+            ? `남은 레슨 횟수가 부족합니다. 남은 횟수는 이미 예약된 레슨 ${reserved}회에 사용될 예정이에요. 기존 예약을 취소하면 다시 예약할 수 있습니다.`
+            : "남은 레슨 횟수가 부족합니다.",
+        );
       }
 
       // 동일 학생이 같은 시간에 다른 선생님과 중복 예약 불가
