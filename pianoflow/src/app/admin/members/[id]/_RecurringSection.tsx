@@ -45,6 +45,7 @@ const SKIP_REASON_LABEL: Record<string, string> = {
   STUDENT_INACTIVE: "학생이 활성 상태가 아님",
   ENROLLMENT_OUT: "등록 기간 밖",
   DUPLICATE: "학생이 같은 시각에 이미 예약 보유",
+  CANCELLED: "취소된 회차 유지(재생성 안 함)",
   SLOT_TAKEN: "다른 예약이 슬롯을 선점",
 };
 

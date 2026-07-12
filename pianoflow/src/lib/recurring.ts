@@ -41,6 +41,7 @@ export type SkipReason =
   | "STUDENT_INACTIVE" // 학생 DORMANT/WITHDRAWN
   | "ENROLLMENT_OUT" // 등록 기간 밖
   | "DUPLICATE" // 학생이 이미 그 시각에 예약 보유
+  | "CANCELLED" // 이 템플릿의 회차를 학생이 취소함(부활 금지 tombstone)
   | "SLOT_TAKEN"; // 선생님 슬롯을 타인이 선점(부분 유니크 P2002)
 
 export interface MaterializeSkip {
@@ -107,15 +108,24 @@ async function materializeOne(
     return "ENROLLMENT_OUT";
   }
 
-  // 같은 학생이 같은 시각에 이미 예약을 가지고 있으면 스킵(다른 선생님과의 중복 포함)
+  // 같은 학생이 같은 시각에 이미 예약을 가지고 있으면 스킵(다른 선생님과의 중복 포함).
+  // 이 템플릿에서 실체화됐다가 취소된 회차(tombstone)도 스킵 — 포인터 리셋 후
+  // 재실체화가 학생의 개별 취소를 되살려 크레딧을 재차감하는 것을 막는다.
+  // 수동 예약의 취소는 tombstone이 아니다(recurringId 없음).
   const dup = await tx.reservation.findFirst({
     where: {
-      studentId: student.id,
       slotDatetime: slot,
-      status: ReservationStatus.ACTIVE,
+      OR: [
+        { studentId: student.id, status: ReservationStatus.ACTIVE },
+        { recurringId: tpl.id, status: ReservationStatus.CANCELLED },
+      ],
     },
   });
-  if (dup) return "DUPLICATE";
+  if (dup) {
+    return dup.status === ReservationStatus.CANCELLED
+      ? "CANCELLED"
+      : "DUPLICATE";
+  }
 
   // 선생님 슬롯 선점 시 partial unique가 P2002 → 호출부에서 SLOT_TAKEN으로 처리
   const created = await tx.reservation.create({
@@ -211,7 +221,8 @@ export async function materializeRecurringReservations(
 /**
  * 실체화 조건이 바뀌었을 때(등록 기간 연장, 스케줄 예외 변경, 회원 재활성화)
  * 해당 템플릿들의 포인터를 리셋해 현재 창을 처음부터 재시도하게 한다.
- * 재시도해도 DUPLICATE 체크 + 부분 유니크(P2002)가 중복 생성을 막으므로 안전.
+ * 재시도해도 DUPLICATE 체크 + 부분 유니크(P2002)가 중복 생성을 막고,
+ * 학생이 취소한 회차는 CANCELLED tombstone이 부활을 막으므로 안전.
  */
 export async function resetMaterialization(where: {
   studentId?: string;
