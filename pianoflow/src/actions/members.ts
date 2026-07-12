@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { generateLoginId, getPhoneLast4 } from "@/lib/login-id";
-import { parseKstDate } from "@/lib/slots";
+import { formatKstDate, kstHourOf, parseKstDate } from "@/lib/slots";
 import {
   adminCredentialSchema,
   lessonAdjustSchema,
@@ -22,6 +22,7 @@ import {
 } from "@/lib/recurring";
 import {
   CreditChangeReason,
+  ReservationStatus,
   Role,
   Specialty,
   UserStatus,
@@ -468,6 +469,81 @@ export async function adminResetPassword(input: {
     return {
       ok: false,
       message: err instanceof Error ? err.message : "비밀번호 초기화 실패",
+    };
+  }
+}
+
+const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+
+/** 예: "07.12 (토) 14:00" — 학생 예약 내역 화면과 동일한 포맷 */
+function dateTimeLabel(d: Date) {
+  const dateStr = formatKstDate(d);
+  const dow = DOW[new Date(parseKstDate(dateStr).getTime() + 9 * 3600000).getUTCDay()];
+  return `${dateStr.slice(5).replace("-", ".")} (${dow}) ${String(kstHourOf(d)).padStart(2, "0")}:00`;
+}
+
+export interface AdminStudentReservationItem {
+  id: string;
+  timeLabel: string;
+  teacherName: string;
+  status: "cancelled" | "done" | "upcoming";
+  isRecurring: boolean;
+}
+
+export interface AdminStudentReservationGroup {
+  month: string;
+  items: AdminStudentReservationItem[];
+}
+
+/** 학생이 로그인해 보는 예약 내역(최근 50건, 월별 그룹)을 관리자용으로 조회 */
+export async function adminGetStudentReservations(input: {
+  studentId: string;
+}): Promise<ActionResult<{ groups: AdminStudentReservationGroup[] }>> {
+  try {
+    await requireAdmin();
+    const student = await prisma.user.findUnique({
+      where: { id: input.studentId },
+      select: { role: true },
+    });
+    if (!student || student.role !== Role.STUDENT) {
+      return { ok: false, message: "학생을 찾을 수 없습니다." };
+    }
+
+    const all = await prisma.reservation.findMany({
+      where: { studentId: input.studentId },
+      include: { teacher: { select: { name: true } } },
+      orderBy: { slotDatetime: "desc" },
+      take: 50,
+    });
+    const now = new Date();
+
+    const groups: AdminStudentReservationGroup[] = [];
+    for (const r of all) {
+      const month = formatKstDate(r.slotDatetime).slice(0, 7).replace("-", ".");
+      let group = groups.at(-1);
+      if (!group || group.month !== month) {
+        group = { month, items: [] };
+        groups.push(group);
+      }
+      group.items.push({
+        id: r.id,
+        timeLabel: dateTimeLabel(r.slotDatetime),
+        teacherName: r.teacher.name,
+        status:
+          r.status === ReservationStatus.CANCELLED
+            ? "cancelled"
+            : r.slotDatetime < now
+              ? "done"
+              : "upcoming",
+        isRecurring: r.recurringId != null,
+      });
+    }
+    return { ok: true, data: { groups } };
+  } catch (err) {
+    return {
+      ok: false,
+      message:
+        err instanceof Error ? err.message : "예약 내역 조회에 실패했습니다.",
     };
   }
 }
