@@ -1,7 +1,8 @@
 "use client";
 
+import { useRef } from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { bookingHorizon, formatKstDate, parseKstDate } from "@/lib/slots";
@@ -17,9 +18,16 @@ function kstParts(dateStr: string) {
   return { dow: kst.getUTCDay(), date: kst.getUTCDate(), month: kst.getUTCMonth() + 1 };
 }
 
+// 스와이프 판정: 수평 이동이 이 값 이상이고 수직 이동보다 확실히 클 때만 주 이동
+const SWIPE_MIN_X = 48;
+const SWIPE_XY_RATIO = 1.5;
+
 export function WeekStrip({ selectedDateStr }: { selectedDateStr: string }) {
   const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
 
   const { dow } = kstParts(selectedDateStr);
   const mondayStr = addDays(selectedDateStr, dow === 0 ? -6 : 1 - dow);
@@ -44,8 +52,36 @@ export function WeekStrip({ selectedDateStr }: { selectedDateStr: string }) {
     return `${pathname}?${sp.toString()}`;
   };
 
+  const onTouchStart = (e: React.TouchEvent) => {
+    swiped.current = false;
+    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    const start = touchStart.current;
+    touchStart.current = null;
+    if (!start) return;
+    const dx = e.changedTouches[0].clientX - start.x;
+    const dy = e.changedTouches[0].clientY - start.y;
+    if (Math.abs(dx) < SWIPE_MIN_X || Math.abs(dx) <= Math.abs(dy) * SWIPE_XY_RATIO) return;
+    if (dx < 0 ? nextDisabled : prevDisabled) return;
+    swiped.current = true;
+    router.push(hrefFor(addDays(selectedDateStr, dx < 0 ? 7 : -7)));
+  };
+  // 스와이프로 판정된 터치의 잔여 click이 날짜 링크를 누르지 않도록 차단
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (!swiped.current) return;
+    swiped.current = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
   return (
-    <div className="rounded-lg border bg-card">
+    <div
+      className="touch-pan-y rounded-lg border bg-card"
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      onClickCapture={onClickCapture}
+    >
       <div className="flex items-center justify-between px-3 py-2.5">
         {prevDisabled ? (
           <span
