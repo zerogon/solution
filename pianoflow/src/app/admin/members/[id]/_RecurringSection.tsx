@@ -40,6 +40,14 @@ const WEEKDAY_LABEL: Record<Weekday, string> = {
   SUN: "일",
 };
 
+const SKIP_REASON_LABEL: Record<string, string> = {
+  NO_AVAILABILITY: "해당 주 선생님 스케줄에 없는 시간",
+  STUDENT_INACTIVE: "학생이 활성 상태가 아님",
+  ENROLLMENT_OUT: "등록 기간 밖",
+  DUPLICATE: "학생이 같은 시각에 이미 예약 보유",
+  SLOT_TAKEN: "다른 예약이 슬롯을 선점",
+};
+
 export interface TeacherOption {
   id: string;
   name: string;
@@ -132,9 +140,23 @@ export function RecurringSection({
         hour: Number(hour),
       });
       if (res.ok) {
-        toast.success(
-          `고정 예약이 등록되었습니다. (예약 ${res.data?.created ?? 0}건 생성)`,
-        );
+        const created = res.data?.created ?? 0;
+        const skipped = res.data?.skipped ?? [];
+        if (created === 0 && skipped.length > 0) {
+          // 대표 사유(가장 많이 발생한 것)를 안내
+          const counts = new Map<string, number>();
+          for (const s of skipped) {
+            counts.set(s.reason, (counts.get(s.reason) ?? 0) + 1);
+          }
+          const top = [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+          toast.warning(
+            `고정 예약은 등록됐지만 이번 예약 창에는 예약이 생성되지 않았습니다. (사유: ${SKIP_REASON_LABEL[top] ?? top})`,
+          );
+        } else {
+          toast.success(
+            `고정 예약이 등록되었습니다. (예약 ${created}건 생성${skipped.length > 0 ? `, ${skipped.length}건 건너뜀` : ""})`,
+          );
+        }
         resetForm();
       } else {
         toast.error(res.message);

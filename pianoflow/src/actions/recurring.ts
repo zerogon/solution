@@ -12,7 +12,10 @@ import {
   recurringDeleteSchema,
   recurringIdSchema,
 } from "@/lib/validators";
-import { materializeRecurringReservations } from "@/lib/recurring";
+import {
+  materializeRecurringReservations,
+  type SkipReason,
+} from "@/lib/recurring";
 import {
   CreditChangeReason,
   ReservationStatus,
@@ -41,7 +44,12 @@ export async function createRecurringAction(input: {
   teacherId: string;
   weekday: import("@/generated/prisma/enums").Weekday;
   hour: number;
-}): Promise<ActionResult<{ created: number }>> {
+}): Promise<
+  ActionResult<{
+    created: number;
+    skipped: { dateStr: string; reason: SkipReason }[];
+  }>
+> {
   try {
     const session = await requireAdmin();
     const parsed = recurringCreateSchema.safeParse(input);
@@ -66,6 +74,18 @@ export async function createRecurringAction(input: {
     if (student.status !== UserStatus.ACTIVE) {
       return { ok: false, message: "활성 상태의 회원만 고정 예약할 수 있습니다." };
     }
+    // 등록 기간이 이미 끝난 학생은 모든 회차가 스킵되므로 등록 자체를 차단
+    // (일반 예약의 등록 기간 규칙과 동일: 종료일 당일까지 허용)
+    if (
+      student.enrollmentEnd &&
+      Date.now() >= student.enrollmentEnd.getTime() + 24 * 60 * 60 * 1000
+    ) {
+      return {
+        ok: false,
+        message:
+          "등록 기간이 종료되어 고정 예약을 등록할 수 없습니다. 등록 기간을 먼저 연장해주세요.",
+      };
+    }
     // 요일 기본 스케줄에 그 시간이 없으면 실체화되지 않으므로 등록 차단
     if (!availability || !availability.hours.includes(hour)) {
       return {
@@ -75,7 +95,7 @@ export async function createRecurringAction(input: {
       };
     }
 
-    await prisma.recurringReservation.create({
+    const template = await prisma.recurringReservation.create({
       data: {
         teacherId,
         studentId,
@@ -85,11 +105,17 @@ export async function createRecurringAction(input: {
       },
     });
 
-    // 등록 즉시 현재 예약 창을 채운다
+    // 등록 즉시 현재 예약 창을 채운다. 결과는 이 템플릿 것만 골라 반환.
     const result = await materializeRecurringReservations(new Date());
+    const created = result.created.filter(
+      (c) => c.templateId === template.id,
+    ).length;
+    const skipped = result.skipped
+      .filter((s) => s.templateId === template.id)
+      .map(({ dateStr, reason }) => ({ dateStr, reason }));
 
     revalidateRecurring(studentId);
-    return { ok: true, data: { created: result.created } };
+    return { ok: true, data: { created, skipped } };
   } catch (err) {
     if (isPrismaUniqueViolation(err)) {
       return {

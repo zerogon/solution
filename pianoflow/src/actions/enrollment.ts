@@ -7,6 +7,10 @@ import { enrollmentPeriodSchema } from "@/lib/validators";
 import type { ActionResult } from "@/lib/errors";
 import { Role } from "@/generated/prisma/enums";
 import { parseKstDate } from "@/lib/slots";
+import {
+  materializeRecurringReservations,
+  resetMaterialization,
+} from "@/lib/recurring";
 
 export async function adminSetEnrollmentPeriod(input: {
   studentId: string;
@@ -40,8 +44,16 @@ export async function adminSetEnrollmentPeriod(input: {
       },
     });
 
+    // 등록 기간이 바뀌면 스킵됐던 고정 예약 회차가 유효해질 수 있으므로 재실체화
+    await resetMaterialization({ studentId: parsed.data.studentId });
+    await materializeRecurringReservations(new Date());
+
     revalidatePath(`/admin/members/${parsed.data.studentId}`);
     revalidatePath("/admin/members");
+    revalidatePath("/admin/reservations");
+    revalidatePath("/student");
+    revalidatePath("/student/book");
+    revalidatePath("/teacher");
     return { ok: true };
   } catch (err) {
     return {

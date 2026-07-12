@@ -49,8 +49,13 @@ export interface MaterializeSkip {
   reason: SkipReason;
 }
 
+export interface MaterializeCreated {
+  templateId: string;
+  dateStr: string;
+}
+
 export interface MaterializeResult {
-  created: number;
+  created: MaterializeCreated[];
   skipped: MaterializeSkip[];
 }
 
@@ -163,7 +168,7 @@ export async function materializeRecurringReservations(
     },
   });
 
-  let created = 0;
+  const created: MaterializeCreated[] = [];
   const skipped: MaterializeSkip[] = [];
 
   for (const tpl of templates) {
@@ -183,7 +188,7 @@ export async function materializeRecurringReservations(
           materializeOne(tx, tpl, dateStr),
         );
         if (skip) skipped.push({ templateId: tpl.id, dateStr, reason: skip });
-        else created++;
+        else created.push({ templateId: tpl.id, dateStr });
       } catch (err) {
         if (isPrismaUniqueViolation(err)) {
           skipped.push({ templateId: tpl.id, dateStr, reason: "SLOT_TAKEN" });
@@ -201,6 +206,21 @@ export async function materializeRecurringReservations(
   }
 
   return { created, skipped };
+}
+
+/**
+ * 실체화 조건이 바뀌었을 때(등록 기간 연장, 스케줄 예외 변경, 회원 재활성화)
+ * 해당 템플릿들의 포인터를 리셋해 현재 창을 처음부터 재시도하게 한다.
+ * 재시도해도 DUPLICATE 체크 + 부분 유니크(P2002)가 중복 생성을 막으므로 안전.
+ */
+export async function resetMaterialization(where: {
+  studentId?: string;
+  teacherId?: string;
+}): Promise<void> {
+  await prisma.recurringReservation.updateMany({
+    where: { ...where, active: true },
+    data: { materializedUntil: null },
+  });
 }
 
 /**

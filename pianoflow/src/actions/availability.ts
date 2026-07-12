@@ -15,6 +15,16 @@ import {
   weekdayOf,
 } from "@/lib/slots";
 import { ReservationStatus, Role } from "@/generated/prisma/enums";
+import {
+  materializeRecurringReservations,
+  resetMaterialization,
+} from "@/lib/recurring";
+
+/** 스케줄 변경으로 스킵됐던 고정 예약 회차가 유효해질 수 있으므로 재실체화 */
+async function rematerializeForTeacher(teacherId: string) {
+  await resetMaterialization({ teacherId });
+  await materializeRecurringReservations(new Date());
+}
 
 export async function adminSetTeacherAvailability(input: {
   teacherId: string;
@@ -45,6 +55,8 @@ export async function adminSetTeacherAvailability(input: {
         })),
       }),
     ]);
+
+    await rematerializeForTeacher(parsed.data.teacherId);
 
     revalidatePath(`/admin/teachers/${input.teacherId}/availability`);
     revalidatePath("/admin/members");
@@ -126,6 +138,7 @@ export async function adminSetTeacherScheduleException(input: {
       });
     });
 
+    await rematerializeForTeacher(teacherId);
     revalidateSchedule(teacherId);
     return { ok: true };
   } catch (err) {
@@ -178,6 +191,7 @@ export async function adminClearTeacherScheduleException(input: {
       });
     });
 
+    await rematerializeForTeacher(teacherId);
     revalidateSchedule(teacherId);
     return { ok: true };
   } catch (err) {

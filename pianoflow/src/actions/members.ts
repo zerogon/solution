@@ -17,6 +17,10 @@ import {
 } from "@/lib/validators";
 import type { ActionResult } from "@/lib/errors";
 import {
+  materializeRecurringReservations,
+  resetMaterialization,
+} from "@/lib/recurring";
+import {
   CreditChangeReason,
   Role,
   Specialty,
@@ -187,6 +191,12 @@ export async function adminSetStatus(input: {
       where: { id: input.id },
       data: { status: input.status },
     });
+    // 재활성화 시 STUDENT_INACTIVE로 스킵됐던 고정 예약 회차를 재실체화
+    if (target.role === Role.STUDENT && input.status === UserStatus.ACTIVE) {
+      await resetMaterialization({ studentId: input.id });
+      await materializeRecurringReservations(new Date());
+      revalidatePath("/admin/reservations");
+    }
     revalidatePath("/admin/members");
     revalidatePath(`/admin/members/${input.id}`);
     return { ok: true };
