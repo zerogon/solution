@@ -56,26 +56,35 @@ export default async function AdminReservations({ searchParams }: PageProps) {
     }),
   ]);
 
-  const reservedMap = await reservedFutureCounts(students.map((s) => s.id));
+  // 강제 예약 셀렉트(활성 학생) + 예약 현황 타임라인(비활성 학생 예약 포함) 둘 다 커버
+  const reservedMap = await reservedFutureCounts([
+    ...new Set([
+      ...students.map((s) => s.id),
+      ...reservations.map((r) => r.studentId),
+    ]),
+  ]);
 
   const selectedTeacher =
     teachers.find((t) => t.id === sp.teacher) ?? teachers[0] ?? null;
   const selectedStudentId = sp.student ?? students[0]?.id;
 
-  const timeline: TimelineItem[] = reservations.map((r) => ({
-    hour: kstHourOf(r.slotDatetime),
-    title: `${r.student.name} 학생`,
-    subtitle: `${r.teacher.name} 선생님 · ${
-      r.forcedByAdmin ? "강제" : r.recurringId ? "고정" : "일반"
-    }`,
-    tone: r.forcedByAdmin || r.recurringId ? "accent" : "default",
-    icon: r.forcedByAdmin ? (
-      <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
-    ) : r.recurringId ? (
-      <Repeat aria-hidden className="size-3.5 shrink-0 text-primary/70" />
-    ) : undefined,
-    trailing: <AdminCancelButton reservationId={r.id} />,
-  }));
+  const timeline: TimelineItem[] = reservations.map((r) => {
+    const reserved = reservedMap.get(r.studentId) ?? 0;
+    return {
+      hour: kstHourOf(r.slotDatetime),
+      title: `${r.student.name} 학생 · 남은 ${r.student.remainingLessons + reserved}회`,
+      subtitle: `${r.teacher.name} 선생님 · ${
+        r.forcedByAdmin ? "강제" : r.recurringId ? "고정" : "일반"
+      }`,
+      tone: r.forcedByAdmin || r.recurringId ? "accent" : "default",
+      icon: r.forcedByAdmin ? (
+        <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
+      ) : r.recurringId ? (
+        <Repeat aria-hidden className="size-3.5 shrink-0 text-primary/70" />
+      ) : undefined,
+      trailing: <AdminCancelButton reservationId={r.id} />,
+    };
+  });
 
   let forceArea: React.ReactNode = null;
   if (selectedTeacher && selectedStudentId) {
