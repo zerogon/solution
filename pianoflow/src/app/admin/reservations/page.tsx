@@ -13,6 +13,7 @@ import {
   generateSlots,
   parseKstDate,
   kstHourOf,
+  kstMinutesOfDay,
 } from "@/lib/slots";
 import { ensureRecurringMaterialized } from "@/lib/recurring";
 import { reservedFutureCounts } from "@/lib/credits";
@@ -30,7 +31,11 @@ interface PageProps {
 
 export default async function AdminReservations({ searchParams }: PageProps) {
   const sp = await searchParams;
-  const dateStr = sp.date ?? formatKstDate(new Date());
+  const todayStr = formatKstDate(new Date());
+  const dateStr = sp.date ?? todayStr;
+  const isToday = dateStr === todayStr;
+  const nowMin = kstMinutesOfDay(new Date());
+  const nowHour = Math.floor(nowMin / 60);
   const baseDate = parseKstDate(dateStr);
   const dayEnd = new Date(baseDate.getTime() + 24 * 60 * 60 * 1000);
 
@@ -70,13 +75,23 @@ export default async function AdminReservations({ searchParams }: PageProps) {
 
   const timeline: TimelineItem[] = reservations.map((r) => {
     const reserved = reservedMap.get(r.studentId) ?? 0;
+    const hour = kstHourOf(r.slotDatetime);
+    // 지난/진행중은 시간 톤 우선, 그 외에는 기존 의미 톤(강제·고정=accent) 유지
+    const tone =
+      dateStr < todayStr || (isToday && hour < nowHour)
+        ? "muted"
+        : isToday && hour === nowHour
+          ? "now"
+          : r.forcedByAdmin || r.recurringId
+            ? "accent"
+            : "default";
     return {
-      hour: kstHourOf(r.slotDatetime),
+      hour,
       title: `${r.student.name} 학생 · 남은 ${r.student.remainingLessons + reserved}회`,
       subtitle: `${r.teacher.name} 선생님 · ${
         r.forcedByAdmin ? "강제" : r.recurringId ? "고정" : "일반"
       }`,
-      tone: r.forcedByAdmin || r.recurringId ? "accent" : "default",
+      tone,
       icon: r.forcedByAdmin ? (
         <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
       ) : r.recurringId ? (
@@ -137,7 +152,12 @@ export default async function AdminReservations({ searchParams }: PageProps) {
             {reservations.length}건
           </span>
         </h2>
-        <DayTimeline items={timeline} emptyHint="이 날은 예약이 없습니다." />
+        <DayTimeline
+          items={timeline}
+          emptyHint="이 날은 예약이 없습니다."
+          nowMinutes={isToday ? nowMin : undefined}
+          collapseEmptyHours
+        />
       </section>
 
       <Card>

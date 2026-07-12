@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { addMonth } from "@/lib/month";
 import { teacherDotClass } from "@/lib/teacher-colors";
+import { reservedFutureCounts } from "@/lib/credits";
 import { buildTeacherLessonTrend, trendMonths } from "@/lib/lesson-trend";
 import { MonthlyTeacherLessons } from "./_MonthlyTeacherLessons";
 import { TeacherLessonTrend } from "./_TeacherLessonTrend";
@@ -89,6 +90,10 @@ export default async function AdminHome() {
   const nowMin = kstMinutesOfDay(new Date());
   const nowHour = Math.floor(nowMin / 60);
 
+  const reservedMap = await reservedFutureCounts([
+    ...new Set(todayList.map((r) => r.studentId)),
+  ]);
+
   const dotByTeacher = new Map(
     teachers.map((t, i) => [t.id, teacherDotClass(i)]),
   );
@@ -100,9 +105,10 @@ export default async function AdminHome() {
 
   const todayTimeline: TimelineItem[] = todayList.map((r) => {
     const hour = kstHourOf(r.slotDatetime);
+    const reserved = reservedMap.get(r.studentId) ?? 0;
     return {
       hour,
-      title: `${r.student.name} 학생`,
+      title: `${r.student.name} 학생 · 남은 ${r.student.remainingLessons + reserved}회`,
       subtitle: `${r.teacher.name} 선생님${r.forcedByAdmin ? " · 강제" : ""}`,
       tone:
         hour < nowHour

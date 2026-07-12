@@ -7,7 +7,12 @@ import { DayTimeline, type TimelineItem } from "@/components/schedule/DayTimelin
 import { AgendaRail, type AgendaGroup } from "@/components/schedule/AgendaRail";
 import { ReservationStatus } from "@/generated/prisma/enums";
 import { Repeat, Shield } from "lucide-react";
-import { formatKstDate, parseKstDate, kstHourOf } from "@/lib/slots";
+import {
+  formatKstDate,
+  parseKstDate,
+  kstHourOf,
+  kstMinutesOfDay,
+} from "@/lib/slots";
 import { ensureRecurringMaterialized } from "@/lib/recurring";
 import { LessonFeedbackDialog } from "@/components/lesson-feedback-dialog";
 import { cn } from "@/lib/utils";
@@ -56,18 +61,38 @@ export default async function TeacherHome({ searchParams }: PageProps) {
   });
 
   const now = new Date();
+  const isToday = selectedDate === todayStr;
+  const nowMin = kstMinutesOfDay(now);
+  const nowHour = Math.floor(nowMin / 60);
   const selLabel = `${selectedDate.slice(5).replace("-", ".")} (${dowLabel(selectedDate)})`;
-  const dayItems: TimelineItem[] = week
-    .filter((r) => formatKstDate(r.slotDatetime) === selectedDate)
-    .map((r) => ({
-      hour: kstHourOf(r.slotDatetime),
+  const dayReservations = week.filter(
+    (r) => formatKstDate(r.slotDatetime) === selectedDate,
+  );
+  const next = isToday
+    ? dayReservations.find((r) => kstHourOf(r.slotDatetime) > nowHour)
+    : undefined;
+  const nextHour = next ? kstHourOf(next.slotDatetime) : undefined;
+  const dayItems: TimelineItem[] = dayReservations.map((r) => {
+    const hour = kstHourOf(r.slotDatetime);
+    return {
+      hour,
       title: `${r.student.name} 학생`,
       subtitle: r.forcedByAdmin
         ? "강제 예약"
         : r.recurringId
           ? "고정 레슨"
           : "레슨",
-      tone: r.slotDatetime >= now ? "accent" : "muted",
+      tone: isToday
+        ? hour < nowHour
+          ? "muted"
+          : hour === nowHour
+            ? "now"
+            : hour === nextHour
+              ? "accent"
+              : "default"
+        : selectedDate < todayStr
+          ? "muted"
+          : "default",
       icon: r.forcedByAdmin ? (
         <Shield aria-hidden className="size-3.5 shrink-0 text-primary/70" />
       ) : r.recurringId ? (
@@ -82,7 +107,8 @@ export default async function TeacherHome({ searchParams }: PageProps) {
           initialFeedback={r.feedback ?? ""}
         />
       ),
-    }));
+    };
+  });
 
   // 선택일을 제외한 그 주 나머지 일정
   const otherByDate = new Map<string, typeof week>();
@@ -138,7 +164,12 @@ export default async function TeacherHome({ searchParams }: PageProps) {
               <span className="ml-1.5 text-xs font-medium text-primary">오늘</span>
             )}
           </h2>
-          <DayTimeline items={dayItems} emptyHint="이 날은 예약된 레슨이 없습니다." />
+          <DayTimeline
+            items={dayItems}
+            emptyHint="이 날은 예약된 레슨이 없습니다."
+            nowMinutes={isToday ? nowMin : undefined}
+            collapseEmptyHours
+          />
         </section>
 
         {weekGroups.length > 0 && (
