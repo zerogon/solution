@@ -137,3 +137,10 @@
     @apply font-sans;
   }
 }
+
+/* 주차 이동 중(WeekStrip이 낙관적으로 새 주를 보여주고 서버 응답 대기)
+   날짜 종속 콘텐츠를 흐리게 해 스트립-콘텐츠 불일치 구간을 표시 */
+body:has([data-week-pending]) [data-week-dim] {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}

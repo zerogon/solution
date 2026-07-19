@@ -145,7 +145,11 @@ export default async function AdminReservations({ searchParams }: PageProps) {
 
       <WeekStrip selectedDateStr={dateStr} />
 
-      <section className="space-y-2">
+      <section
+        key={dateStr}
+        data-week-dim
+        className="space-y-2 animate-in fade-in duration-200"
+      >
         <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
           {dateStr.slice(5).replace("-", ".")} 예약 현황
           <span className="ml-1.5 text-xs tabular-nums text-muted-foreground">

@@ -112,7 +112,11 @@ export default async function TeacherPeek({ searchParams }: PageProps) {
           <WeekStrip selectedDateStr={dateStr} />
 
           {selected && (
-            <section className="space-y-2">
+            <section
+              key={dateStr}
+              data-week-dim
+              className="space-y-2 animate-in fade-in duration-200"
+            >
               <h2 className="px-0.5 text-sm font-medium text-muted-foreground">
                 {selected.name} 선생님 · {dateStr.slice(5).replace("-", ".")}
               </h2>

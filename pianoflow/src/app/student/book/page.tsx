@@ -192,6 +192,11 @@ export default async function BookPage({ searchParams }: PageProps) {
         </CardContent>
       </Card>
 
+      <div
+        key={dateStr}
+        data-week-dim
+        className="space-y-5 animate-in fade-in duration-200"
+      >
       <Card>
         <CardHeader>
           <StepTitle n={2}>선생님 선택</StepTitle>
@@ -293,6 +298,7 @@ export default async function BookPage({ searchParams }: PageProps) {
           <DaySchedule dateStr={dateStr} items={dayScheduleItems} />
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }

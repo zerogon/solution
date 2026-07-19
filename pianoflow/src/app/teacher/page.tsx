@@ -151,7 +151,11 @@ export default async function TeacherHome({ searchParams }: PageProps) {
 
       <WeekStrip selectedDateStr={selectedDate} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+      <div
+        key={selectedDate}
+        data-week-dim
+        className="grid grid-cols-1 gap-6 animate-in fade-in duration-200 lg:grid-cols-2 lg:items-start"
+      >
         <section
           className={cn(
             "space-y-2",
