@@ -1,71 +1,73 @@
 /**
- * Lotte Resort crawl configuration.
+ * Lotte Resort crawl configuration — lottehotel.com integrated site.
  *
- * The site is a SPA with menu / modal / calendar widgets — selector-string-only
- * config (the original shape) couldn't represent it. We instead keep labels,
- * URLs, and timeouts here, and call Playwright's accessibility APIs
- * (`getByRole`, `getByText`) from login/search/parse directly. That matches
- * how `npx playwright codegen` captures elements on this site.
+ * lotteresort.com was merged into LOTTE HOTELS & RESORTS (confirmed
+ * 2026-07-26): every old path 301s to www.lottehotel.com, and resort booking
+ * lives on the resort.lottehotel.com subdomain. The room list there is served
+ * by a plain JSON API that works without a session, so the crawler only uses
+ * the browser for login (member-rate session cookies) and calls the API via
+ * `page.request` for search — no calendar/DOM interaction at all.
  *
- * If any label below stops matching (site copy change), update it here only —
- * login/search/parse reference these constants, not hard-coded strings.
+ * Discovery notes:
+ * - room list:  GET {roomListApiUrl}?rsvType=BAR&bizCd=..&checkinDt=YYYYMMDD&checkoutDt=YYYYMMDD&roomCnt=1
+ * - session:    GET {isLoginUrl} → { code: "0000", data: boolean }
+ * - bizCd per property comes from the CMS catalog's `anotherBookingUrl`
+ *   (https://resort.lottehotel.com/cms/common/hotel-catalogs/ko_catalogs.json)
  */
 export const LOTTE = {
-  /** Public entry. The "로그인" URL alone redirects, so we start on main. */
-  mainUrl: "https://www.lotteresort.com/main/ko/index?urlLang=ko",
-  baseUrl: "https://www.lotteresort.com",
+  baseUrl: "https://www.lottehotel.com",
+  /** Rewards (integrated L.POINT) login form. */
+  loginUrl: "https://www.lottehotel.com/global/ko/login/rewards",
+  /** Session probe — returns { data: true } when the cookies are authenticated. */
+  isLoginUrl: "https://resort.lottehotel.com/common/login/isLogin",
+  /** Room availability JSON API. */
+  roomListApiUrl: "https://resort.lottehotel.com/api/main/ko/reservation/roomList",
+  /** Human-facing booking page — used for detailUrl and as API referer. */
+  bookingUrl: "https://resort.lottehotel.com/main/ko/reservation/accommodation",
 
-  /** Menu / login flow */
   login: {
-    menuButtonName: "메뉴",
-    loginLinkName: "로그인/회원가입",
-    idTextboxName: "아이디",
-    pwTextboxName: "비밀번호",
-    /** Password-change reminder modal that appears after some logins. */
-    postLoginDismissButtonName: "다음에 변경",
+    /** Cookie-consent banner button (appears once per fresh context). */
+    cookieConsentButtonName: "전체 동의",
     /**
-     * After login the menu replaces "로그인/회원가입" with the member name +
-     * "로그아웃". Detect either of these via text matching.
+     * The login page has two tabs: "리워즈 로그인" and "L.POINT 로그인".
+     * 리조트 온라인 회원/법인회원은 L.POINT 탭으로만 로그인 가능 (페이지 하단
+     * 안내문 기준, 2026-07 홈페이지 통합 이후).
      */
-    loggedInTexts: ["로그아웃", "마이페이지"] as const,
-  },
-
-  /** Search flow — entered from the menu */
-  search: {
-    searchPageLinkName: "객실 검색",
-    /** Opens the calendar modal */
-    dateRangeButtonName: "투숙기간 선택",
-    /** Opens the resort-branch modal */
-    branchButtonName: "방문리조트 선택",
-    /** Final submit button on the search form */
-    submitButtonName: "객실 검색",
+    tabName: "L.POINT 로그인",
+    /** `:visible` — both tabs' inputs can coexist in the DOM. */
+    idInputSelector: 'input[name="loginId"]:visible',
+    pwInputSelector: 'input[name="loginPw"]:visible',
+    /** Form submit. Exact match keeps it apart from "카카오톡 간편 로그인" 등. */
+    submitButtonName: "로그인",
   },
 
   /**
-   * Known branches. `value` is what we pass to the booking form (link text in
-   * the branch modal); `label` is what the rest of the app shows. Extend this
-   * list as we confirm more sites are reachable from this single account.
+   * Known branches. `value` is stored as ResortInventory.branchName and must
+   * match what SearchView sends to /api/inventory. `bizCd` is the property
+   * code the reservation API expects.
+   *
+   * 산정호수 was dropped from the lineup during the site merge (absent from
+   * the integrated catalog) — re-add here if it ever returns.
    */
   branches: [
-    { value: "롯데리조트 속초", label: "속초", region: "강원" },
-    { value: "롯데리조트 부여", label: "부여", region: "충남" },
-    { value: "롯데리조트 제주 아트빌라스", label: "제주", region: "제주" },
-    { value: "롯데리조트 김해", label: "김해", region: "경남" },
-    { value: "롯데리조트 산정호수", label: "산정호수", region: "경기" },
+    { value: "롯데리조트 속초", label: "속초", region: "강원", bizCd: "81" },
+    { value: "롯데리조트 부여", label: "부여", region: "충남", bizCd: "61" },
+    { value: "아트빌라스 제주", label: "제주", region: "제주", bizCd: "71" },
+    { value: "롯데호텔앤리조트 김해", label: "김해", region: "경남", bizCd: "91" },
   ] as const,
+
+  /** rooms remaining at or below this count → closingSoon */
+  closingSoonThreshold: 2,
 
   /** Cached storage state lifetime (login skip window). */
   sessionTtlHours: 6,
 
   /** Per-step deadlines (ms). Keep total well under STEP_BUDGET_MS in run.ts. */
   timeouts: {
-    navigation: 15_000,
-    login: 20_000,
-    modalOpen: 5_000,
-    /** Calendar day cell or branch link click → results render */
-    searchSubmit: 25_000,
-    /** Per-branch search inside the loop */
-    perBranch: 30_000,
+    navigation: 20_000,
+    login: 25_000,
+    /** Single roomList API call */
+    api: 15_000,
   },
 } as const;
 

@@ -12,8 +12,9 @@ export interface CrawlerContext {
 }
 
 export interface SearchParams {
-  /** local-time check-in date (KST midnight) */
+  /** UTC-midnight check-in date (produced by `parseDate`); read with UTC getters */
   checkin: Date;
+  /** UTC-midnight check-out date, same convention as `checkin` */
   checkout: Date;
   /** optional region label to narrow the search (applied per-resort) */
   region?: string;

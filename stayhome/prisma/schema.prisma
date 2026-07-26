@@ -22,11 +22,10 @@ enum CrawlStatus {
 
 enum ResortSlug {
   LOTTE
-  SONO
+  RESOM
   HANWHA
-  DAEMYUNG
-  KENSINGTON
-  HYUNDAI
+  OAKVALLEY
+  SONO
 }
 
 enum AuditAction {

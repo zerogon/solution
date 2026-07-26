@@ -14,11 +14,10 @@ type LoaderFn = () => Promise<CrawlerModule>;
  */
 const LOADERS: Partial<Record<ResortSlug, LoaderFn>> = {
   [ResortSlug.LOTTE]: async () => (await import("./lotte")).lotteCrawler,
-  // [ResortSlug.SONO]: async () => (await import("./sono")).sonoCrawler,
+  // [ResortSlug.RESOM]: async () => (await import("./resom")).resomCrawler,
   // [ResortSlug.HANWHA]: async () => (await import("./hanwha")).hanwhaCrawler,
-  // [ResortSlug.DAEMYUNG]: async () => (await import("./daemyung")).daemyungCrawler,
-  // [ResortSlug.KENSINGTON]: async () => (await import("./kensington")).kensingtonCrawler,
-  // [ResortSlug.HYUNDAI]: async () => (await import("./hyundai")).hyundaiCrawler,
+  // [ResortSlug.OAKVALLEY]: async () => (await import("./oakvalley")).oakvalleyCrawler,
+  // [ResortSlug.SONO]: async () => (await import("./sono")).sonoCrawler,
 };
 
 export async function loadCrawler(slug: ResortSlug): Promise<CrawlerModule> {

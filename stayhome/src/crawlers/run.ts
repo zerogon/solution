@@ -9,6 +9,7 @@ import {
   clearStorageState,
 } from "./_shared/session-store";
 import { withDeadline, DeadlineExceeded } from "./_shared/timeout";
+import { parseDate, todayKstIso, addDaysUtc } from "@/lib/utils";
 import { loadCrawler } from "./registry";
 import type { CrawlerContext, InventoryRow, SearchParams } from "./types";
 
@@ -31,17 +32,17 @@ export interface RunOptions {
   inngestRunId?: string;
   /** Force a fresh login even if cached session is valid */
   forceLogin?: boolean;
-  /** Search window. Defaults to today → today+7 in KST. */
+  /** Search window. Defaults to today → today+1 (KST), matching the UI default. */
   search?: SearchParams;
 }
 
 function defaultSearch(): SearchParams {
-  const now = new Date();
-  const checkin = new Date(now);
-  checkin.setHours(0, 0, 0, 0);
-  const checkout = new Date(checkin);
-  checkout.setDate(checkout.getDate() + 7);
-  return { checkin, checkout };
+  // UTC-midnight Dates, same convention as parseDate on the read path —
+  // local-time Dates here would shift the @db.Date key by a day on KST.
+  // One night, matching SearchView's default query so the seeded cache is
+  // actually served on first load.
+  const checkin = parseDate(todayKstIso());
+  return { checkin, checkout: addDaysUtc(checkin, 1) };
 }
 
 export async function runResortCrawl(

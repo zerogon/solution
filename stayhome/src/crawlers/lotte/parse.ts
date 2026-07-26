@@ -1,73 +1,62 @@
-import type { CrawlerContext, InventoryRow } from "../types";
+import type { InventoryRow } from "../types";
 import { LOTTE, type LotteBranch } from "./config";
 
-const CLOSED_TOKENS = ["마감", "매진", "예약불가", "선택 불가"];
-const CLOSING_SOON_TOKENS = ["마감임박", "잔여"];
+/** Subset of the roomList API response we rely on. */
+export interface RoomListPayload {
+  rsltCd?: string;
+  rsltMsg?: string;
+  roomList?: Array<{
+    roomNm?: string;
+    /** remaining bookable rooms — "0" means sold out */
+    roomCnt?: string | number;
+    /** waitlist count for sold-out rooms */
+    waitRsvCnt?: string | number;
+    onlineUseYn?: string;
+    roomFlgNm?: string;
+  }>;
+}
 
 /**
- * Parse the results page that follows a single-branch search. Lotte's site
- * doesn't expose `data-*` hooks on result rows — we rely on the `<li>` list
- * structure that codegen revealed and extract text content per row.
+ * Map a roomList API payload to normalized inventory rows.
  *
- * `branch` is passed in (rather than parsed from the page) because the search
- * was constrained to one branch before we got here — the row text rarely
- * repeats the branch name.
+ * Availability semantics (observed 2026-07-26 against bizCd=81):
+ * - `roomCnt` is the remaining-room count; sold-out rooms report "0" and the
+ *   UI offers 대기예약 instead of booking.
+ * - `onlineUseYn: "N"` rooms aren't bookable online regardless of count.
  */
-export async function parseResults(
-  ctx: CrawlerContext,
+export function parseRoomList(
+  payload: RoomListPayload,
   branch: LotteBranch,
-): Promise<InventoryRow[]> {
-  const { page, log } = ctx;
+  dates: { checkinDt: string; checkoutDt: string },
+): InventoryRow[] {
+  // Empty roomList is a legitimate result: fully booked for the range
+  // ("AVAILRSV" = 대기예약만 가능) or reservations not open ("NORSV").
+  // The caller logs rsltCd/rsltMsg; here it just yields zero rows.
+  const rooms = payload.roomList ?? [];
 
-  // Heuristic: result rows are <li> elements inside the page main content.
-  // Filter to those that contain at least one heading-like text node so we
-  // skip nav / footer / breadcrumb <li>s.
-  const items = await page
-    .locator("main li, [role='main'] li, .room-list li, body li")
-    .filter({ has: page.locator("h1, h2, h3, h4, [class*='title'], [class*='name']") })
-    .all();
-
-  log("[lotte] result candidates", { count: items.length });
+  const detailUrl =
+    `${LOTTE.bookingUrl}?bizCd=${branch.bizCd}` +
+    `&checkinDt=${dates.checkinDt}&checkoutDt=${dates.checkoutDt}` +
+    `&roomCnt=1&reservationType=BAR`;
 
   const out: InventoryRow[] = [];
   const seen = new Set<string>();
+  for (const room of rooms) {
+    const roomType = room.roomNm?.trim();
+    if (!roomType || seen.has(roomType)) continue;
+    seen.add(roomType);
 
-  for (const item of items) {
-    const titleEl = item
-      .locator("h1, h2, h3, h4, [class*='title'], [class*='name']")
-      .first();
-    const roomType = (await titleEl.textContent())?.trim() ?? "";
-    if (!roomType) continue;
-
-    const key = `${branch.value}::${roomType}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const fullText = ((await item.textContent()) ?? "").replace(/\s+/g, " ").trim();
-    const closingSoon = CLOSING_SOON_TOKENS.some((t) => fullText.includes(t));
-    const closed = CLOSED_TOKENS.some((t) => fullText.includes(t));
-
-    // detail link (first <a> in the row)
-    let detailUrl: string | undefined;
-    const anchor = item.locator("a").first();
-    if ((await anchor.count()) > 0) {
-      const href = await anchor.getAttribute("href");
-      if (href) {
-        detailUrl = href.startsWith("http")
-          ? href
-          : new URL(href, LOTTE.baseUrl).toString();
-      }
-    }
+    const remaining = Number(room.roomCnt ?? 0);
+    const available = Number.isFinite(remaining) && remaining > 0 && room.onlineUseYn !== "N";
 
     out.push({
       branchName: branch.value,
       roomType,
       region: branch.region,
-      available: !closed,
-      closingSoon,
+      available,
+      closingSoon: available && remaining <= LOTTE.closingSoonThreshold,
       detailUrl,
     });
   }
-
   return out;
 }

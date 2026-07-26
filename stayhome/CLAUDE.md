@@ -4,9 +4,9 @@
 
 ## 프로젝트 컨텍스트
 
-사내 복지 담당자 1인용 제휴 리조트 통합 조회 시스템. 6개 리조트(롯데·소노캄·한화·대명·켄싱턴·현대) 중 MVP는 **롯데리조트 1개만** 구현하고, 나머지는 selector/config 등록만으로 확장 가능한 구조를 유지한다.
+사내 복지 담당자 1인용 제휴 리조트 통합 조회 시스템. 5개 리조트(롯데·리솜·한화·오크밸리·소노) 중 MVP는 **롯데리조트 1개만** 구현하고, 나머지는 selector/config 등록만으로 확장 가능한 구조를 유지한다. (대명리조트는 소노로 리브랜딩되어 SONO 하나로 통합, 켄싱턴·현대는 대상에서 제외됨.)
 
-전체 설계: `prd.md` + `/home/zerogon/.claude/plans/humble-shimmying-spindle.md`.
+전체 설계: `prd.md`.
 
 ## 스택 / 핵심 결정
 
@@ -35,14 +35,17 @@
 ## 페이즈 진행 메모
 
 - **Phase A (완료)**: 스캐폴드 / 인증 / 암호화 / 관리 UI / PWA 골격
-- **Phase B (다음)**: `src/crawlers/_shared/` + `src/crawlers/lotte/` 구현. 시작 전 사용자에게 롯데 URL/셀렉터 확보 절차 확인.
+- **Phase B (완료, 2026-07 재작성)**: lotteresort.com → lottehotel.com 통합에 맞춰
+  롯데 크롤러 재작성. 로그인만 브라우저(L.POINT 탭), 검색은 roomList JSON API 직접 호출.
+  상세는 `AGENTS.md` 참조.
 - **Phase C**: Inngest 함수 + Vercel Cron 배선
-- **Phase D**: 검색 UI (React Query + `/api/search`)
+- **Phase D (구현됨)**: 검색 UI (`SearchView` + `/api/inventory`)
 - **Phase E**: PWA 폴리시 + 실제 아이콘 자산
-- **Phase F**: 나머지 5개 리조트 확장
+- **Phase F**: 나머지 4개 리조트(리솜·한화·오크밸리·소노) 확장
 
 ## 미해결 사항
 
-- 롯데리조트 실제 URL/DOM 셀렉터 — Phase B 시작 전 `npx playwright codegen`으로 캡처 필요
-- 검색 단위(단일 체크인-체크아웃 vs 캘린더 그리드) — Phase B 로컬 측정 후 결정
 - 실제 PWA 아이콘 — `public/icons/README.md` 참조
+
+(롯데 크롤러는 2026-07-26 실사이트 검증 통과: L.POINT 로그인 → 4개 지점 76행 upsert →
+세션 재사용 확인 → `active=true` 적용 완료)

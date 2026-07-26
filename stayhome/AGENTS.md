@@ -6,61 +6,53 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ---
 
-# Lotte 셀렉터 캡처
+# Lotte 크롤러 (lottehotel.com 통합 사이트)
 
-`src/crawlers/lotte/config.ts`의 모든 `"TODO"` 값은 실제 사이트에서 캡처해 채워야 합니다. 절차:
+lotteresort.com은 2026-07에 LOTTE HOTELS & RESORTS(lottehotel.com)로 통합되었다.
+현재 크롤러 구조 (`src/crawlers/lotte/`):
 
-## 1) Playwright codegen 실행
+- **로그인만 브라우저 조작**: `www.lottehotel.com/global/ko/login/rewards`에서
+  쿠키 동의 → **"L.POINT 로그인" 탭** 클릭 → `input[name=loginId/loginPw]` 입력.
+  리조트 회원/법인회원은 리워즈 탭이 아니라 L.POINT 탭이어야 함 (사이트 안내문 기준).
+- **검색은 JSON API 직접 호출** (DOM/달력 조작 없음):
+  `GET resort.lottehotel.com/api/main/ko/reservation/roomList?rsvType=BAR&bizCd=..&checkinDt=YYYYMMDD&checkoutDt=YYYYMMDD&roomCnt=1`
+  — `page.request`로 호출해 로그인 세션 쿠키가 함께 전달됨. 비로그인도 BAR 요금은 응답함.
+- **세션 검증도 API**: `GET resort.lottehotel.com/common/login/isLogin` → `{ data: boolean }`.
+- **파싱**: `roomList[].roomCnt`(잔여 객실 수) > 0 → available, ≤2 → closingSoon.
+  빈 roomList는 만실(AVAILRSV)/예약미오픈(NORSV)으로 정상 0행 처리.
+- 지점별 `bizCd`: 속초=81, 부여=61, 제주 아트빌라스=71, 김해=91.
+  (산정호수는 통합 시 라인업 제외. bizCd 출처: CMS 카탈로그
+  `resort.lottehotel.com/cms/common/hotel-catalogs/ko_catalogs.json`의 `anotherBookingUrl`)
+
+## 로컬 검증
 
 ```bash
 npx playwright install chromium    # 최초 1회
-npx playwright codegen https://www.lotteresort.com/login
-```
-
-브라우저 창이 뜨면 다음을 순서대로 수행하세요:
-
-1. **로그인 폼 입력** (실제 ID/비밀번호 사용) → 로그인 성공 페이지까지 도달
-2. **검색 페이지로 이동** (예약/객실 검색)
-3. **체크인 날짜, 체크아웃 날짜, 지점 선택** 후 검색
-4. **결과 카드/행이 보일 때까지 스크롤**
-
-이 과정에서 codegen 창 우측에 생성된 코드를 복사해 두세요.
-
-## 2) `config.ts`에 셀렉터 채우기
-
-codegen이 만든 locator를 `src/crawlers/lotte/config.ts`의 각 위치에 옮깁니다. 우선순위:
-
-- `data-*` 또는 `[name="..."]` 속성 우선
-- `:has-text("...")` 같은 텍스트 매칭은 사이트 문구 변경에 취약하므로 차선
-- `nth-child` / 좌표 셀렉터는 피하기
-
-`assertConfigured()`가 자동으로 `"TODO"` 잔여를 검출해 에러로 알려줍니다.
-
-## 3) 로컬에서 동작 확인
-
-```bash
-npm run dev
-# 브라우저 → /admin/accounts → Lotte 계정(실 자격증명) 등록
-# /admin/crawl-logs → "수동 새로고침" 클릭
+# /admin/accounts에 L.POINT 자격증명(실계정) 등록 후:
+npx tsx scripts/run-crawl.ts       # 수동 크롤 (RefreshButton과 동일 경로)
+npx tsx scripts/check-logs.ts      # crawl_logs / inventory / sessions 확인
+npx tsx scripts/debug-page.ts roomlist   # 로그인 없이 검색+파싱 파이프라인만 테스트
 ```
 
 성공 조건:
-- `crawl_logs` 테이블에 `status=SUCCESS`, `rows_upserted > 0`
-- `resort_inventory` 테이블에 행이 upsert됨
-- `resort_sessions` 테이블에 `storage_state`가 저장됨
-- 6시간 내 재실행 시 로그인 단계 스킵 (콘솔 로그 `session valid, skipping login`)
+- `crawl_logs`: `status=SUCCESS`, `rows_upserted > 0`
+- `resort_inventory`에 행 upsert, `checkin_date`가 KST 오늘의 UTC 자정과 일치
+- `resort_sessions`에 storage_state 저장, 6시간 내 재실행 시 로그인 스킵
 
-## 4) Resort 활성화
+로그인 실패 시 `CRAWLER_DEBUG_DIR=<dir>` 지정하면 `lotte-login-failed.png` 스크린샷 저장.
+사이트 구조 탐색은 `scripts/debug-page.ts`의 스텝(main/login/lpoint/resort/search/dom/bizcds/roomlist) 활용.
 
-성공 후 Neon SQL 콘솔 또는 Prisma Studio에서:
+## Resort 활성화
+
+검증 통과 후:
 ```sql
 UPDATE resorts SET active = true WHERE slug = 'LOTTE';
 ```
 
-## 셀렉터 변경 시
+## 날짜 규약
 
-- 사이트 UI가 바뀌면 `crawl_logs.error_stage = SEARCH` 또는 `PARSE`로 표시됩니다.
-- `config.ts`만 수정하면 됩니다. login/search/parse 코드는 셀렉터 키만 참조하므로 무수정.
+"YYYY-MM-DD" 문자열 ↔ `parseDate()`(UTC 자정 Date)만 사용. Date를 로컬 API로
+생성/해석 금지 (`todayKstIso`/`addDaysUtc` 유틸 사용, getter는 항상 `getUTC*`).
 
 ---
 

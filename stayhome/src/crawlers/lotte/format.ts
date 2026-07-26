@@ -1,10 +1,10 @@
 /**
- * Lotte's search form expects YYYY-MM-DD (placeholder — confirm during codegen).
- * Adjust if the real format differs (e.g. YYYY.MM.DD).
+ * Format a UTC-midnight Date (produced by `parseDate`) for the reservation
+ * API, which expects compact YYYYMMDD.
  */
-export function formatDateKst(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+export function formatDateCompact(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  return `${y}${m}${day}`;
 }

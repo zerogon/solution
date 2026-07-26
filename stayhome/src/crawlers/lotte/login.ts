@@ -1,90 +1,97 @@
 import type { CrawlerContext } from "../types";
 import { LOTTE } from "./config";
 
-async function openMenu(ctx: CrawlerContext) {
-  const { page } = ctx;
-  await page
-    .getByRole("button", { name: LOTTE.login.menuButtonName })
-    .click({ timeout: LOTTE.timeouts.modalOpen });
-}
-
-async function isLoggedInVisible(ctx: CrawlerContext): Promise<boolean> {
-  const { page } = ctx;
-  for (const text of LOTTE.login.loggedInTexts) {
-    if ((await page.getByText(text, { exact: false }).count()) > 0) {
-      return true;
-    }
-  }
-  return false;
-}
-
-export async function performLogin(ctx: CrawlerContext) {
-  const { page, credentials, log } = ctx;
-
-  log("[lotte] navigating to main");
-  await page.goto(LOTTE.mainUrl, {
-    waitUntil: "domcontentloaded",
-    timeout: LOTTE.timeouts.navigation,
-  });
-
-  log("[lotte] opening menu → login");
-  await openMenu(ctx);
-  await page
-    .getByRole("link", { name: LOTTE.login.loginLinkName })
-    .click({ timeout: LOTTE.timeouts.modalOpen });
-
-  log("[lotte] filling login form");
-  const idBox = page.getByRole("textbox", { name: LOTTE.login.idTextboxName });
-  await idBox.fill(credentials.id);
-  await idBox.press("Tab");
-  await page
-    .getByRole("textbox", { name: LOTTE.login.pwTextboxName })
-    .fill(credentials.pw);
-  await page
-    .getByRole("textbox", { name: LOTTE.login.pwTextboxName })
-    .press("Enter");
-
-  // "다음에 변경" 비밀번호 변경 권유 모달 — 없으면 무시
-  try {
-    await page
-      .getByRole("button", { name: LOTTE.login.postLoginDismissButtonName })
-      .click({ timeout: 3_000 });
-    log("[lotte] dismissed post-login reminder");
-  } catch {
-    /* modal absent — fine */
-  }
-
-  log("[lotte] waiting for logged-in indicator");
-  await page.waitForLoadState("domcontentloaded", {
-    timeout: LOTTE.timeouts.login,
-  });
-
-  // 메뉴를 다시 열어 로그아웃 텍스트 확인 (최상단 nav는 이미 갱신됐을 수 있음)
-  if (!(await isLoggedInVisible(ctx))) {
-    await openMenu(ctx);
-    if (!(await isLoggedInVisible(ctx))) {
-      throw new Error("LOGIN_FAILED: 로그인 후 indicator 텍스트(로그아웃/마이페이지)를 찾지 못함");
-    }
-  }
-  log("[lotte] login success");
-}
-
+/**
+ * Probe the session via the isLogin endpoint. `page.request` shares the
+ * browser context's cookies, so this validates a restored storageState without
+ * any page navigation.
+ */
 export async function checkLoggedIn(ctx: CrawlerContext): Promise<boolean> {
   const { page, log } = ctx;
   try {
-    log("[lotte] validating cached session");
-    await page.goto(LOTTE.mainUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: LOTTE.timeouts.navigation,
+    const res = await page.request.get(LOTTE.isLoginUrl, {
+      timeout: LOTTE.timeouts.api,
+      headers: { Accept: "application/json" },
     });
-    if (await isLoggedInVisible(ctx)) return true;
-    // 메뉴를 열어 한 번 더 확인
-    await openMenu(ctx);
-    return await isLoggedInVisible(ctx);
+    if (!res.ok()) return false;
+    const body = (await res.json()) as { code?: string; data?: boolean };
+    log("[lotte] isLogin probe", { code: body.code, data: body.data });
+    return body.data === true;
   } catch (e) {
     log("[lotte] session validation failed", {
       error: e instanceof Error ? e.message : String(e),
     });
     return false;
   }
+}
+
+export async function performLogin(ctx: CrawlerContext) {
+  const { page, credentials, log } = ctx;
+
+  log("[lotte] navigating to login page");
+  await page.goto(LOTTE.loginUrl, {
+    waitUntil: "domcontentloaded",
+    timeout: LOTTE.timeouts.navigation,
+  });
+
+  // Cookie-consent banner shows once per fresh context — dismiss if present.
+  try {
+    await page
+      .getByRole("button", { name: LOTTE.login.cookieConsentButtonName })
+      .click({ timeout: 5_000 });
+    log("[lotte] cookie consent accepted");
+  } catch {
+    /* banner absent — fine */
+  }
+
+  log("[lotte] switching to L.POINT tab");
+  await page
+    .getByText(LOTTE.login.tabName, { exact: false })
+    .first()
+    .click({ timeout: LOTTE.timeouts.navigation });
+
+  log("[lotte] filling login form");
+  const idInput = page.locator(LOTTE.login.idInputSelector);
+  await idInput.waitFor({ state: "visible", timeout: LOTTE.timeouts.navigation });
+  await idInput.fill(credentials.id);
+  await page.locator(LOTTE.login.pwInputSelector).fill(credentials.pw);
+  await page
+    .getByRole("button", { name: LOTTE.login.submitButtonName, exact: true })
+    .click({ timeout: 5_000 });
+
+  // The SPA may or may not navigate — verify via the session API instead of DOM.
+  log("[lotte] waiting for authenticated session");
+  const deadline = Date.now() + LOTTE.timeouts.login;
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(1_500);
+    if (await checkLoggedIn(ctx)) {
+      log("[lotte] login success");
+      return;
+    }
+  }
+
+  // Diagnostics before giving up: what does the page show?
+  const pageUrl = page.url();
+  let alertText = "";
+  try {
+    const alerts = await page
+      .locator("[role='alert'], [class*='error'], [class*='alert'], .toast, [class*='valid']")
+      .allInnerTexts();
+    alertText = alerts.map((t) => t.trim()).filter(Boolean).join(" | ").slice(0, 300);
+  } catch {
+    /* diagnostics only */
+  }
+  if (process.env.CRAWLER_DEBUG_DIR) {
+    try {
+      await page.screenshot({
+        path: `${process.env.CRAWLER_DEBUG_DIR}/lotte-login-failed.png`,
+      });
+    } catch {
+      /* diagnostics only */
+    }
+  }
+  throw new Error(
+    `LOGIN_FAILED: isLogin이 계속 false. url=${pageUrl}` +
+      (alertText ? ` page_alerts="${alertText}"` : ""),
+  );
 }
