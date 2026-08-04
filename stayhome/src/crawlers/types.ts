@@ -16,8 +16,8 @@ export interface SearchParams {
   checkin: Date;
   /** UTC-midnight check-out date, same convention as `checkin` */
   checkout: Date;
-  /** optional region label to narrow the search (applied per-resort) */
-  region?: string;
+  /** optional branch filter — matches `ResortInventory.branchName` (applied per-resort) */
+  branch?: string;
 }
 
 export interface InventoryRow {

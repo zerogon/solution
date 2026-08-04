@@ -95,36 +95,67 @@ export function RevealDialog({
             {title} · 이 작업은 감사 로그에 기록됩니다.
           </DialogDescription>
         </DialogHeader>
-        {loading && <div className="py-4 text-center text-sm text-muted-foreground">복호화 중…</div>}
+        {loading && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            복호화 중…
+          </div>
+        )}
         {data && (
           <div className="space-y-3">
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">ID</div>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 rounded bg-muted px-2 py-1 font-mono text-sm">
+              <div className="flex items-center gap-1.5">
+                <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-sm">
                   {data.loginId}
                 </code>
-                <Button size="sm" variant="ghost" onClick={() => copy(data.loginId)}>
-                  <Copy className="h-4 w-4" />
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="ID 복사"
+                  onClick={() => copy(data.loginId)}
+                >
+                  <Copy className="size-3.5" />
                 </Button>
               </div>
             </div>
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">비밀번호</div>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 rounded bg-muted px-2 py-1 font-mono text-sm">
-                  {showPw ? data.password : "•".repeat(Math.min(data.password.length, 16))}
+              <div className="flex items-center gap-1.5">
+                <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2.5 py-1.5 font-mono text-sm">
+                  {showPw
+                    ? data.password
+                    : "•".repeat(Math.min(data.password.length, 16))}
                 </code>
-                <Button size="sm" variant="ghost" onClick={() => setShowPw((s) => !s)}>
-                  {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={showPw ? "비밀번호 가리기" : "비밀번호 보기"}
+                  onClick={() => setShowPw((s) => !s)}
+                >
+                  {showPw ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
                 </Button>
-                <Button size="sm" variant="ghost" onClick={() => copy(data.password)}>
-                  <Copy className="h-4 w-4" />
+                <Button
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label="비밀번호 복사"
+                  onClick={() => copy(data.password)}
+                >
+                  <Copy className="size-3.5" />
                 </Button>
               </div>
             </div>
-            <div className="text-xs text-muted-foreground">
-              {Math.ceil(remaining / 1000)}초 후 자동으로 닫힙니다
+
+            {/* 남은 노출 시간을 막대로도 보여준다 — 숫자만으로는 임박한 게 잘 안 보인다. */}
+            <div className="space-y-1">
+              <div className="h-1 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-[width] duration-200 ease-linear"
+                  style={{ width: `${(remaining / VISIBILITY_MS) * 100}%` }}
+                />
+              </div>
+              <div className="font-mono text-xs tabular-nums text-muted-foreground">
+                {Math.ceil(remaining / 1000)}초 후 자동으로 닫힙니다
+              </div>
             </div>
           </div>
         )}

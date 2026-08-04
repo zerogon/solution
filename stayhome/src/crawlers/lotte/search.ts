@@ -16,8 +16,8 @@ export async function performSearch(
   const checkinDt = formatDateCompact(params.checkin);
   const checkoutDt = formatDateCompact(params.checkout);
 
-  const branches = params.region
-    ? LOTTE.branches.filter((b) => b.region === params.region)
+  const branches = params.branch
+    ? LOTTE.branches.filter((b) => b.value === params.branch)
     : LOTTE.branches;
 
   const out: InventoryRow[] = [];

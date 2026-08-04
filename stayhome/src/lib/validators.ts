@@ -27,7 +27,7 @@ export const searchParamsSchema = z
   .object({
     checkin: isoDate,
     checkout: isoDate,
-    region: z.string().optional(),
+    branch: z.string().optional(),
   })
   .refine((v) => v.checkout > v.checkin, {
     message: "체크아웃은 체크인 이후여야 합니다",

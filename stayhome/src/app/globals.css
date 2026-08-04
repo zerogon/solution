@@ -27,6 +27,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -49,72 +50,82 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Stay Planner — 쿨 뉴트럴 + 오션 틸.
+     형제 앱 pianoflow와 토큰 구조·스케일은 동일하고 hue만 인디고(273) → 틸(205)로 분기한다. */
+  --background: oklch(0.99 0.002 220);
+  --foreground: oklch(0.22 0.006 245);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.22 0.006 245);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --popover-foreground: oklch(0.22 0.006 245);
+  --primary: oklch(0.52 0.1 205);
+  --primary-foreground: oklch(0.99 0.004 220);
+  --secondary: oklch(0.965 0.003 230);
+  --secondary-foreground: oklch(0.28 0.008 245);
+  --muted: oklch(0.965 0.003 230);
+  --muted-foreground: oklch(0.5 0.008 235);
+  --accent: oklch(0.95 0.025 205);
+  --accent-foreground: oklch(0.42 0.09 205);
+  --destructive: oklch(0.58 0.2 25);
+  --destructive-foreground: oklch(0.99 0.004 220);
+  --border: oklch(0.91 0.004 235);
+  --input: oklch(0.91 0.004 235);
+  --ring: oklch(0.52 0.1 205);
+  --chart-1: oklch(0.52 0.1 205);
+  --chart-2: oklch(0.62 0.13 250);
+  --chart-3: oklch(0.65 0.13 155);
+  --chart-4: oklch(0.55 0.03 235);
+  --chart-5: oklch(0.72 0.15 70);
+  --radius: 0.5rem;
+  /* 앱 셸 지오메트리 — 매직넘버 대신 토큰으로 두고 `md:w-(--app-sidebar-w)` 형태로 소비한다. */
+  --app-sidebar-w: 16rem;
+  --app-sidebar-rail-w: 3.75rem;
+  --app-content-w: 72rem;
+  --sidebar: oklch(0.985 0.003 215);
+  --sidebar-foreground: oklch(0.22 0.006 245);
+  --sidebar-primary: oklch(0.52 0.1 205);
+  --sidebar-primary-foreground: oklch(0.99 0.004 220);
+  --sidebar-accent: oklch(0.95 0.025 205);
+  --sidebar-accent-foreground: oklch(0.42 0.09 205);
+  --sidebar-border: oklch(0.91 0.004 235);
+  --sidebar-ring: oklch(0.52 0.1 205);
 }
 
+/* 현재 앱은 라이트 고정(`<html style="color-scheme: light">`)이라 이 블록은 활성화되지 않는다.
+   나중에 다크 모드를 켤 때 hue가 어긋나지 않도록 같은 205 계열로 맞춰만 둔다. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.205 0.006 245);
+  --foreground: oklch(0.96 0.004 220);
+  --card: oklch(0.245 0.006 245);
+  --card-foreground: oklch(0.96 0.004 220);
+  --popover: oklch(0.245 0.006 245);
+  --popover-foreground: oklch(0.96 0.004 220);
+  --primary: oklch(0.72 0.11 200);
+  --primary-foreground: oklch(0.18 0.03 205);
+  --secondary: oklch(0.28 0.006 245);
+  --secondary-foreground: oklch(0.96 0.004 220);
+  --muted: oklch(0.28 0.006 245);
+  --muted-foreground: oklch(0.7 0.008 235);
+  --accent: oklch(0.31 0.05 205);
+  --accent-foreground: oklch(0.85 0.08 200);
+  --destructive: oklch(0.65 0.18 25);
+  --destructive-foreground: oklch(0.99 0.004 220);
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 13%);
+  --ring: oklch(0.72 0.11 200);
+  --chart-1: oklch(0.72 0.11 200);
+  --chart-2: oklch(0.7 0.12 250);
+  --chart-3: oklch(0.72 0.13 155);
+  --chart-4: oklch(0.7 0.03 235);
+  --chart-5: oklch(0.78 0.14 70);
+  --sidebar: oklch(0.225 0.006 245);
+  --sidebar-foreground: oklch(0.96 0.004 220);
+  --sidebar-primary: oklch(0.72 0.11 200);
+  --sidebar-primary-foreground: oklch(0.18 0.03 205);
+  --sidebar-accent: oklch(0.31 0.05 205);
+  --sidebar-accent-foreground: oklch(0.85 0.08 200);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.72 0.11 200);
 }
 
 @layer base {
@@ -127,4 +138,11 @@
   html {
     @apply font-sans;
   }
+}
+
+/* 날짜 이동 중(StayDateStrip이 낙관적으로 새 주를 보여주고 서버 응답을 기다리는 구간)
+   날짜에 종속된 콘텐츠를 흐리게 해 스트립-결과 불일치 상태를 드러낸다. */
+body:has([data-range-pending]) [data-range-dim] {
+  opacity: 0.55;
+  transition: opacity 0.15s;
 }

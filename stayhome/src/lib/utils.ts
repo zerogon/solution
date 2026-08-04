@@ -30,3 +30,25 @@ export function addDaysUtc(d: Date, n: number): Date {
   copy.setUTCDate(copy.getUTCDate() + n);
   return copy;
 }
+
+/**
+ * Shift a "YYYY-MM-DD" string by `n` days, staying in string space.
+ *
+ * Goes through `parseDate`/`addDaysUtc` so the UTC-only rule holds — never build
+ * a Date from a local-time API here, or DST/timezone shifts will move the day.
+ */
+export function addDaysIso(s: string, n: number): string {
+  return addDaysUtc(parseDate(s), n).toISOString().slice(0, 10);
+}
+
+/** Whole days between two "YYYY-MM-DD" strings (`to - from`). */
+export function diffDaysIso(from: string, to: string): number {
+  return Math.round(
+    (parseDate(to).getTime() - parseDate(from).getTime()) / 86_400_000,
+  );
+}
+
+/** The Sunday that starts the week containing `s`, as "YYYY-MM-DD". */
+export function isoWeekStart(s: string): string {
+  return addDaysIso(s, -parseDate(s).getUTCDay());
+}

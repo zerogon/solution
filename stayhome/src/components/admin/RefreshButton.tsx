@@ -47,11 +47,15 @@ export function RefreshButton({ slug, label }: { slug: string; label: string }) 
 
   return (
     <div className="flex items-center gap-2">
+      {last && (
+        <span className="font-mono text-xs tabular-nums text-muted-foreground">
+          {last}
+        </span>
+      )}
       <Button size="sm" variant="outline" onClick={trigger} disabled={pending}>
-        <RefreshCw className={`mr-1 h-3.5 w-3.5 ${pending ? "animate-spin" : ""}`} />
-        {pending ? "실행 중…" : "수동 새로고침"}
+        <RefreshCw className={pending ? "size-3.5 animate-spin" : "size-3.5"} />
+        {pending ? "실행 중…" : "새로고침"}
       </Button>
-      {last && <span className="text-xs text-muted-foreground">{last}</span>}
     </div>
   );
 }

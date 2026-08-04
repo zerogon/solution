@@ -105,7 +105,7 @@ export function AccountFormDialog({ mode, resorts, existing, trigger }: Props) {
             (trigger as React.ReactElement)
           ) : (
             <Button>
-              <Plus className="mr-1 h-4 w-4" />
+              <Plus className="size-4" />
               계정 추가
             </Button>
           )

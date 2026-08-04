@@ -14,6 +14,9 @@ export const authConfig: NextAuthConfig = {
 
       const isPublic =
         pathname === "/login" ||
+        // 서비스워커가 오프라인 폴백으로 precache하는 페이지 — 로그인 전에도
+        // 받아올 수 있어야 하고, 네트워크가 끊긴 상태에서 리다이렉트도 불가능하다.
+        pathname === "/offline" ||
         pathname === "/manifest.json" ||
         pathname.startsWith("/icons/") ||
         pathname.startsWith("/api/auth") ||

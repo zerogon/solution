@@ -36,9 +36,9 @@ export async function POST(
     );
   }
 
-  // Optional JSON body { checkin, checkout, region } narrows the crawl to a
-  // user-specified window/branch. Absent body → defaultSearch() (today+7, all
-  // branches), preserving the admin RefreshButton behavior.
+  // Optional JSON body { checkin, checkout, branch } narrows the crawl to a
+  // user-specified window/branch. Absent body → defaultSearch() (today KST,
+  // one night, all branches), preserving the admin RefreshButton behavior.
   let search: SearchParams | undefined;
   const raw = await req.json().catch(() => null);
   if (raw != null) {
@@ -52,7 +52,7 @@ export async function POST(
     search = {
       checkin: parseDate(parsed.data.checkin),
       checkout: parseDate(parsed.data.checkout),
-      region: parsed.data.region,
+      branch: parsed.data.branch,
     };
   }
 

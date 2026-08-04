@@ -4,8 +4,10 @@ import { Suspense, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
+
+import { AppMark } from "@/components/app-mark";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -43,14 +45,22 @@ function LoginForm() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background px-4">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-6 bg-background px-4 py-10">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <AppMark className="size-14" />
+        <div className="space-y-1">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">
+            Welfare Stay
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            사내 제휴 리조트 통합 조회 시스템
+          </p>
+        </div>
+      </div>
+
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-2xl">Welfare Stay</CardTitle>
-          <CardDescription>사내 제휴 리조트 통합 조회 시스템</CardDescription>
-        </CardHeader>
         <CardContent>
-          <form className="space-y-3" onSubmit={onSubmit}>
+          <form className="space-y-4" onSubmit={onSubmit}>
             <div className="space-y-1.5">
               <Label htmlFor="loginId">ID</Label>
               <Input
@@ -72,15 +82,16 @@ function LoginForm() {
                 required
               />
             </div>
-            <Button type="submit" className="w-full" disabled={pending}>
+            <Button type="submit" size="lg" className="w-full" disabled={pending}>
               {pending ? "확인 중…" : "로그인"}
             </Button>
-            <p className="text-xs text-muted-foreground">
-              테스트 계정: admin / 0000
-            </p>
           </form>
         </CardContent>
       </Card>
+
+      <p className="text-xs text-muted-foreground">
+        접근 권한이 필요하면 복지 담당자에게 문의하세요.
+      </p>
     </div>
   );
 }

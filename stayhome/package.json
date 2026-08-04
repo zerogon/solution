@@ -11,7 +11,8 @@
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "icons:generate": "tsx scripts/generate-icons.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.7.4",
@@ -56,6 +57,7 @@
     "playwright": "^1.60.0",
     "prisma": "^7.8.0",
     "shadcn": "^4.0.0",
+    "sharp": "^0.35.3",
     "tailwindcss": "^4",
     "tsx": "^4.19.2",
     "typescript": "^5"

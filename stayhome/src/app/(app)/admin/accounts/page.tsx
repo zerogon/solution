@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { PageHeader } from "@/components/page-header";
 import { AccountTable } from "@/components/admin/AccountTable";
 import { AccountFormDialog } from "@/components/admin/AccountFormDialog";
 
@@ -28,15 +29,11 @@ export default async function AdminAccountsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold">리조트 계정 관리</h1>
-          <p className="text-sm text-muted-foreground">
-            계정 정보는 AES-256-GCM으로 암호화되어 저장되며, 기본 마스킹 상태로 표시됩니다.
-          </p>
-        </div>
-        <AccountFormDialog mode="create" resorts={resorts} />
-      </div>
+      <PageHeader
+        title="리조트 계정"
+        description="계정 정보는 AES-256-GCM으로 암호화되어 저장되며, 기본 마스킹 상태로 표시됩니다."
+        action={<AccountFormDialog mode="create" resorts={resorts} />}
+      />
       <AccountTable accounts={safeAccounts} resorts={resorts} />
     </div>
   );
