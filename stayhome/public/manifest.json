@@ -1,0 +1,50 @@
+{
+  "id": "/",
+  "name": "Welfare Stay — 제휴 리조트 조회",
+  "short_name": "Welfare Stay",
+  "description": "사내 제휴 리조트 통합 조회 시스템",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#FAFCFD",
+  "theme_color": "#FAFCFD",
+  "lang": "ko-KR",
+  "dir": "ltr",
+  "categories": ["business", "travel", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "객실 조회",
+      "short_name": "조회",
+      "url": "/",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "크롤링 로그",
+      "short_name": "로그",
+      "url": "/admin/crawl-logs",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
