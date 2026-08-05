@@ -21,8 +21,9 @@ export function PageHeader({
     <div className={cn("flex items-start justify-between gap-3 pb-1", className)}>
       <div className="min-w-0 space-y-1">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">{title}</h1>
+        {/* max-w-prose: 본문 컬럼이 1344px까지 넓어져서, 제한이 없으면 설명이 한 줄로 쭉 늘어난다. */}
         {description && (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="max-w-prose text-sm text-muted-foreground">{description}</p>
         )}
       </div>
       {action && <div className="shrink-0">{action}</div>}

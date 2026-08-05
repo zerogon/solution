@@ -5,11 +5,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CalendarSearch, RefreshCw, Search, SearchX, TriangleAlert } from "lucide-react";
 
-import { addDaysIso, diffDaysIso, todayKstIso } from "@/lib/utils";
+import { addDaysIso, todayKstIso } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
-import { StayDateStrip } from "./StayDateStrip";
+import { DateRangeField } from "./DateRangeField";
 import { NightsStepper } from "./NightsStepper";
 import { ALL_BRANCHES, BranchTabs } from "./BranchTabs";
 import { AvailabilitySummary } from "./AvailabilitySummary";
@@ -77,6 +77,12 @@ export function SearchView() {
     return counts;
   }, [rows]);
 
+  /** 캘린더와 박수 스테퍼가 공유하는 단일 진입점 — 둘 다 같은 (checkin, nights)를 쓴다. */
+  function onRangeChange(next: { checkin: string; nights: number }) {
+    setCheckin(next.checkin);
+    setNights(next.nights);
+  }
+
   function onSearch() {
     setCommitted({ checkin, checkout, branch });
   }
@@ -119,32 +125,27 @@ export function SearchView() {
   }
 
   return (
-    <div className="space-y-6" {...(stale ? { "data-range-pending": "" } : {})}>
-      <div className="space-y-3">
-        <StayDateStrip value={checkin} today={today} onChange={setCheckin} />
+    // minmax(0,1fr): 결과 컬럼이 콘텐츠보다 작아질 수 있어야 객실명 truncate가 동작한다.
+    <div
+      className="grid gap-6 xl:grid-cols-[20rem_minmax(0,1fr)] 2xl:grid-cols-[22rem_minmax(0,1fr)]"
+      {...(stale ? { "data-range-pending": "" } : {})}
+    >
+      {/* xl:self-start 필수 — 늘어난 그리드 아이템은 움직일 여지가 없어 sticky가 무효가 된다.
+          top-8은 <main>의 md:py-8과 맞춘 값(데스크톱엔 sticky 헤더가 없다). */}
+      <aside className="space-y-3 xl:sticky xl:top-8 xl:self-start">
+        <DateRangeField
+          checkin={checkin}
+          nights={nights}
+          today={today}
+          onChange={onRangeChange}
+          onSearch={onSearch}
+        />
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <NightsStepper checkin={checkin} nights={nights} onChange={setNights} />
-
-          <div className="flex items-center gap-2 sm:justify-end">
-            <Button onClick={onSearch} disabled={isFetching} className="flex-1 sm:flex-none">
-              <Search className="size-4" />
-              {isFetching ? "조회 중…" : "조회"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onRefresh}
-              disabled={refreshing || !branch}
-              title={
-                !branch ? "지점을 선택하면 라이브 최신화가 가능합니다" : undefined
-              }
-              className="flex-1 sm:flex-none"
-            >
-              <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
-              {refreshing ? "최신화 중… (최대 60초)" : "최신화"}
-            </Button>
-          </div>
-        </div>
+        <NightsStepper
+          checkin={checkin}
+          nights={nights}
+          onChange={(next) => onRangeChange({ checkin, nights: next })}
+        />
 
         <BranchTabs value={branch} counts={availableCounts} onChange={setBranch} />
 
@@ -153,9 +154,28 @@ export function SearchView() {
             전체 지점은 캐시 조회만 가능합니다. 라이브 최신화는 지점을 선택하세요.
           </p>
         )}
-      </div>
 
-      <div data-range-dim>
+        <div className="flex items-center gap-2">
+          <Button onClick={onSearch} disabled={isFetching} className="flex-1">
+            <Search className="size-4" />
+            {isFetching ? "조회 중…" : "조회"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={onRefresh}
+            disabled={refreshing || !branch}
+            title={
+              !branch ? "지점을 선택하면 라이브 최신화가 가능합니다" : undefined
+            }
+            className="flex-1"
+          >
+            <RefreshCw className={refreshing ? "size-4 animate-spin" : "size-4"} />
+            {refreshing ? "최신화 중…" : "최신화"}
+          </Button>
+        </div>
+      </aside>
+
+      <div data-range-dim className="min-w-0">
         <Results
           committed={committed}
           rows={rows}
@@ -225,14 +245,9 @@ function Results({
     );
   }
 
-  const nights = diffDaysIso(committed.checkin, committed.checkout);
-
   return (
     <div className="space-y-6">
-      <AvailabilitySummary rows={rows} />
-      <p className="px-0.5 font-mono text-xs tabular-nums text-muted-foreground">
-        {committed.checkin} → {committed.checkout} · {nights}박
-      </p>
+      <AvailabilitySummary rows={rows} committed={committed} />
       {groupByBranch(rows).map((group) => (
         <BranchResultSection key={group[0].branchName} rows={group} />
       ))}

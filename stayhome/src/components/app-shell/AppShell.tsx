@@ -144,7 +144,7 @@ export function AppShell({
         )}
       >
         {/* pb-24: 모바일에서 하단 탭바에 콘텐츠 마지막 줄이 가리지 않도록. */}
-        <main className="mx-auto w-full max-w-(--app-content-w) flex-1 px-4 py-6 pb-24 md:px-8 md:py-8 md:pb-8">
+        <main className="mx-auto w-full max-w-(--app-content-w) flex-1 px-4 py-6 pb-24 md:px-6 md:py-8 md:pb-8 xl:px-8">
           {children}
         </main>
       </div>

@@ -41,7 +41,8 @@ export function BranchTabs({
     <div
       role="tablist"
       aria-label="지점"
-      className="grid grid-cols-3 gap-1.5 sm:grid-cols-5"
+      /* xl에서 3칸으로 되돌린다 — 320px 필터 패널에서 5칸이면 칩 하나가 조각이 된다. */
+      className="grid grid-cols-3 gap-1.5 sm:grid-cols-5 xl:grid-cols-3"
     >
       {options.map((opt) => {
         const selected = opt.value === value;

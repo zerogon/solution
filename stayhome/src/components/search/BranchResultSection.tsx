@@ -1,6 +1,7 @@
 import { ExternalLink, MapPin } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import {
   TONE_BADGE,
   TONE_DOT,
@@ -44,16 +45,19 @@ export function BranchResultSection({ rows }: { rows: InventoryRow[] }) {
   );
 
   return (
-    <section className="space-y-2">
-      <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-0.5">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-semibold">{head.branchName}</h2>
-          <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+    // head.resortName("롯데리조트")은 일부러 렌더하지 않는다 — branchName에 이미 들어 있다.
+    <section id={`branch-${head.branchName}`} className="scroll-mt-8 space-y-2">
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-0.5">
+        <div className="flex min-w-0 items-center gap-2">
+          <h2 className="font-heading text-base font-semibold tracking-tight">
+            {head.branchName}
+          </h2>
+          <Badge variant="secondary" className="shrink-0 gap-1">
             <MapPin className="size-3" />
             {head.region}
-          </span>
+          </Badge>
         </div>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
           <span className="font-mono tabular-nums">
             예약 가능 {availableCount}/{rows.length}
           </span>
@@ -62,7 +66,8 @@ export function BranchResultSection({ rows }: { rows: InventoryRow[] }) {
         </div>
       </header>
 
-      <ul className="space-y-1.5">
+      {/* 넓은 화면에서 한 줄짜리 객실 행이 세로로만 쌓이면 결과 컬럼이 텅 비어 보인다. */}
+      <ul className="grid gap-1.5 2xl:grid-cols-2">
         {sorted.map((row) => {
           const tone = toneOf(row);
           return (

@@ -48,7 +48,34 @@ export function diffDaysIso(from: string, to: string): number {
   );
 }
 
-/** The Sunday that starts the week containing `s`, as "YYYY-MM-DD". */
-export function isoWeekStart(s: string): string {
-  return addDaysIso(s, -parseDate(s).getUTCDay());
+/** First day of the month containing `s`, as "YYYY-MM-DD". */
+export function startOfMonthIso(s: string): string {
+  return `${s.slice(0, 7)}-01`;
+}
+
+/**
+ * Shift a "YYYY-MM-DD" by `n` months, clamped to the target month's last day.
+ *
+ * `setUTCMonth` alone would roll 1/31 + 1 month over into March; clamping keeps
+ * the result inside the month the caller asked for.
+ */
+export function addMonthsIso(s: string, n: number): string {
+  const d = parseDate(s);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth() + n;
+  // day 0 of month+1 === last day of month.
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(
+    Date.UTC(year, month, Math.min(d.getUTCDate(), lastDay)),
+  )
+    .toISOString()
+    .slice(0, 10);
+}
+
+const KO_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
+
+/** "2026-08-05" → "8.5(수)". UTC getters only, per the date convention above. */
+export function formatKoMd(s: string): string {
+  const d = parseDate(s);
+  return `${d.getUTCMonth() + 1}.${d.getUTCDate()}(${KO_WEEKDAYS[d.getUTCDay()]})`;
 }
