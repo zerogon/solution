@@ -57,7 +57,7 @@
 - **Phase B (완료, 2026-07 재작성)**: lotteresort.com → lottehotel.com 통합에 맞춰
   롯데 크롤러 재작성. 로그인만 브라우저(L.POINT 탭), 검색은 roomList JSON API 직접 호출.
   상세는 `AGENTS.md` 참조.
-- **Phase C**: Inngest 함수 + Vercel Cron 배선
+- **Phase C (완료, 2026-08-05)**: Inngest 함수 + 크론 배선. 상세는 아래 "스케줄링" 절.
 - **Phase D (구현됨)**: 검색 UI (`SearchView` + `/api/inventory`)
 - **Phase E (완료, 2026-08-03)**: 프론트 전면 개선 + PWA 전환.
   앱 셸 도입(인라인 헤더 2벌 → `AppShell`), 조회 화면 재설계(날짜 스트립 + 박수 스테퍼 +
@@ -87,6 +87,47 @@
   `min`/`max`)에 위임하지 않고 `onSelect`의 `triggerDate`만 읽어 직접 해석한다 —
   `{from, to: undefined}`라는 무효 상태를 만들지 않기 위해서다.
 - 로케일은 `react-day-picker/locale/ko` **서브패스**로 import (배럴은 date-fns 전 로케일을 끌고 온다).
+
+## 스케줄링 (Phase C)
+
+`src/lib/inngest/` + `/api/inngest` + `/api/cron/refresh` + `vercel.json`.
+
+- **스케줄 주체는 Inngest 크론이지 Vercel Cron이 아니다.** Vercel Hobby는 크론을
+  **하루 1회**로 제한하고, `0 */3 * * *` 같은 표현은 **배포 시 실패**한다
+  (vercel.com/docs/cron-jobs/usage-and-pricing). Inngest는 자체 스케줄러로
+  `/api/inngest`를 호출하므로 요금제 제약을 받지 않는다.
+  `scheduled-refresh`가 `TZ=Asia/Seoul 0 */3 * * *`(하루 8회)로 팬아웃한다.
+  `vercel.json`의 하루 1회 `/api/cron/refresh`는 **Inngest 앱 sync가 깨졌을 때를 위한
+  백스톱**이지 주 경로가 아니다 — `CRON_SECRET` Bearer 검증 필수.
+- **6시간 주기 금지** — `ResortSession` TTL이 정확히 6시간이라 매 실행이 만료 세션에
+  걸려 재로그인 비용을 낸다. 3시간은 세션 1회 로그인으로 2회 실행을 덮는다.
+- **핫 윈도우 = 30일 × 1~2박** (`src/lib/inngest/windows.ts`, 지점 4개 → 240 API콜/회).
+  `/api/inventory`가 `(checkinDate, checkoutDate)` 정확 일치라서 UI가 허용하는
+  조합(임의 날짜 × 1~14박)을 전부 사전 수집하는 건 불가능하다. 핫 윈도우 밖은
+  `POST /api/resorts/[slug]/refresh`(SearchView "최신화" 버튼)로 실시간 크롤한다.
+  윈도우 배열은 **가까운 날짜부터** 정렬 — 예산이 끊기면 앞에서부터 잘리기 때문.
+- **60초 우회는 "패스" 단위.** `runResortCrawl(slug, { windows, budgetMs })`가 브라우저
+  **한 세션**으로 예산이 허용하는 만큼 윈도우를 돌고 `windowsCompleted`를 반환한다.
+  `crawl-resort`는 `pending.slice(windowsCompleted)`로 남은 걸 다음 `step.run`에 넘긴다 —
+  step마다 Vercel 60초 예산이 새로 잡히는 게 우회의 핵심. 로그인이 10~25초라 윈도우당
+  호출하지 않고 배치로 묶는다.
+- **재고 upsert는 다중행 `ON CONFLICT` 한 문장**(`upsertInventory`의 `$executeRaw`).
+  행마다 `prisma.upsert`를 await 하면 Neon 왕복이 행 수만큼 발생해 윈도우당 ~5초가
+  들었고(3윈도우 41.6초), 이게 패스당 윈도우 수 = 전체 스윕의 브라우저 기동 횟수를
+  결정했다. **`$transaction([...upserts])`도 해결책이 아니다** — pg 드라이버 어댑터에서는
+  여전히 문장별 왕복이라 기본 5초 트랜잭션 타임아웃에 걸린다. 한 문장으로 바꿔 9.2초.
+  · 같은 INSERT가 동일 conflict target을 두 번 건드릴 수 없으므로 유니크 키 기준
+    **선(先) 중복 제거** 필수.
+  · 날짜는 Date가 아니라 `'YYYY-MM-DD'::date`로 바인딩 — Date는 timestamptz로 전송돼
+    세션 TimeZone으로 캐스팅되고, 그게 이 앱의 UTC 자정 규약이 막으려는 하루 밀림이다.
+- **진전 0인 패스는 1회까지 정상.** 로그인에 예산을 다 쓴 첫 패스가 그렇고, 다음 패스는
+  캐시된 세션을 쓴다. 연속 2회면 중단(`stalledPasses`).
+- `runResortCrawl`은 실패를 던지지 않고 `status: FAILED`로 **반환**한다(CrawlLog를 닫아야
+  하므로). 그래서 `crawl-resort`는 결과를 보고 **직접 throw** 해야 Inngest 재시도가 걸린다.
+- Inngest 경계를 넘는 날짜는 항상 `"YYYY-MM-DD"` 문자열. 이벤트/step 결과는 JSON이라
+  Date를 넣으면 ISO 타임스탬프 문자열로 돌아와 조용히 Date가 아니게 된다
+  (`parseDate`/`toIsoDate`로 변환).
+- 실패 알림은 `onFailure` → `notifySlack`(`SLACK_WEBHOOK_URL` 없으면 무동작).
 
 ## PWA
 

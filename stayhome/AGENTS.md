@@ -39,6 +39,18 @@ npx tsx scripts/debug-page.ts roomlist   # 로그인 없이 검색+파싱 파이
 - `resort_inventory`에 행 upsert, `checkin_date`가 KST 오늘의 UTC 자정과 일치
 - `resort_sessions`에 storage_state 저장, 6시간 내 재실행 시 로그인 스킵
 
+스케줄러(Phase C) 검증:
+
+```bash
+npm run inngest:dev        # 별 터미널: Inngest dev server (localhost:8288)
+npm run dev                # 별 터미널
+# 대시보드에서 scheduled-refresh를 Invoke 하거나, 이벤트를 직접 발행:
+#   resort/crawl.requested  { "slug": "LOTTE", "windows": [{"checkin":"2026-08-10","checkout":"2026-08-11"}] }
+```
+
+`windows`를 생략하면 핫 윈도우 60개(30일 × 1~2박)를 전부 돈다 — 실사이트에 240 API콜이
+나가므로 스모크 테스트에는 `windows`를 2~3개만 명시할 것.
+
 로그인 실패 시 `CRAWLER_DEBUG_DIR=<dir>` 지정하면 `lotte-login-failed.png` 스크린샷 저장.
 사이트 구조 탐색은 `scripts/debug-page.ts`의 스텝(main/login/lpoint/resort/search/dom/bizcds/roomlist) 활용.
 

@@ -24,6 +24,17 @@ export function todayKstIso(): string {
   return new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
 }
 
+/**
+ * UTC-midnight Date → "YYYY-MM-DD". Inverse of `parseDate`.
+ *
+ * The crawl scheduler exchanges windows as strings across the Inngest step
+ * boundary (step results are JSON, so Dates would come back as full ISO
+ * timestamps and silently stop being Dates); this is the conversion back.
+ */
+export function toIsoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 /** Return a copy of a UTC-midnight Date shifted by `n` days. */
 export function addDaysUtc(d: Date, n: number): Date {
   const copy = new Date(d);

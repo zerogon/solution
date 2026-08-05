@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "inngest:dev": "npx --yes inngest-cli@latest dev -u http://localhost:3000/api/inngest",
     "icons:generate": "tsx scripts/generate-icons.ts"
   },
   "dependencies": {
