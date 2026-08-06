@@ -1,11 +1,15 @@
 import { BedDouble, CircleCheck, Clock } from "lucide-react";
 
 import { diffDaysIso, formatKoMd } from "@/lib/utils";
-import { LOTTE } from "@/crawlers/lotte/config";
 import { TONE_TEXT } from "@/lib/availability-tone";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/stat-card";
-import type { Committed, InventoryRow } from "./types";
+import {
+  candidateProperties,
+  placeLabel,
+  type PlaceSelection,
+} from "./place-selection";
+import type { Committed, InventoryRow, ResortCatalogEntry } from "./types";
 
 /**
  * 조회 결과 상단의 조건 줄 + 요약 스탯 행.
@@ -17,22 +21,26 @@ import type { Committed, InventoryRow } from "./types";
 export function AvailabilitySummary({
   rows,
   committed,
+  place,
+  catalog,
 }: {
   rows: InventoryRow[];
   committed: Committed;
+  place: PlaceSelection;
+  catalog: ResortCatalogEntry[];
 }) {
   const available = rows.filter((r) => r.available).length;
   const closingSoon = rows.filter((r) => r.available && r.closingSoon).length;
 
   const nights = diffDaysIso(committed.checkin, committed.checkout);
-  const branchLabel =
-    LOTTE.branches.find((b) => b.value === committed.branch)?.label ??
-    "전체 지점";
 
   // 행 수보다 "몇 개 지점에 자리가 있나"가 위치 중심 사고에 맞는 지표다.
+  // 분모는 전체 지점이 아니라 **현재 필터 범위 안의** 지점 수 — 제주만 보고 있는데
+  // 분모가 전국 지점 수면 비율이 아무 의미가 없다.
   const branchesWithAvailability = new Set(
     rows.filter((r) => r.available).map((r) => r.branchName),
   ).size;
+  const branchesInScope = candidateProperties(place, catalog).length;
 
   return (
     <div className="space-y-3">
@@ -45,14 +53,14 @@ export function AvailabilitySummary({
         <span className="font-mono text-xs tabular-nums text-muted-foreground">
           {nights}박
         </span>
-        <Badge variant="outline">{branchLabel}</Badge>
+        <Badge variant="outline">{placeLabel(place, catalog)}</Badge>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <StatCard
           icon={BedDouble}
           label="예약 가능 지점"
-          value={`${branchesWithAvailability}/${LOTTE.branches.length}`}
+          value={`${branchesWithAvailability}/${branchesInScope}`}
         />
         <StatCard
           icon={CircleCheck}

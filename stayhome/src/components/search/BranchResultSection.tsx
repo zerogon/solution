@@ -45,11 +45,16 @@ export function BranchResultSection({ rows }: { rows: InventoryRow[] }) {
   );
 
   return (
-    // head.resortName("롯데리조트")은 일부러 렌더하지 않는다 — branchName에 이미 들어 있다.
+    // 리조트명은 항상 함께 렌더한다. 롯데는 branchName에 브랜드가 들어 있어 생략했었지만
+    // ("롯데리조트 속초") 그건 롯데 한정 가정이다 — 같은 롯데의 "롯데호텔앤리조트 김해"도
+    // Resort.name("롯데리조트")과 다르고, 한화의 "설악 쏘라노"류는 브랜드가 아예 없다.
     <section id={`branch-${head.branchName}`} className="scroll-mt-8 space-y-2">
       <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-0.5">
         <div className="flex min-w-0 items-center gap-2">
-          <h2 className="font-heading text-base font-semibold tracking-tight">
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {head.resortName}
+          </span>
+          <h2 className="min-w-0 truncate font-heading text-base font-semibold tracking-tight">
             {head.branchName}
           </h2>
           <Badge variant="secondary" className="shrink-0 gap-1">

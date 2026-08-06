@@ -72,7 +72,22 @@ UPDATE resorts SET active = true WHERE slug = 'LOTTE';
 
 1. `src/crawlers/<slug>/{config,login,search,parse,index}.ts` 작성 (lotte 복사 후 수정)
 2. `src/crawlers/registry.ts`에 lazy import 1줄 추가
-3. (Phase C 이후) `src/lib/inngest/functions/<slug>.ts` 추가
-4. Neon에서 `UPDATE resorts SET active = true WHERE slug = '<SLUG>'`
+3. `src/lib/resort-catalog.ts`의 `CATALOG`에 `{ properties }` 1항목 추가 —
+   지점의 `branchName`/`label`/`region`만 뽑는다. **`bizCd` 등 크롤 전용 필드는 넣지 않는다**
+   (이 모듈은 `server-only`지만, 넣으면 서버 컴포넌트가 클라이언트로 내려보내게 된다).
+4. `/admin/accounts`에서 해당 리조트 자격증명 등록 (없으면 `run.ts`가 throw)
+5. Neon에서 `UPDATE resorts SET active = true WHERE slug = '<SLUG>'`
 
-핵심 코드(`run.ts`, `_shared/*`)는 무수정.
+핵심 코드(`run.ts`, `_shared/*`)는 물론 **Inngest 함수·조회 UI·`/api/inventory`도 무수정**이다.
+`crawl-resort`는 slug를 인자로 받는 단일 함수이고(리조트별 함수가 아니다),
+`scheduled-refresh`가 `listCrawlableResorts()`(= `active` ∩ 등록된 크롤러)로 팬아웃한다.
+
+추가 후 확인 — 지점 문자열이 카탈로그와 실제 수집 결과 사이에서 어긋나지 않았는지:
+
+```sql
+SELECT DISTINCT resort_name, branch_name, region FROM resort_inventory ORDER BY 1, 2;
+```
+
+`branchName`은 크롤러 config의 `value`가 그대로 저장된 값이고 카탈로그도 같은 배열을
+읽으므로 자동으로 일치해야 한다. 어긋난다면 크롤러가 `config.branches`를 우회해
+지점명을 만들고 있다는 뜻이다 (증상은 "필터를 눌렀는데 0건").

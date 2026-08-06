@@ -68,7 +68,41 @@
   조회 화면 **2단 레이아웃**(xl 이상: sticky 필터 패널 + 결과), 셸 여백 정리
   (`--app-content-w` 72→88rem — 1920px에서 사이드바-본문 공백 288→160px),
   결과에서 지점명·지역 위계 승격. 상세는 아래 "월 캘린더" 절.
+- **Phase F 준비 (완료, 2026-08-06)**: 조회 화면 다중 리조트 일반화. 지점 메타의 단일
+  출처를 `src/lib/resort-catalog.ts`(server-only)로 만들고 클라이언트의 크롤러 config
+  import 제거, 필터를 리조트/지역/지점 3축 + 점진 노출로 재설계, "최신화"를 선택 지점의
+  리조트로 라우팅. 상세는 아래 "조회 필터" 절.
 - **Phase F**: 나머지 4개 리조트(리솜·한화·오크밸리·소노) 확장
+
+## 조회 필터 (Phase F 준비)
+
+`src/lib/resort-catalog.ts` + `src/components/search/{place-selection,PlaceFilter,PropertyPicker,FilterChipRow}.tsx`.
+
+- **크롤러 config는 클라이언트 번들에 흘러가면 안 된다.** 예전엔 `BranchTabs`가
+  `@/crawlers/lotte/config`를 직접 import해 `bizCd`(예약 API 프로퍼티 코드)가 실제로
+  브라우저까지 나갔다. 이제 `resort-catalog.ts`가 `server-only`로 막고 UI에 필요한
+  필드만 뽑아 서버 컴포넌트(`app/(app)/page.tsx`)가 props로 내려보낸다.
+  회귀 검사: `npm run build && grep -r "bizCd\|roomListApiUrl\|loginPw" .next/static` → 0건.
+- **지점 메타는 DB 테이블이 아니라 카탈로그 모듈.** `ResortInventory.branchName`은
+  크롤러가 `config.branches[].value`를 그대로 저장한 값이라, 테이블을 만들면 같은
+  리스트의 사본이 생긴다. 사본이 어긋나면 증상이 "필터를 눌렀는데 0건"이고 크롤 실패와
+  구분되지 않는다. 카탈로그는 UI가 읽는 배열 = 크롤러가 도는 배열이라 그 드리프트가 없다.
+- **축은 점진 노출**(`visibleAxes`). 리조트 축은 리조트 ≥2, 지역 축은 지역 ≥2 **그리고**
+  지점 수 > 지역 수일 때만 뜬다. 롯데 단독(지점 4 / 지역 4)은 둘 다 숨겨져 지점 칩 한 줄만
+  남는다. `REGION_ORDER`는 `place-selection.ts`에 있다 — 카탈로그는 server-only라 클라가 못 읽는다.
+- **무효 조합은 상태로 존재할 수 없다.** `selectResort/Region/Property` 세 함수가 상위 축
+  변경 시 모순되는 하위를 지우고, 지점 선택 시 상위를 그 지점 값으로 채운다.
+  `StayRangeCalendar`가 `{from, to: undefined}`를 안 만드는 것과 같은 판단.
+- **서버 필터 축은 `resort` 하나뿐.** 지역·지점은 클라이언트 `matchesPlace`가 좁힌다 —
+  칩마다 예약 가능 건수 배지가 왕복 없이 나오고, `stale` 흐림이 날짜/리조트 변경에만 걸린다.
+  `matchesPlace`는 카탈로그가 아니라 **행 자신의 `region`/`resortSlug`**로 판정한다.
+- **최신화는 항상 단일 지점.** `/api/resorts/[slug]/refresh`는 `maxDuration=60`에
+  `runResortCrawl` 50초 예산이라 지점 10곳 넘는 리조트의 "전체 최신화"는
+  `withDeadline`이 터져 0행 FAILED가 된다. 여러 리조트 동시 최신화는 호출 1건 =
+  브라우저 1세션이라 불가능.
+- 지점 후보가 8곳을 넘으면 칩 그리드 대신 검색 가능한 바텀시트(`PropertyPicker`).
+  칩 그리드 컬럼 수는 **개수 비의존**이어야 한다 — 예전 `sm:grid-cols-5`는 옵션 5개에
+  맞춘 값이라 지점 수가 바뀌면 마지막 줄에 조각 칩이 생겼다.
 
 ## 월 캘린더 (react-day-picker v10)
 
@@ -137,6 +171,12 @@
 
 - 캐시 전략: navigation → network-first + `/offline` 폴백 / `/api/inventory` → SWR /
   `_next/static`·`/icons` → cache-first / **그 외 전부 캐시 우회**.
+- **`x-fresh: 1` 헤더는 SWR의 캐시본을 건너뛴다.** 라이브 최신화 직후 재조회에 붙인다 —
+  안 붙이면 방금 크롤한 결과 대신 이전 캐시본이 먼저 그려져 갱신이 한 박자 밀린다
+  (개발 모드는 워커 미등록이라 드러나지 않는다). `cache.match`는 요청 헤더를 무시하므로
+  캐시 키는 쪼개지지 않는다.
+- `/api/inventory` 응답 shape을 바꾸면 `CACHE_VERSION`을 올린다 — 낡은 본문이 새 코드에
+  그대로 들어온다. `activate`가 `welfarestay-` 접두사 중 현행 아닌 캐시를 지운다.
 - **개발 모드에서는 서비스워커를 등록하지 않는다** (`ServiceWorkerManager`가
   `NODE_ENV !== "production"`이면 조기 return). 예방 조치다 — `sw.js`는
   `_next/static`을 cache-first로 잡는데, 개발 중에는 브라우저에 워커가 끼어 있는 것만으로
