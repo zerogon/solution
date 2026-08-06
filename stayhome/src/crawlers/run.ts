@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 import { decrypt } from "@/lib/crypto";
 import { CrawlStatus, CrawlStage } from "@/generated/prisma/enums";
 import type { ResortSlug } from "@/generated/prisma/enums";
@@ -9,12 +11,29 @@ import {
   clearStorageState,
 } from "./_shared/session-store";
 import { withDeadline, DeadlineExceeded } from "./_shared/timeout";
-import { parseDate, todayKstIso, addDaysUtc } from "@/lib/utils";
+import { parseDate, todayKstIso, addDaysUtc, toIsoDate } from "@/lib/utils";
 import { loadCrawler } from "./registry";
 import type { CrawlerContext, InventoryRow, SearchParams } from "./types";
 
 const DEFAULT_SESSION_TTL_HOURS = 6;
 const STEP_BUDGET_MS = 55_000; // leave 5s headroom under Vercel's 60s cap
+
+/**
+ * Wall-clock budget for one call, measured from entry. Browser launch, session
+ * validation and login all come out of it before any window is searched, so it
+ * sits below STEP_BUDGET_MS rather than at it.
+ */
+const DEFAULT_BUDGET_MS = 50_000;
+
+/**
+ * How long to assume the *next* window will take before any window has been
+ * measured, and thus how much budget must remain to start one. A measured
+ * window (4 branch API calls + one batched upsert) runs ~2.5s against the live
+ * site; this leaves room for a bad one without idling away a third of the pass.
+ * The search itself is separately capped at the remaining budget, so an
+ * underestimate cannot actually overrun the invocation — it only wastes a step.
+ */
+const INITIAL_WINDOW_ESTIMATE_MS = 8_000;
 
 export interface RunResult {
   resortId: string;
@@ -23,6 +42,15 @@ export interface RunResult {
   errorMessage?: string;
   errorStage?: CrawlStage;
   durationMs: number;
+  /**
+   * Windows fully searched *and* upserted in this call, counted from the front
+   * of `opts.windows`. The scheduler resumes with `windows.slice(this)` — see
+   * `src/lib/inngest/functions/crawl-resort.ts`. Always `windows.length` when
+   * the budget held; short when it ran out; short-and-FAILED when a window threw.
+   */
+  windowsCompleted: number;
+  /** `opts.windows.length` (or 1 for the single-window form). */
+  windowsRequested: number;
 }
 
 export interface RunOptions {
@@ -34,6 +62,17 @@ export interface RunOptions {
   forceLogin?: boolean;
   /** Search window. Defaults to today → today+1 (KST), matching the UI default. */
   search?: SearchParams;
+  /**
+   * Several windows crawled in ONE browser session, in order. Takes precedence
+   * over `search`.
+   *
+   * Login is by far the dominant cost of a crawl (browser launch + a real form
+   * submit ≈ 10-25s) while an extra window is only 4 more JSON calls, so the
+   * scheduler batches windows here instead of calling this function per window.
+   */
+  windows?: SearchParams[];
+  /** Wall-clock budget from entry. Defaults to {@link DEFAULT_BUDGET_MS}. */
+  budgetMs?: number;
 }
 
 function defaultSearch(): SearchParams {
@@ -50,7 +89,12 @@ export async function runResortCrawl(
   opts: RunOptions,
 ): Promise<RunResult> {
   const startedAt = new Date();
-  const search = opts.search ?? defaultSearch();
+  const budgetMs = opts.budgetMs ?? DEFAULT_BUDGET_MS;
+  const deadline = startedAt.getTime() + budgetMs;
+  const windows =
+    opts.windows && opts.windows.length > 0
+      ? opts.windows
+      : [opts.search ?? defaultSearch()];
 
   const resort = await prisma.resort.findUnique({ where: { slug } });
   if (!resort) throw new Error(`Resort not found: ${slug}`);
@@ -81,6 +125,7 @@ export async function runResortCrawl(
   let stage: CrawlStage = CrawlStage.VALIDATE;
   let errorMessage: string | undefined;
   let rowsUpserted = 0;
+  let windowsCompleted = 0;
   let status: CrawlStatus = CrawlStatus.FAILED;
   let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;
 
@@ -125,19 +170,42 @@ export async function runResortCrawl(
       logger("session valid, skipping login");
     }
 
-    // Stage 3: search
-    stage = CrawlStage.SEARCH;
-    const rows: InventoryRow[] = await withDeadline(
-      "search",
-      STEP_BUDGET_MS,
-      () => crawler.searchAvailability(ctx, search),
-    );
+    // Stages 3+4, once per window, all on the one authenticated session.
+    // A window is only counted as completed after its rows are upserted, so a
+    // budget cut or a throw resumes exactly where this left off.
+    let windowEstimateMs = INITIAL_WINDOW_ESTIMATE_MS;
+    for (const window of windows) {
+      const remaining = deadline - Date.now();
+      if (remaining < windowEstimateMs) {
+        logger("budget exhausted, deferring remaining windows", {
+          done: windowsCompleted,
+          left: windows.length - windowsCompleted,
+          remainingMs: remaining,
+        });
+        break;
+      }
+      const windowStart = Date.now();
 
-    // Stage 4: upsert
-    stage = CrawlStage.UPSERT;
-    rowsUpserted = await upsertInventory(resort.id, resort.name, rows, search);
+      stage = CrawlStage.SEARCH;
+      const rows: InventoryRow[] = await withDeadline(
+        "search",
+        Math.min(STEP_BUDGET_MS, remaining),
+        () => crawler.searchAvailability(ctx, window),
+      );
+
+      stage = CrawlStage.UPSERT;
+      rowsUpserted += await upsertInventory(resort.id, resort.name, rows, window);
+      windowsCompleted++;
+
+      // Track the slowest window seen rather than the mean: the budget check
+      // must survive the next window being as bad as the worst so far.
+      windowEstimateMs = Math.max(windowEstimateMs, Date.now() - windowStart);
+    }
     status = CrawlStatus.SUCCESS;
-    logger("crawl complete", { rows: rowsUpserted });
+    logger("crawl complete", {
+      rows: rowsUpserted,
+      windows: `${windowsCompleted}/${windows.length}`,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     errorMessage = msg;
@@ -163,7 +231,10 @@ export async function runResortCrawl(
       durationMs,
       errorMessage,
       errorStage: errorMessage ? stage : null,
-      rowsUpserted: status === CrawlStatus.SUCCESS ? rowsUpserted : null,
+      // Recorded even on FAILED: a multi-window run can die on window 7 with
+      // six windows' worth of rows already committed, and reporting null there
+      // would make the log claim nothing was collected.
+      rowsUpserted,
     },
   });
 
@@ -174,6 +245,8 @@ export async function runResortCrawl(
     errorMessage,
     errorStage: errorMessage ? stage : undefined,
     durationMs,
+    windowsCompleted,
+    windowsRequested: windows.length,
   };
 }
 
@@ -185,43 +258,46 @@ async function upsertInventory(
 ): Promise<number> {
   if (rows.length === 0) return 0;
   const now = new Date();
-  // Process sequentially to avoid hammering the pooler with parallel writes
-  // during a single crawl pass; volume per resort is small (~50 rows max).
-  let count = 0;
-  for (const row of rows) {
-    await prisma.resortInventory.upsert({
-      where: {
-        uniq_inventory_row: {
-          resortId,
-          branchName: row.branchName,
-          roomType: row.roomType,
-          checkinDate: search.checkin,
-          checkoutDate: search.checkout,
-        },
-      },
-      create: {
-        resortId,
-        resortName,
-        branchName: row.branchName,
-        roomType: row.roomType,
-        region: row.region,
-        checkinDate: search.checkin,
-        checkoutDate: search.checkout,
-        available: row.available,
-        closingSoon: row.closingSoon,
-        detailUrl: row.detailUrl ?? null,
-        syncedAt: now,
-      },
-      update: {
-        resortName,
-        region: row.region,
-        available: row.available,
-        closingSoon: row.closingSoon,
-        detailUrl: row.detailUrl ?? null,
-        syncedAt: now,
-      },
-    });
-    count++;
-  }
-  return count;
+
+  // Deduplicate on the unique key first. A single INSERT cannot touch the same
+  // conflict target twice ("ON CONFLICT DO UPDATE command cannot affect row a
+  // second time"), and the room list occasionally repeats a room type. Last
+  // occurrence wins, matching what the old row-at-a-time loop ended up storing.
+  const byKey = new Map<string, InventoryRow>();
+  for (const row of rows) byKey.set(`${row.branchName} ${row.roomType}`, row);
+
+  // One statement, one round trip. Prisma's `upsert` per row — and even
+  // `$transaction([...upserts])` under the pg driver adapter — issues a
+  // separate round trip each, which measured ~5s per window against Neon and
+  // dominated the pass budget (and so the browser-launch count for a full
+  // sweep). Dates bind as 'YYYY-MM-DD' strings cast to `date` rather than as
+  // Date objects: a Date would be sent as a timestamptz and cast using the
+  // session's TimeZone, which is exactly the off-by-one-day this app's
+  // UTC-midnight convention exists to prevent.
+  const checkin = toIsoDate(search.checkin);
+  const checkout = toIsoDate(search.checkout);
+  const values = [...byKey.values()].map(
+    (row) => Prisma.sql`(
+      ${randomUUID()}, ${resortId}, ${resortName}, ${row.branchName},
+      ${row.roomType}, ${row.region}, ${checkin}::date, ${checkout}::date,
+      ${row.available}, ${row.closingSoon}, ${row.detailUrl ?? null}, ${now}
+    )`,
+  );
+
+  await prisma.$executeRaw`
+    INSERT INTO resort_inventory (
+      id, resort_id, resort_name, branch_name, room_type, region,
+      checkin_date, checkout_date, available, closing_soon, detail_url, synced_at
+    )
+    VALUES ${Prisma.join(values)}
+    ON CONFLICT (resort_id, branch_name, room_type, checkin_date, checkout_date)
+    DO UPDATE SET
+      resort_name  = EXCLUDED.resort_name,
+      region       = EXCLUDED.region,
+      available    = EXCLUDED.available,
+      closing_soon = EXCLUDED.closing_soon,
+      detail_url   = EXCLUDED.detail_url,
+      synced_at    = EXCLUDED.synced_at
+  `;
+  return values.length;
 }

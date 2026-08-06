@@ -24,7 +24,9 @@
  * 않는다 — 아래 `shouldBypass()`가 GET 이외 전부와 함께 걸러낸다.
  */
 
-const CACHE_VERSION = "v1";
+// v2: /api/inventory 행에 resortSlug가 추가돼 v1 본문은 새 코드에 대해 불완전하다.
+// 올리면 activate 핸들러가 welfarestay-*-v1 캐시를 지운다.
+const CACHE_VERSION = "v2";
 const STATIC_CACHE = `welfarestay-static-${CACHE_VERSION}`;
 const DATA_CACHE = `welfarestay-data-${CACHE_VERSION}`;
 const OFFLINE_CACHE = `welfarestay-offline-${CACHE_VERSION}`;
@@ -116,13 +118,19 @@ async function staleWhileRevalidate(request, cacheName) {
     })
     .catch(() => undefined);
 
-  if (cached) {
+  // 라이브 최신화 직후의 재조회는 캐시본을 건너뛴다. 방금 크롤한 결과를 보려고
+  // 누른 것인데 SWR이 이전 캐시본을 먼저 돌려주면 갱신이 한 박자 밀려 보인다.
+  // `cache.match`는 기본적으로 요청 헤더를 무시하므로 캐시 키는 쪼개지지 않는다.
+  const wantsFresh = request.headers.get("x-fresh") === "1";
+
+  if (cached && !wantsFresh) {
     // 갱신은 백그라운드로 흘려보내고 캐시본을 먼저 그린다.
     return cached;
   }
   const fresh = await network;
   return (
     fresh ??
+    cached ??
     new Response(JSON.stringify({ error: "offline" }), {
       status: 503,
       headers: { "content-type": "application/json" },

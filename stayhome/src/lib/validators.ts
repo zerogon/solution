@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { ResortSlug } from "@/generated/prisma/enums";
+
 export const loginSchema = z.object({
   loginId: z.string().min(1, "ID를 입력하세요").max(50),
   password: z.string().min(1, "비밀번호를 입력하세요").max(200),
@@ -36,11 +38,22 @@ export const searchParamsSchema = z
 
 export type SearchParamsInput = z.infer<typeof searchParamsSchema>;
 
-/** User-facing cache read: filter by branch (= ResortInventory.branchName). */
+/**
+ * User-facing cache read.
+ *
+ * `resort` is the only server-side narrowing axis — it is low-cardinality (≤5) and
+ * is what actually bounds the payload. Region and property filtering happens on the
+ * client (`matchesPlace`) so that every chip's availability badge comes for free
+ * without a round trip per chip.
+ *
+ * `branch` (= `ResortInventory.branchName`) stays for compatibility with any cached
+ * URL the service worker still holds; the search UI no longer sends it.
+ */
 export const inventoryQuerySchema = z
   .object({
     checkin: isoDate,
     checkout: isoDate,
+    resort: z.nativeEnum(ResortSlug).optional(),
     branch: z.string().optional(),
   })
   .refine((v) => v.checkout > v.checkin, {

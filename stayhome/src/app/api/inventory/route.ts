@@ -10,12 +10,18 @@ export const dynamic = "force-dynamic";
 /**
  * Cached inventory read for the user search screen. Returns rows previously
  * collected by a crawl (`runResortCrawl` → upsertInventory) for the given
- * check-in/check-out window, optionally narrowed to one branch.
+ * check-in/check-out window, optionally narrowed to one resort.
  *
- * `branch` filters by `ResortInventory.branchName` (= LOTTE.branches[].value,
- * e.g. "롯데리조트 속초") — NOT the geographic `region` column. Dates are parsed
- * with the same `parseDate` helper used on the write path so `@db.Date`
- * equality matching holds.
+ * `resort` is the only narrowing the client asks for; region/property filtering
+ * happens client-side so the filter chips can show per-axis availability counts
+ * without a round trip each. `branch` (= `ResortInventory.branchName`) is still
+ * accepted for compatibility with service-worker-cached URLs.
+ *
+ * Dates are parsed with the same `parseDate` helper used on the write path so
+ * `@db.Date` equality matching holds.
+ *
+ * Row order matters to the UI: region → resort → branch is what lets `Results`
+ * insert region dividers by watching for the value changing.
  */
 export async function GET(req: Request) {
   await requireSession();
@@ -24,6 +30,7 @@ export async function GET(req: Request) {
   const parsed = inventoryQuerySchema.safeParse({
     checkin: url.searchParams.get("checkin") ?? undefined,
     checkout: url.searchParams.get("checkout") ?? undefined,
+    resort: url.searchParams.get("resort") ?? undefined,
     branch: url.searchParams.get("branch") ?? undefined,
   });
   if (!parsed.success) {
@@ -33,15 +40,21 @@ export async function GET(req: Request) {
     );
   }
 
-  const { checkin, checkout, branch } = parsed.data;
+  const { checkin, checkout, resort, branch } = parsed.data;
 
-  const rows = await prisma.resortInventory.findMany({
+  const found = await prisma.resortInventory.findMany({
     where: {
       checkinDate: parseDate(checkin),
       checkoutDate: parseDate(checkout),
+      ...(resort ? { resort: { slug: resort } } : {}),
       ...(branch ? { branchName: branch } : {}),
     },
-    orderBy: [{ region: "asc" }, { branchName: "asc" }, { roomType: "asc" }],
+    orderBy: [
+      { region: "asc" },
+      { resortName: "asc" },
+      { branchName: "asc" },
+      { roomType: "asc" },
+    ],
     select: {
       id: true,
       resortName: true,
@@ -52,8 +65,13 @@ export async function GET(req: Request) {
       closingSoon: true,
       detailUrl: true,
       syncedAt: true,
+      resort: { select: { slug: true } },
     },
   });
+
+  // Flatten the relation so a row describes its own resort — the client filters
+  // by slug and must never have to reverse-engineer it from the display name.
+  const rows = found.map(({ resort: r, ...row }) => ({ ...row, resortSlug: r.slug }));
 
   return NextResponse.json({ rows });
 }
