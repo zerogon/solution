@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Noto_Sans_KR } from "next/font/google";
 
 import { Toaster } from "@/components/ui/sonner";
-import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 import { ServiceWorkerManager } from "@/components/pwa/ServiceWorkerManager";
 import { ReactQueryProvider } from "@/components/ReactQueryProvider";
 import "./globals.css";
@@ -66,7 +65,6 @@ export default function RootLayout({
         <ReactQueryProvider>{children}</ReactQueryProvider>
         <Toaster position="top-center" richColors theme="light" />
         <ServiceWorkerManager />
-        <PwaInstallPrompt />
       </body>
     </html>
   );
