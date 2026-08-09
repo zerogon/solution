@@ -171,10 +171,96 @@ npx tsx scripts/debug-sono.ts diff       # 사이트 지점 목록 ↔ SONO.bran
 `doLogin`이 세션을 파일로 남기고 나머지 스텝이 재사용한다 — 스텝마다 로그인하면
 사이트 레이트리밋에 걸린다.
 
+# RESOM 크롤러 (book.resom.co.kr 회원 객실 예약)
+
+리솜리조트(호반호텔앤리조트)의 예약 사이트는 `book.resom.co.kr`이고 Vue SPA다
+(마케팅 사이트 `www.resom.co.kr`과 다른 호스트 — `Resort.baseUrl`은 후자를 가리키니
+config의 `baseUrl`과 헷갈리지 말 것). 롯데·소노처럼 **브라우저는 로그인에만** 쓰고
+검색은 `page.request`로 JSON을 직접 부른다. 수집 대상은 **회원 객실 예약 하나**다 —
+패키지·추첨(`/drawLots`)·쿠폰 전용 예약은 다른 상품이라 같은 테이블에 섞으면
+"잔여 객실"의 의미가 리조트마다 달라진다.
+
+엔드포인트 (2026-08-09 실계정 검증, `apiBase` = `https://book.resom.co.kr/api/user/reservation`):
+
+```
+POST {apiBase}/auth/login                       로그인 (폼 조작으로 유발)
+GET  {apiBase}/auth/info                        세션 검증 → member.memNo / memInd
+GET  {apiBase}/roomReservation/allCondos        지점 + 객실유형 카탈로그
+GET  {apiBase}/roomReservation/calendarRooms    잔여 객실 (날짜별 달력)
+```
+
+롯데·소노와 갈리는 지점은 넷이다.
+
+- **API가 쿠키가 아니라 베어러 토큰이다.** 로그인 쿠키를 다 들고 가도 헤더가 없으면
+  401이다. SPA는 `Authorization: Bearer …` + `login-id: <intnetId>` +
+  `user-device: HOMEPAGE`를 보낸다.
+  · 토큰은 **로그인 응답에만** 나온다(`{ accessToken, member: { intnetId, memNo, memInd } }`).
+    사이트 자신은 localStorage에 pinia-persist로 넣는데, 키가
+    `SHA256("hoban-user-front-local")`이고 값이 앱 상수 패스프레이즈로 AES 암호화돼 있다.
+    **크롤러는 그 블롭을 읽지 않는다** — 프런트엔드 빌드의 난독화 세부에 묶이는 데다
+    localStorage는 해당 오리진으로 이동해야만 읽힌다.
+  · 대신 `login.ts`가 토큰을 **우리 쿠키**(`welfarestay_auth`, base64 JSON)에 넣는다.
+    쿠키는 `storageState`에 그대로 실려 세션 재사용에서 살아남고, 네비게이션 없이
+    `context.cookies()`로 읽히므로 `validateSession`이 롯데·소노처럼 요청 한 번으로 끝난다.
+  · 조사 스크립트는 예외적으로 그 블롭을 복호화한다(`decryptPinia`). 질문 하나마다
+    실계정 로그인을 새로 하지 않기 위한 것이지 크롤러 경로가 아니다.
+- **`calendarRooms`는 체크인 날짜를 키로 하는 달력이다.** `{ "20260901": [ …객실유형… ], … }`
+  이고 `ciYmd`..`coYmd` 범위를 **문자 그대로** 지킨다 — 20260809→20260930 요청이 월 경계를
+  넘어 53일 전부를 구멍 없이 돌려줬다. 그래서 지점당 한 콜로 핫 윈도우 전체가 덮인다.
+  요청 폭은 `RESOM.calendarSpanDays`(45일)이고, 이 상수는 **크롤러에만** 있다 —
+  `windows.ts`에 사본을 두면 어긋났을 때 증상이 "그 날짜만 조용히 빔"이다.
+- **`nights`는 재고에 아무 영향이 없다.** 1·2·7박 요청의 공통 180건이 `statusBooking`·
+  `remdRmCnt`까지 전부 동일했다. 응답은 하룻밤씩을 말하므로 `parse.ts`가 숙박 일수만큼
+  AND 한다(소노와 같은 결론이지만, 유추가 아니라 실측으로 얻은 것이다).
+  판정할 밤이 하나라도 없으면 행을 **안 만든다**.
+- **`remdRmCnt`가 음수로 나온다**(관측 -33). `statusBooking === 1` ⟺ `remdRmCnt > 0`이
+  실측 180건에서 완전히 일치했으므로 예약 가능 판정은 `statusBooking`을 쓴다.
+  마감임박은 사이트가 코드로 주지 않아 **롯데식 임계값 추론**이다(잔여 ≤ 2). 소노처럼
+  사이트의 `E`를 쓰는 것과 근거가 다르다는 점을 기억할 것.
+
+그 밖에:
+
+- 지점 3곳 — 포레스트 리솜(1075·제천·**충북**), 스플라스 리솜(1027·덕산·충남),
+  아일랜드 리솜(1001·안면도·충남). `region`은 API의 `bizNm`(덕산/제천/안면도)이 아니라
+  **2글자 광역**으로 정규화한다. 안 그러면 지역 칩이 롯데·소노와 갈라진다.
+- `roomType`에 `dongNm`을 붙인다(`"레스트리 S30 타워 클린"`). 동이 사실상 별개 숙소로
+  홍보되고(포레스트/레스트리, 오션빌라스/오션타워, 스테이타워/플렉스타워), `roomType`이
+  upsert 유니크 키의 일부라 이름이 겹치면 한쪽이 조용히 사라지기 때문이다.
+- 객실유형 코드는 **config가 아니라 `allCondos`에서** 가져온다. `calendarRooms`가
+  `rmTypeCd` 목록을 필수로 요구하고(빈 배열이면 400), 객실유형은 지점명과 달리 자주 바뀌며
+  다른 무엇과도 일치할 필요가 없다. 지점명(`branchName`)만이 config 단독 출처다.
+- 로그인 폼에 `<form>`도 `name`/`id`도 없다. 아이디는 placeholder로, 제출은
+  `a.login_btn`으로 잡는다 — 페이지의 유일한 `button` role은 "GO"이고, 헤더에 같은
+  접근성 이름의 `로그인` 앵커가 하나 더 있다.
+
+실사이트 검증(2026-08-09): 전 지점 1윈도우 2,116행 11.4초, **핫 윈도우 60개 → 58개
+스킵·요청 2세트(6콜) 4,186행 21초**(세션 재사용). 30일 핫 윈도우에 1박·2박 모두 결측
+0일, 과거 날짜 0행, "2박 가능인데 1박 불가" 모순 0행, 지점·지역 카탈로그 완전 일치.
+
+## 로컬 검증
+
+```bash
+npx tsx scripts/debug-resom.ts main       # 진입점 · 아웃바운드 호스트
+npx tsx scripts/debug-resom.ts login      # 로그인 폼 인풋/클릭 후보
+npx tsx scripts/debug-resom.ts doLogin    # 실로그인 → /tmp/resom-debug-state.json + 토큰 응답 shape
+npx tsx scripts/debug-resom.ts net        # 예약 화면을 직접 몰며 JSON 전량 기록
+npx tsx scripts/debug-resom.ts api <url>  # 저장된 세션 + 인증 헤더로 GET
+npx tsx scripts/debug-resom.ts rows       # search+parse 단독 실행
+npx tsx scripts/debug-resom.ts span       # 한 콜이 덮는 범위 · nights 무영향 재확인
+npx tsx scripts/debug-resom.ts diff       # allCondos ↔ RESOM.branches 대조
+npx tsx scripts/run-crawl.ts RESOM        # run.ts 전체 경로
+npx tsx scripts/run-crawl.ts RESOM hot    # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
+```
+
+`doLogin`이 세션을 파일로 남기고 나머지 스텝이 재사용한다. `rows`/`span`은 그 세션에서
+크롤러용 쿠키를 만들어 심으므로(`seedCrawlerCookie`) 파서를 고칠 때마다 실계정에
+로그인이 쌓이지 않는다 — 반복 로그인 실패는 잠금 위험이라 그렇게 만들었다.
+
 # 새 리조트 추가 (Phase F)
 
-1. `src/crawlers/<slug>/{config,login,search,parse,index}.ts` 작성
-   (lotte 또는 sono 복사 후 수정 — 사이트가 다중 지점 배치 조회를 지원하면 sono 쪽이 가깝다)
+1. `src/crawlers/<slug>/{config,login,search,parse,index}.ts` 작성.
+   가장 가까운 것을 복사한다 — 지점마다 한 콜이면 **lotte**, 한 콜에 여러 지점이면
+   **sono**, 응답이 날짜 달력이거나 API가 쿠키가 아니라 토큰을 요구하면 **resom**.
 2. `src/crawlers/registry.ts`에 lazy import 1줄 추가
 3. `src/lib/resort-catalog.ts`의 `CATALOG`에 `{ properties }` 1항목 추가 —
    지점의 `branchName`/`label`/`region`만 뽑는다. **`bizCd` 등 크롤 전용 필드는 넣지 않는다**

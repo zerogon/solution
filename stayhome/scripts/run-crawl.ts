@@ -19,6 +19,26 @@ async function main() {
   }
   const branch = process.argv[3];
 
+  // `hot` runs the scheduler's own window list instead of a single day. It is
+  // the only local way to see the window-skip in action: a crawler whose rows
+  // carry their own `stay` answers many windows per request, and that only
+  // shows up as `windowsCompleted` racing ahead of the requests it made.
+  if (branch === "hot") {
+    const { buildHotWindows } = await import("../src/lib/inngest/windows");
+    const windows = buildHotWindows().map((w) => ({
+      checkin: parseDate(w.checkin),
+      checkout: parseDate(w.checkout),
+    }));
+    const result = await runResortCrawl(slug as ResortSlug, {
+      triggeredBy: "MANUAL",
+      windows,
+      budgetMs: 300_000,
+    });
+    console.log(`windows requested: ${windows.length}`);
+    console.log("RESULT:", JSON.stringify(result, null, 2));
+    return;
+  }
+
   const result = await runResortCrawl(slug as ResortSlug, {
     triggeredBy: "MANUAL",
     ...(branch ? { search: { ...defaultWindow(), branch } } : {}),
