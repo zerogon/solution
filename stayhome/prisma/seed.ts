@@ -67,9 +67,9 @@ const RESORTS: Array<{
     name: "소노호텔앤리조트",
     region: "전국",
     baseUrl: "https://www.sonohotelsresorts.com",
-    loginUrl: "https://www.sonohotelsresorts.com/login",
+    loginUrl: "https://www.sonohotelsresorts.com/member/login",
     active: false,
-    memo: "구 대명리조트 (소노로 리브랜딩)",
+    memo: "구 대명리조트 (소노로 리브랜딩). 회원(제휴) 예약 경로 — 비로그인 조회 불가",
   },
 ];
 

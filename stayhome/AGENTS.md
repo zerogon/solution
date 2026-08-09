@@ -68,9 +68,70 @@ UPDATE resorts SET active = true WHERE slug = 'LOTTE';
 
 ---
 
+# SONO 크롤러 (sonohotelsresorts.com 회원 예약)
+
+소노 사이트 전체가 `/api/hms/user/...` JSON API 위의 SPA다. 롯데와 마찬가지로
+**브라우저는 로그인에만** 쓰고 검색은 `page.request`로 직접 호출한다.
+롯데와 갈리는 지점은 셋:
+
+- **비로그인으로는 아무것도 못 본다.** 예약 위젯을 로그아웃 상태로 열면
+  "로그인이 필요합니다" 다이얼로그가 뜬다. 롯데의 BAR 요금처럼 공개된 재고가 없다.
+- **`storeCdList`가 배열이라 여러 지점을 한 콜에 조회한다.** 실측: 32곳 한 번에
+  7.4초/2.6MB, 1곳 0.35초/54KB. 그래서 `search.ts`가 지점 루프가 아니라
+  **배치 루프**다 (`SONO.batchSize = 8` → 4콜). 전 지점 크롤이 로그인 포함 17초라
+  `/admin/crawl-logs`의 전체 새로고침(maxDuration=60)도 안전하다.
+- **응답이 요청 날짜 하루치가 아니다.** 요청한 `ciYmd` 주변 **약 23일치**를 항상
+  돌려준다. `run.ts`는 반환된 모든 행을 자기가 요청한 한 윈도우 아래 upsert하므로
+  `parse.ts`가 `ciYmd === checkinDt`로 **반드시 걸러야** 한다. (거르지 않으면
+  8/20의 재고가 8/12로 저장된다.)
+
+엔드포인트 (2026-08-09 실계정 검증):
+
+```
+POST {apiBase}/management/auth/login              로그인 (폼 조작으로 유발)
+GET  {apiBase}/management/auth/userinfo           세션 검증 → body.userInfo.memNo
+GET  {apiBase}/memberReservation/room/placeList   지점 목록 (조사용)
+POST {apiBase}/memberReservation/room/list/pc     잔여 객실
+```
+
+- 로그인 폼은 `#lginId` / `#lginPw`. **`<form>` 요소가 없고** `name` 속성도 없다.
+  헤더의 "로그인" 링크가 제출 버튼과 접근성 이름이 같아 셀렉터를 폼 영역으로 좁혀야 한다.
+- `memNo`는 계정마다 다르므로 매 윈도우 `userinfo`에서 읽는다 (config에 박지 않는다).
+  `userIndCd:"Y"` / `rsvIndCd:"9"`는 SPA 요청에서 관측한 상수라 `SONO.request`에 고정 —
+  다른 계정에서 전 지점 0행이 나오면 여기부터 다시 캔다.
+- 상태 코드 `A`=예약원활 `E`=마감임박 `D`=예약마감 `W`=예약대기 `N`=예약불가.
+  `rsvRmCnt`는 예약대기 행에서 **음수**가 나온다(관측 -31). `closingSoon`은
+  임계값 추론이 아니라 사이트의 `E`를 그대로 쓴다 — 23일×32지점 실측에서 A의 잔여
+  중앙값 54~206, E는 3~11로 상태 코드가 잔여와 잘 대응했다.
+- 지점 32곳. `outsYn:"Y"`인 3곳(파나크 영덕·팔라티움 해운대·소노벨 경주 감포)은
+  **회원 예약 응답에서 조용히 빠지므로** config에서 제외했다 (에러가 아니라 무응답).
+- `region`은 API의 `jiyukNm`(강원권/경상권…)이나 `addr` 접두사(강원특별자치도/강원도/
+  경북/경상북도 혼재)가 아니라 **롯데와 같은 2글자 광역**으로 정규화해 하드코딩한다.
+  안 그러면 지역 칩이 롯데와 갈라진다.
+- `branchName`은 `config.branches[].value`가 유일 출처다. placeList는 storeCd 09를
+  "소노벨 A 비발디파크", room/list는 "소노벨 비발디파크 A"라고 부른다 — 파서가
+  응답의 `storeNm`을 읽으면 그 순간 카탈로그와 어긋난다.
+
+## 로컬 검증
+
+```bash
+npx tsx scripts/debug-sono.ts main       # 진입점 · 헤더 · 아웃바운드 호스트
+npx tsx scripts/debug-sono.ts login      # 로그인 폼 인풋/버튼/프레임
+npx tsx scripts/debug-sono.ts doLogin    # 실로그인 → /tmp/sono-debug-state.json 저장
+npx tsx scripts/debug-sono.ts doSearch   # 위젯 구동 + 요청/응답 페이로드 전량 덤프
+npx tsx scripts/debug-sono.ts api <url>  # 저장된 세션으로 GET
+POST_BODY='{...}' npx tsx scripts/debug-sono.ts apiPost <url>
+npx tsx scripts/debug-sono.ts rows ["지점명"]   # search+parse 단독 실행
+npx tsx scripts/debug-sono.ts diff       # 사이트 지점 목록 ↔ SONO.branches 대조
+```
+
+`doLogin`이 세션을 파일로 남기고 나머지 스텝이 재사용한다 — 스텝마다 로그인하면
+사이트 레이트리밋에 걸린다.
+
 # 새 리조트 추가 (Phase F)
 
-1. `src/crawlers/<slug>/{config,login,search,parse,index}.ts` 작성 (lotte 복사 후 수정)
+1. `src/crawlers/<slug>/{config,login,search,parse,index}.ts` 작성
+   (lotte 또는 sono 복사 후 수정 — 사이트가 다중 지점 배치 조회를 지원하면 sono 쪽이 가깝다)
 2. `src/crawlers/registry.ts`에 lazy import 1줄 추가
 3. `src/lib/resort-catalog.ts`의 `CATALOG`에 `{ properties }` 1항목 추가 —
    지점의 `branchName`/`label`/`region`만 뽑는다. **`bizCd` 등 크롤 전용 필드는 넣지 않는다**

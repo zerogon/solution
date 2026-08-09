@@ -3,6 +3,7 @@ import "server-only";
 import { prisma } from "@/lib/prisma";
 import { ResortSlug } from "@/generated/prisma/enums";
 import { LOTTE } from "@/crawlers/lotte/config";
+import { SONO } from "@/crawlers/sono/config";
 import type { ResortCatalogEntry, ResortProperty } from "@/components/search/types";
 
 /**
@@ -25,6 +26,14 @@ const CATALOG: Partial<Record<ResortSlug, { properties: ResortProperty[] }>> = {
   // bizCd는 여기서 떨어져 나간다.
   [ResortSlug.LOTTE]: {
     properties: LOTTE.branches.map((b) => ({
+      branchName: b.value,
+      label: b.label,
+      region: b.region,
+    })),
+  },
+  // storeCd는 bizCd와 같은 이유로 여기서 떨어져 나간다.
+  [ResortSlug.SONO]: {
+    properties: SONO.branches.map((b) => ({
       branchName: b.value,
       label: b.label,
       region: b.region,
