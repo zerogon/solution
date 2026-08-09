@@ -47,7 +47,18 @@
 ## 보안 규칙 (감사 사항)
 
 1. `ResortAccount.idEncrypted` / `pwEncrypted`는 절대 클라이언트로 평문 전달 금지 — `/api/admin/accounts/[id]/reveal`의 응답만이 유일한 합법 경로.
-2. 복호화하는 모든 경로는 동일 호출에서 `writeAudit({ action: REVEAL_CREDENTIAL, ... })` 작성 필수.
+2. 복호화한 평문을 **호출자에게 돌려주는** 경로는 동일 호출에서
+   `writeAudit({ action: REVEAL_CREDENTIAL, ... })` 작성 필수 — 현재
+   `/api/admin/accounts/[id]/reveal` 하나뿐이다.
+   크롤러(`run.ts`)는 복호화하지만 평문이 같은 프로세스 안 Playwright 폼 입력으로
+   끝나고 밖으로 나가지 않으므로 대상이 아니다. 기계 실행 흔적은 `CrawlLog`가
+   담당한다(`triggeredBy` · 시각 · 소요시간 · 결과 · 실패 단계).
+   **"복호화하는 모든 경로"에서 좁힌 이유**: 크론이 3시간마다 × 리조트 수만큼 돌아
+   `audit_logs`가 기계 실행으로 하루 수십 건씩 불어나면, "누가 평문을 봤나"라는
+   이 로그의 유일한 질문이 그 아래 묻힌다.
+   회귀 검사: `grep -rn "decrypt(" src/ | grep -v generated` → `run.ts` 2곳 +
+   `reveal/route.ts` 2곳 + `lib/crypto.ts` 정의부. 새 호출부가 생기면 둘 중 어느
+   칸인지부터 판정할 것.
 3. `RESORT_CRED_SECRET`이 32바이트(base64 decode 후)가 아니면 `crypto.ts`가 에러를 던지도록 검증.
 4. `/api/cron/*`, `/api/inngest/*` 외 모든 라우트는 `proxy.ts`에서 세션 검증.
 

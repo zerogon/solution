@@ -152,6 +152,14 @@ export async function runResortCrawl(
       slug,
       context,
       page,
+      // No `writeAudit(REVEAL_CREDENTIAL)` here, deliberately — see 보안 규칙 2
+      // in CLAUDE.md. That action records a *person* seeing plaintext; this
+      // plaintext goes straight into a Playwright form in the same process and
+      // never leaves it. The machine-side trail is `CrawlLog` (triggeredBy,
+      // timing, result, failure stage), which the run already writes.
+      //
+      // Auditing here would put 8 rows a day per resort into `audit_logs` and
+      // bury the handful of rows that answer the question it exists for.
       credentials: {
         id: decrypt(account.idEncrypted),
         pw: decrypt(account.pwEncrypted),
