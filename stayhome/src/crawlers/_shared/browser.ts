@@ -11,9 +11,26 @@ import type { StorageStateJSON } from "./session-store";
  *   2. Local dev: when `CHROMIUM_PACK_URL` is empty, fall back to letting
  *      playwright resolve a system-installed chromium (works after
  *      `npx playwright install chromium`).
+ *
+ * The pack version must track `playwright-core`'s expected Chromium
+ * (`node_modules/playwright-core/browsers.json` → `browserVersion`). They were
+ * 17 major versions apart once — the launch itself would still succeed, so the
+ * mismatch would surface later as CDP calls failing for no visible reason.
+ *
+ * On Vercel a missing `CHROMIUM_PACK_URL` is fatal rather than a fallback: the
+ * dev branch there hunts for a system chromium that a serverless filesystem
+ * never has, and the resulting "run `npx playwright install`" message reads
+ * like a local setup mistake rather than an unset env var.
  */
 export async function launchBrowser(): Promise<Browser> {
   const packUrl = process.env.CHROMIUM_PACK_URL;
+  if (!packUrl && process.env.VERCEL) {
+    throw new Error(
+      "CHROMIUM_PACK_URL이 비어 있다. Vercel에는 시스템 크로미움이 없으므로 " +
+        "@sparticuz/chromium-min 팩 URL이 반드시 필요하다 " +
+        "(버전은 playwright-core의 browsers.json과 맞출 것).",
+    );
+  }
   if (packUrl) {
     // Production / Vercel: always headless (no display available)
     const chromiumMin = (await import("@sparticuz/chromium-min")).default;
