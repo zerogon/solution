@@ -25,6 +25,47 @@ export async function checkLoggedIn(ctx: CrawlerContext): Promise<boolean> {
   }
 }
 
+/**
+ * Close whatever modal layer is covering the login form.
+ *
+ * An undismissed layer does not fail where it is raised — it fails 20s later
+ * on the L.POINT tab click, reported as `.modal-dimm ... intercepts pointer
+ * events`, which reads like a broken tab selector. So when no candidate
+ * matches, the layer's own heading and buttons go to the log: an overlay that
+ * only appears from some regions is otherwise invisible from here.
+ */
+async function dismissOverlay(ctx: CrawlerContext): Promise<void> {
+  const { page, log } = ctx;
+  const layer = page.locator(LOTTE.login.overlaySelector).first();
+  if (!(await layer.isVisible().catch(() => false))) return;
+
+  for (const name of LOTTE.login.overlayDismissButtonNames) {
+    const button = layer.getByRole("button", { name, exact: false }).first();
+    if (!(await button.count().catch(() => 0))) continue;
+    try {
+      await button.click({ timeout: 3_000 });
+      log("[lotte] overlay dismissed", { via: name });
+      await layer.waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
+      if (!(await layer.isVisible().catch(() => false))) return;
+    } catch {
+      /* candidate did not take — try the next one */
+    }
+  }
+
+  let heading = "";
+  let buttons: string[] = [];
+  try {
+    heading = (await layer.innerText()).replace(/\s+/g, " ").trim().slice(0, 200);
+    buttons = (await layer.locator("button, a[role='button']").allInnerTexts())
+      .map((t) => t.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .slice(0, 12);
+  } catch {
+    /* diagnostics only */
+  }
+  log("[lotte] overlay still open — no dismiss candidate matched", { heading, buttons });
+}
+
 export async function performLogin(ctx: CrawlerContext) {
   const { page, credentials, log } = ctx;
 
@@ -35,6 +76,7 @@ export async function performLogin(ctx: CrawlerContext) {
   });
 
   // Cookie-consent banner shows once per fresh context — dismiss if present.
+  // It is not necessarily inside `overlaySelector`, so it keeps its own click.
   try {
     await page
       .getByRole("button", { name: LOTTE.login.cookieConsentButtonName })
@@ -43,6 +85,8 @@ export async function performLogin(ctx: CrawlerContext) {
   } catch {
     /* banner absent — fine */
   }
+
+  await dismissOverlay(ctx);
 
   log("[lotte] switching to L.POINT tab");
   await page

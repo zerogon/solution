@@ -29,6 +29,27 @@ export const LOTTE = {
     /** Cookie-consent banner button (appears once per fresh context). */
     cookieConsentButtonName: "전체 동의",
     /**
+     * Modal layers that sit in front of the login form. A fresh context in
+     * Korea gets the cookie-consent banner; the scheduled crawl runs from a US
+     * Vercel region and hit a layer whose dismiss button is not "전체 동의" —
+     * the click on the L.POINT tab then timed out for 20s against
+     * `.modal-dimm ... intercepts pointer events` rather than failing on the
+     * tab itself. Candidates are tried in order and the layer names itself in
+     * the log when none of them match, so the next unknown one is one run away
+     * from being identified instead of being invisible.
+     */
+    overlaySelector: ".layer-wrap",
+    overlayDismissButtonNames: [
+      "전체 동의",
+      "모두 동의",
+      "동의",
+      "확인",
+      "닫기",
+      "Accept All",
+      "Accept",
+      "Close",
+    ],
+    /**
      * The login page has two tabs: "리워즈 로그인" and "L.POINT 로그인".
      * 리조트 온라인 회원/법인회원은 L.POINT 탭으로만 로그인 가능 (페이지 하단
      * 안내문 기준, 2026-07 홈페이지 통합 이후).
