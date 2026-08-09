@@ -17,11 +17,16 @@
  *   1. `storeCdList` takes MANY stores per call. All 32 in one request is
  *      7.4s / 2.6MB; one store is 0.35s / 54KB. That is why `search.ts`
  *      batches instead of looping per branch the way Lotte does.
- *   2. The response ignores the requested date for filtering purposes — it
- *      returns ~23 days around it regardless. Rows must be filtered to the
- *      requested `ciYmd`, because `run.ts` upserts everything we return under
- *      the one window it asked for. (The wider window is a real opportunity
- *      for the scheduler later: one call could fill a month.)
+ *   2. The response is a MONTH CALENDAR, not an answer about one stay
+ *      (measured 2026-08-09). The requested `ciYmd` only selects a month: it
+ *      returns that whole month, clipped at today and extended by `nights - 1`
+ *      days — 0809, 0820 and 0831 all returned 0809-0831, while 0915 returned
+ *      0901-0930. And `nights` changes no status or count anywhere: 1, 2 and 7
+ *      nights gave byte-identical rows across all 299 shared entries.
+ *
+ *      So a stay is not something this API answers; `parse.ts` derives it by
+ *      AND-ing the nights, and one call covers a month of hot windows rather
+ *      than one of them.
  *   3. `rsvRmCnt` goes NEGATIVE on 예약대기 rows (observed -31), so a naive
  *      `> 0` on the raw number is not the same as "bookable".
  */

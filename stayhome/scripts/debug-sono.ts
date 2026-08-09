@@ -23,6 +23,8 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *             ← this step decides the JSON-API vs DOM branch
  *   branches  property selector — options, codes, regions
  *   rows      run sono/search.ts standalone (only after it exists)
+ *   span      what one room-list call actually covers — the finding the
+ *             scheduler's request count depends on
  *   diff      compare site property list against SONO.branches
  *
  * Credentials: `SONO_ID`/`SONO_PW` env if set, otherwise the primary
@@ -514,6 +516,94 @@ async function main() {
     console.log("per branch:", byBranch);
     const regions = [...new Set(rows.map((r) => r.region))];
     console.log("regions:", JSON.stringify(regions));
+  } else if (step === "span") {
+    // Two properties of the room list decide how many requests a full sweep
+    // costs, and both are invisible from a single call:
+    //
+    //   1. the requested date only selects a MONTH (measured 2026-08-09:
+    //      0809/0820/0831 all returned 0809-0831, 0915 returned 0901-0930),
+    //      clipped at today and extended by `nights - 1` days;
+    //   2. `nights` changes no status or count — 1, 2 and 7 nights returned
+    //      byte-identical rows on every shared entry.
+    //
+    // Together they are why `parse.ts` reads the response as a calendar and
+    // AND-s the nights itself, and why 60 hot windows cost 4 requests. If a
+    // sweep ever starts costing 60 again, or 2-night availability starts
+    // matching 1-night exactly, re-run this.
+    const { SONO } = await import("../src/crawlers/sono/config");
+    const { fetchMemberNo } = await import("../src/crawlers/sono/login");
+    const { todayKstIso, parseDate, addDaysUtc, toIsoDate } = await import("../src/lib/utils");
+    const { formatDateCompact } = await import("../src/crawlers/sono/format");
+    const stores = SONO.branches.slice(0, 2);
+
+    const ctx = {
+      resortId: "debug",
+      slug: "sono",
+      context,
+      page,
+      credentials: { id: "", pw: "" },
+      log: (m: string, meta?: Record<string, unknown>) => console.log(m, meta ?? ""),
+    };
+    await page.goto(SITE.home, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    const memNo = await fetchMemberNo(ctx);
+    if (!memNo) throw new Error("no memNo — run `doLogin` first");
+
+    const call = async (ciYmd: string, nights: number) => {
+      const checkin = parseDate(`${ciYmd.slice(0, 4)}-${ciYmd.slice(4, 6)}-${ciYmd.slice(6, 8)}`);
+      const res = await page.request.post(
+        `${SONO.apiBase}/memberReservation/room/list/pc?lang=ko&deviceType=PC&mobileAppYn=N`,
+        {
+          timeout: SONO.timeouts.api,
+          headers: { "content-type": "application/json", Accept: "application/json", Referer: SONO.bookingUrl },
+          data: {
+            memNo,
+            ...SONO.request,
+            ciYmd,
+            coYmd: formatDateCompact(addDaysUtc(checkin, nights)),
+            nights,
+            storeCdList: stores.map((b) => b.storeCd),
+            rmTypeCode: "",
+          },
+        },
+      );
+      const json = (await res.json()) as {
+        body?: Array<{ rmTypeList?: Array<Record<string, unknown>> }>;
+      };
+      const entries = (json.body ?? []).flatMap((s) => s.rmTypeList ?? []);
+      const dates = [...new Set(entries.map((e) => String(e.ciYmd)))].sort();
+      return { entries, dates };
+    };
+
+    const today = todayKstIso().replace(/-/g, "");
+    console.log("\n(1) which dates come back, per requested date");
+    console.log("req        nights  entries  days  span");
+    for (const ci of [today, formatDateCompact(addDaysUtc(parseDate(todayKstIso()), 11)), "20260915"]) {
+      const { entries, dates } = await call(ci, 1);
+      console.log(
+        `${ci}   1     ${String(entries.length).padStart(6)}  ${String(dates.length).padStart(4)}  ${dates[0]} → ${dates[dates.length - 1]}`,
+      );
+    }
+
+    console.log("\n(2) does `nights` change anything?");
+    const key = (e: Record<string, unknown>) => `${e.storeCd}|${e.ciYmd}|${e.rmTypeCd}`;
+    const base = await call(today, 1);
+    const baseMap = new Map(base.entries.map((e) => [key(e), e]));
+    for (const nights of [2, 7]) {
+      const other = await call(today, nights);
+      let shared = 0;
+      let differing = 0;
+      for (const e of other.entries) {
+        const b = baseMap.get(key(e));
+        if (!b) continue;
+        shared++;
+        if (b.rsvStatusCd !== e.rsvStatusCd || b.rsvRmCnt !== e.rsvRmCnt) differing++;
+      }
+      console.log(
+        `  1night vs ${nights}night: shared=${shared} differing=${differing}` +
+          (differing === 0 ? "  ← nights is ignored" : "  ← nights MATTERS, parse.ts must change"),
+      );
+    }
+    console.log(`\n(today = ${toIsoDate(parseDate(todayKstIso()))})`);
   } else if (step === "diff") {
     // Drift watchdog: the config list is the runtime source of truth, so the
     // only way it can rot is silently. Symptom would be "필터를 눌렀는데 0건",

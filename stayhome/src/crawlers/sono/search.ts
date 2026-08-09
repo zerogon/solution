@@ -1,3 +1,4 @@
+import { toIsoDate } from "@/lib/utils";
 import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { SONO, type SonoBranch } from "./config";
 import { formatDateCompact } from "./format";
@@ -16,6 +17,10 @@ import { parseRoomList, type RoomListPayload } from "./parse";
  * `SONO.batchSize` splits that into chunks so a failing batch costs a quarter
  * of the pass instead of all of it. That is the same isolation Lotte gets from
  * its per-branch try/catch, moved to the granularity this API offers.
+ *
+ * The response is also wide in the other axis: ~23 check-in dates per call,
+ * all of them for the `nights` we asked for. Rows come back stamped with their
+ * own `stay`, so one request answers three weeks of hot windows at once.
  */
 export async function performSearch(
   ctx: CrawlerContext,
@@ -47,15 +52,20 @@ export async function performSearch(
     try {
       const payload = await fetchRoomList(ctx, memNo, batch, { ciYmd, coYmd, nights });
       let rows = 0;
+      const dates = new Set<string>();
       for (const branch of batch) {
-        const parsed = parseRoomList(payload, branch, ciYmd);
+        const parsed = parseRoomList(payload, branch, { nights });
         rows += parsed.length;
+        for (const r of parsed) if (r.stay) dates.add(toIsoDate(r.stay.checkin));
         out.push(...parsed);
       }
       log("[sono] batch done", {
         batch: `${i / SONO.batchSize + 1}/${Math.ceil(branches.length / SONO.batchSize)}`,
         stores: batch.length,
         rows,
+        // The span is the whole point of this crawler's shape — if it ever
+        // collapses to 1 the scheduler quietly goes back to 60 requests.
+        checkinDates: dates.size,
       });
     } catch (e) {
       // One batch failing shouldn't kill the crawl — log and keep going, so

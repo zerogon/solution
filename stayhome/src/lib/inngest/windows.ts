@@ -10,15 +10,19 @@ import type { CrawlWindow } from "./client";
  * get asked for, and anything outside it falls back to the manual refresh path
  * (`POST /api/resorts/[slug]/refresh`, which crawls the requested window live).
  *
- * 30 days × {1, 2} nights = 60 windows per resort per pass. What a window
- * costs is per-resort, not a constant: Lotte is one API call per branch
- * (4 calls), SONO batches all 32 stores into 4 (~7s total).
+ * 30 days × {1, 2} nights = 60 windows per resort per pass.
  *
- * Worth knowing before this is tuned for SONO: its room-list response already
- * carries ~23 days around the requested date (see `crawlers/sono/config.ts`),
- * which `parse.ts` currently discards because `run.ts` files every returned
- * row under the one window it asked for. Letting a crawler report rows for
- * dates it wasn't asked about would collapse SONO's 60 windows into ~3.
+ * That count is what the scheduler *asks* for, not what it costs. A crawler
+ * whose response covers dates it wasn't asked about stamps each row with its
+ * own `stay` (see `InventoryRow`), and `run.ts` then skips every later window
+ * those rows already answered — SONO's ~23-day room list turns these 60
+ * windows into about 4 requests. Lotte reports no stays and so still pays one
+ * request per branch per window, which is what its API offers.
+ *
+ * This list is therefore deliberately free of per-resort knowledge: it says
+ * what the search UI needs kept warm, and each crawler works out how few calls
+ * that takes. A resort-specific window list here would be a second opinion
+ * about a span only the crawler can actually observe.
  */
 export const HOT_WINDOW_DAYS = 30;
 export const HOT_WINDOW_NIGHTS = [1, 2] as const;

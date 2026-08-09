@@ -35,6 +35,15 @@ const DEFAULT_BUDGET_MS = 50_000;
  */
 const INITIAL_WINDOW_ESTIMATE_MS = 8_000;
 
+/**
+ * Rows per INSERT. Postgres caps a statement at 65535 bind parameters and each
+ * row binds 12, so the hard ceiling is ~5400; 1000 keeps a wide margin while
+ * still costing only a handful of round trips. This only started to matter
+ * when crawlers began reporting whole spans — a single SONO window is ~3900
+ * rows (32 stores × ~23 days), where it used to be ~170.
+ */
+const UPSERT_CHUNK_ROWS = 1_000;
+
 export interface RunResult {
   resortId: string;
   status: CrawlStatus;
@@ -174,7 +183,23 @@ export async function runResortCrawl(
     // A window is only counted as completed after its rows are upserted, so a
     // budget cut or a throw resumes exactly where this left off.
     let windowEstimateMs = INITIAL_WINDOW_ESTIMATE_MS;
+    // Stays already filed by an earlier window in THIS pass. A crawler that
+    // reports `row.stay` answers for dates it wasn't asked about (SONO returns
+    // ~23 days per call), and searching those windows again would re-fetch
+    // bytes we already have. Crawlers that don't report stays never populate
+    // this, so nothing is skipped for them.
+    const covered = new Set<string>();
+    let windowsSkipped = 0;
     for (const window of windows) {
+      // Checked ahead of the budget: a covered window costs nothing, and
+      // stopping short of one would make the scheduler re-crawl it next pass
+      // with a fresh (empty) `covered` set.
+      if (covered.has(stayKey(window.checkin, window.checkout))) {
+        windowsCompleted++;
+        windowsSkipped++;
+        continue;
+      }
+
       const remaining = deadline - Date.now();
       if (remaining < windowEstimateMs) {
         logger("budget exhausted, deferring remaining windows", {
@@ -197,6 +222,12 @@ export async function runResortCrawl(
       rowsUpserted += await upsertInventory(resort.id, resort.name, rows, window);
       windowsCompleted++;
 
+      // Only after the rows are committed: a window is "covered" when its data
+      // is in the table, not when it came back over the wire.
+      for (const row of rows) {
+        if (row.stay) covered.add(stayKey(row.stay.checkin, row.stay.checkout));
+      }
+
       // Track the slowest window seen rather than the mean: the budget check
       // must survive the next window being as bad as the worst so far.
       windowEstimateMs = Math.max(windowEstimateMs, Date.now() - windowStart);
@@ -205,6 +236,7 @@ export async function runResortCrawl(
     logger("crawl complete", {
       rows: rowsUpserted,
       windows: `${windowsCompleted}/${windows.length}`,
+      skipped: windowsSkipped,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -250,6 +282,11 @@ export async function runResortCrawl(
   };
 }
 
+/** Stable identity for a stay, in the app's `YYYY-MM-DD` convention. */
+function stayKey(checkin: Date, checkout: Date): string {
+  return `${toIsoDate(checkin)}/${toIsoDate(checkout)}`;
+}
+
 async function upsertInventory(
   resortId: string,
   resortName: string,
@@ -259,45 +296,60 @@ async function upsertInventory(
   if (rows.length === 0) return 0;
   const now = new Date();
 
+  // A row's own `stay` wins over the requested window; see `InventoryRow`.
+  const requested = stayKey(search.checkin, search.checkout);
+
   // Deduplicate on the unique key first. A single INSERT cannot touch the same
   // conflict target twice ("ON CONFLICT DO UPDATE command cannot affect row a
   // second time"), and the room list occasionally repeats a room type. Last
   // occurrence wins, matching what the old row-at-a-time loop ended up storing.
-  const byKey = new Map<string, InventoryRow>();
-  for (const row of rows) byKey.set(`${row.branchName} ${row.roomType}`, row);
+  // The dates are part of that key now — one call's rows can span many stays.
+  // The separator is written as an escape: this line used to carry a raw NUL
+  // byte, which made the file `data` to `file(1)` and invisible to grep.
+  const byKey = new Map<string, { row: InventoryRow; stay: string }>();
+  for (const row of rows) {
+    const stay = row.stay ? stayKey(row.stay.checkin, row.stay.checkout) : requested;
+    byKey.set(`${stay}\u0000${row.branchName}\u0000${row.roomType}`, { row, stay });
+  }
 
-  // One statement, one round trip. Prisma's `upsert` per row — and even
+  // One statement per chunk. Prisma's `upsert` per row — and even
   // `$transaction([...upserts])` under the pg driver adapter — issues a
   // separate round trip each, which measured ~5s per window against Neon and
   // dominated the pass budget (and so the browser-launch count for a full
-  // sweep). Dates bind as 'YYYY-MM-DD' strings cast to `date` rather than as
-  // Date objects: a Date would be sent as a timestamptz and cast using the
+  // sweep). Chunking is not a retreat from that: it exists only for the
+  // bind-parameter ceiling (see UPSERT_CHUNK_ROWS) and still costs a handful
+  // of round trips where the old loop cost thousands.
+  //
+  // Dates bind as 'YYYY-MM-DD' strings cast to `date` rather than as Date
+  // objects: a Date would be sent as a timestamptz and cast using the
   // session's TimeZone, which is exactly the off-by-one-day this app's
   // UTC-midnight convention exists to prevent.
-  const checkin = toIsoDate(search.checkin);
-  const checkout = toIsoDate(search.checkout);
-  const values = [...byKey.values()].map(
-    (row) => Prisma.sql`(
-      ${randomUUID()}, ${resortId}, ${resortName}, ${row.branchName},
-      ${row.roomType}, ${row.region}, ${checkin}::date, ${checkout}::date,
-      ${row.available}, ${row.closingSoon}, ${row.detailUrl ?? null}, ${now}
-    )`,
-  );
+  const entries = [...byKey.values()];
+  for (let i = 0; i < entries.length; i += UPSERT_CHUNK_ROWS) {
+    const values = entries.slice(i, i + UPSERT_CHUNK_ROWS).map(({ row, stay }) => {
+      const [checkin, checkout] = stay.split("/");
+      return Prisma.sql`(
+        ${randomUUID()}, ${resortId}, ${resortName}, ${row.branchName},
+        ${row.roomType}, ${row.region}, ${checkin}::date, ${checkout}::date,
+        ${row.available}, ${row.closingSoon}, ${row.detailUrl ?? null}, ${now}
+      )`;
+    });
 
-  await prisma.$executeRaw`
-    INSERT INTO resort_inventory (
-      id, resort_id, resort_name, branch_name, room_type, region,
-      checkin_date, checkout_date, available, closing_soon, detail_url, synced_at
-    )
-    VALUES ${Prisma.join(values)}
-    ON CONFLICT (resort_id, branch_name, room_type, checkin_date, checkout_date)
-    DO UPDATE SET
-      resort_name  = EXCLUDED.resort_name,
-      region       = EXCLUDED.region,
-      available    = EXCLUDED.available,
-      closing_soon = EXCLUDED.closing_soon,
-      detail_url   = EXCLUDED.detail_url,
-      synced_at    = EXCLUDED.synced_at
-  `;
-  return values.length;
+    await prisma.$executeRaw`
+      INSERT INTO resort_inventory (
+        id, resort_id, resort_name, branch_name, room_type, region,
+        checkin_date, checkout_date, available, closing_soon, detail_url, synced_at
+      )
+      VALUES ${Prisma.join(values)}
+      ON CONFLICT (resort_id, branch_name, room_type, checkin_date, checkout_date)
+      DO UPDATE SET
+        resort_name  = EXCLUDED.resort_name,
+        region       = EXCLUDED.region,
+        available    = EXCLUDED.available,
+        closing_soon = EXCLUDED.closing_soon,
+        detail_url   = EXCLUDED.detail_url,
+        synced_at    = EXCLUDED.synced_at
+    `;
+  }
+  return entries.length;
 }

@@ -1,5 +1,7 @@
+import { addDaysUtc } from "@/lib/utils";
 import type { InventoryRow } from "../types";
 import { SONO, type SonoBranch } from "./config";
+import { formatDateCompact, parseDateCompact } from "./format";
 
 /** Subset of `POST /memberReservation/room/list/pc` we rely on. */
 export interface RoomListPayload {
@@ -31,12 +33,29 @@ const OPEN_STATUSES = new Set(["A", "E"]);
 /**
  * Map one store's room-list entries to normalized inventory rows.
  *
- * Three decisions worth stating, all of them forced by the shape of the data:
+ * The response is a CALENDAR, not an answer about one stay. Measured against
+ * the live API (2026-08-09, `nights` = 1 / 2 / 7 against the same `ciYmd`):
  *
- * 1. **Filter to `checkinDt`.** The API returns every date in a ~23-day span
- *    around the request. `run.ts` upserts whatever we return under the single
- *    window it asked for, so unfiltered rows would file August 20th's
- *    availability under August 12th.
+ *   - it returns the whole month containing `ciYmd`, clipped at today and
+ *     extended by `nights - 1` days (0809→0809-0831, 0820→0809-0831,
+ *     0915→0901-0930), so the requested date only picks the month; and
+ *   - `nights` does not change a single status or count. All 299 shared
+ *     entries were byte-identical across 1, 2 and 7 nights.
+ *
+ * Both facts drive what this parser does:
+ *
+ * 1. **Emit every check-in date in the month, and AND across the stay.**
+ *    Since each entry describes one night, an N-night stay starting D is
+ *    bookable only if every night D..D+N-1 is. Reporting D's own status as if
+ *    it answered for the whole stay — which is what filing the response under
+ *    the requested window amounted to — claims availability nobody measured.
+ *    The `nights - 1` tail is exactly the data this needs at a month boundary,
+ *    so a stay running into the next month is still answerable; a check-in
+ *    whose nights are not all present is dropped rather than guessed.
+ *
+ *    Rows carry their own `stay`, so `run.ts` files each under its own dates
+ *    and the scheduler skips the windows this call already answered. That is
+ *    what turns 60 hot windows into 4 requests (2 months x 2 stay lengths).
  *
  * 2. **Group by `resortTypeNm + roomTypeNm`, don't sum.** One room type spans
  *    several `rmTypeCd` (평형/뷰 variants) that the booking UI shows as one
@@ -54,7 +73,7 @@ const OPEN_STATUSES = new Set(["A", "E"]);
 export function parseRoomList(
   payload: RoomListPayload,
   branch: SonoBranch,
-  checkinDt: string,
+  request: { nights: number },
 ): InventoryRow[] {
   // The store's name is read from `branch.value`, never from `storeNm`: the
   // place list calls storeCd 09 "소노벨 A 비발디파크" and the room list calls
@@ -63,11 +82,12 @@ export function parseRoomList(
   const store = payload.body?.find((s) => s.storeCd === branch.storeCd);
   if (!store) return [];
 
-  /** roomType label → whether any variant is bookable, and whether any is 원활. */
-  const groups = new Map<string, { bookable: boolean; roomy: boolean }>();
+  /** roomType -> ciYmd -> that one night, merged across its 평형/뷰 variants. */
+  const calendar = new Map<string, Map<string, Night>>();
 
   for (const entry of store.rmTypeList ?? []) {
-    if (entry.ciYmd !== checkinDt) continue;
+    const ciYmd = entry.ciYmd?.trim();
+    if (!ciYmd) continue;
 
     const roomTypeNm = entry.roomTypeNm?.trim();
     if (!roomTypeNm) continue;
@@ -78,25 +98,66 @@ export function parseRoomList(
     const remaining = entry.rsvRmCnt ?? 0;
     const bookable = OPEN_STATUSES.has(status) && remaining > 0;
 
-    const group = groups.get(roomType) ?? { bookable: false, roomy: false };
-    group.bookable ||= bookable;
-    group.roomy ||= bookable && status === "A";
-    groups.set(roomType, group);
+    const nights = calendar.get(roomType) ?? new Map<string, Night>();
+    const night = nights.get(ciYmd) ?? { bookable: false, roomy: false };
+    night.bookable ||= bookable;
+    night.roomy ||= bookable && status === "A";
+    nights.set(ciYmd, night);
+    calendar.set(roomType, nights);
   }
 
   const out: InventoryRow[] = [];
-  for (const [roomType, { bookable, roomy }] of groups) {
-    out.push({
-      branchName: branch.value,
-      roomType,
-      region: branch.region,
-      available: bookable,
-      closingSoon: bookable && !roomy,
-      // The search result page holds its state in the SPA session, not the
-      // URL (`?step=sch` is all it carries), so there is no per-branch deep
-      // link to hand out — the booking entry point is the honest answer.
-      detailUrl: SONO.bookingUrl,
-    });
+  for (const [roomType, nights] of calendar) {
+    for (const ciYmd of nights.keys()) {
+      const checkin = parseDateCompact(ciYmd);
+      // An unreadable date is dropped rather than filed under the requested
+      // window: `run.ts`'s fallback would put some other day's availability on
+      // the requested one, which is the confusion `stay` exists to prevent.
+      if (!checkin) continue;
+
+      // A stay we weren't given every night of gets no row at all. The API
+      // supplies the `nights - 1` tail past month end precisely so this only
+      // fires on genuinely missing data.
+      const stay = collectStay(nights, checkin, request.nights);
+      if (!stay) continue;
+
+      out.push({
+        branchName: branch.value,
+        roomType,
+        region: branch.region,
+        available: stay.bookable,
+        closingSoon: stay.bookable && !stay.roomy,
+        // The search result page holds its state in the SPA session, not the
+        // URL (`?step=sch` is all it carries), so there is no per-branch deep
+        // link to hand out — the booking entry point is the honest answer.
+        detailUrl: SONO.bookingUrl,
+        stay: { checkin, checkout: addDaysUtc(checkin, request.nights) },
+      });
+    }
   }
   return out;
+}
+
+/** One night of one room type, merged across its 평형/뷰 variants. */
+interface Night {
+  bookable: boolean;
+  roomy: boolean;
+}
+
+/**
+ * Fold a stay's nights into one verdict, or null if the calendar doesn't cover
+ * all of them. Bookable means every night is; 원활 means every night is, so a
+ * single 마감임박 night makes the whole stay 마감임박 — the same reading the
+ * one-night rows always had, extended over the stay.
+ */
+function collectStay(nights: Map<string, Night>, checkin: Date, stayNights: number): Night | null {
+  let bookable = true;
+  let roomy = true;
+  for (let i = 0; i < stayNights; i++) {
+    const night = nights.get(formatDateCompact(addDaysUtc(checkin, i)));
+    if (!night) return null;
+    bookable &&= night.bookable;
+    roomy &&= night.roomy;
+  }
+  return { bookable, roomy };
 }
