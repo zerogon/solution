@@ -39,6 +39,16 @@ export const LOTTE = {
      * from being identified instead of being invisible.
      */
     overlaySelector: ".layer-wrap",
+    /**
+     * The layer is not in the DOM when `domcontentloaded` resolves — a
+     * point-in-time check right after `goto` saw nothing and logged nothing,
+     * and the layer then appeared *during* the tab click and intercepted it.
+     * So wait briefly for it, and retry the click with the dismissal in
+     * between rather than spending one long timeout on a blocked click.
+     */
+    overlayAppearMs: 1_500,
+    tabClickAttempts: 3,
+    tabClickTimeoutMs: 5_000,
     overlayDismissButtonNames: [
       "전체 동의",
       "모두 동의",

@@ -37,6 +37,12 @@ export async function checkLoggedIn(ctx: CrawlerContext): Promise<boolean> {
 async function dismissOverlay(ctx: CrawlerContext): Promise<void> {
   const { page, log } = ctx;
   const layer = page.locator(LOTTE.login.overlaySelector).first();
+  // Give a late layer a moment to show itself. Without this the check ran
+  // before the layer existed, returned quietly, and the layer arrived in the
+  // middle of the tab click instead.
+  await layer
+    .waitFor({ state: "visible", timeout: LOTTE.login.overlayAppearMs })
+    .catch(() => {});
   if (!(await layer.isVisible().catch(() => false))) return;
 
   for (const name of LOTTE.login.overlayDismissButtonNames) {
@@ -86,13 +92,21 @@ export async function performLogin(ctx: CrawlerContext) {
     /* banner absent — fine */
   }
 
-  await dismissOverlay(ctx);
-
+  // Dismiss-then-click, retried: the layer can arrive after the dismissal and
+  // before the click. One long click timeout cannot recover from that — it
+  // just spends 20s retrying against an overlay nobody closed.
   log("[lotte] switching to L.POINT tab");
-  await page
-    .getByText(LOTTE.login.tabName, { exact: false })
-    .first()
-    .click({ timeout: LOTTE.timeouts.navigation });
+  const tab = page.getByText(LOTTE.login.tabName, { exact: false }).first();
+  for (let attempt = 1; ; attempt++) {
+    await dismissOverlay(ctx);
+    try {
+      await tab.click({ timeout: LOTTE.login.tabClickTimeoutMs });
+      break;
+    } catch (e) {
+      if (attempt >= LOTTE.login.tabClickAttempts) throw e;
+      log("[lotte] tab click blocked, retrying", { attempt });
+    }
+  }
 
   log("[lotte] filling login form");
   const idInput = page.locator(LOTTE.login.idInputSelector);
