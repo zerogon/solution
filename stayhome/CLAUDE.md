@@ -214,6 +214,26 @@
 - `/offline`은 `auth.config.ts`의 `isPublic`과 `proxy.ts` matcher **양쪽 모두**에서 제외돼야 한다.
 - `sw.js`는 `next.config.ts`의 헤더로 no-store 처리 — 캐시되면 사용자가 낡은 워커에 묶인다.
 
+## 배포 (Vercel)
+
+프로젝트는 `zerogons-projects/stayhome` (`stayhome-khaki.vercel.app`).
+
+- **Playwright를 쓰는 라우트는 `outputFileTracingIncludes`가 필요하다.**
+  `playwright-core`는 externalize되고 파일 80개가 트레이스에 들어가지만
+  `browsers.json`만 빠진다 — import 시점에 `require`가 아니라 `fs`로 읽어서
+  트레이서가 못 본다. 그러면 핸들러 코드가 돌기도 전에 모듈 로드가 실패해
+  **500**이 나고, 증상이 지독한 이유는 **`next dev`에서는 멀쩡하다는 것**이다.
+  대상은 `/api/inngest`와 `/api/resorts/[slug]/refresh` 둘. 검증:
+  `grep browsers.json .next/server/app/api/inngest/route.js.nft.json`.
+  · 이것 때문에 **Inngest 앱 sync가 처음부터 불가능**했다. sync는 Inngest가
+    `/api/inngest`를 호출해 함수 목록을 읽는 것인데 그 요청이 `serve()`에
+    닿지도 못했다. "크론이 안 돈다"의 원인이 크론 설정이 아니라 여기였다.
+- **Git 연결이 없다** — `VERCEL_GIT_*`가 전부 비어 있고 배포는 CLI(`vercel deploy
+  --prod`)로만 이뤄졌다. push해도 자동 배포되지 않는다. 저장소가 프로젝트별
+  브랜치 구조라 Git 연동 시 Root Directory=`stayhome`, Production Branch=`stayhome`.
+- 환경변수는 Vercel에 Sensitive로 등록돼 있어 `vercel env pull`로 **되읽을 수 없다**
+  (`[SENSITIVE]`만 나온다). 값 확인은 대시보드에서.
+
 ## 미해결 사항
 
 - 웹 푸시 **구독** 플로우(VAPID 키 · `web-push` · 구독 저장 테이블) 미구현.
