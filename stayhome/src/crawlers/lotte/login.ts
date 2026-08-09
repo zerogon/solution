@@ -138,6 +138,11 @@ export async function performLogin(ctx: CrawlerContext) {
     }
   }
 
+  // Do not fill until the tab reports itself selected — see tabSelectedSelector.
+  await page
+    .locator(LOTTE.login.tabSelectedSelector)
+    .waitFor({ state: "attached", timeout: LOTTE.timeouts.navigation });
+
   log("[lotte] filling login form");
   const idInput = page.locator(LOTTE.login.idInputSelector);
   await idInput.waitFor({ state: "visible", timeout: LOTTE.timeouts.navigation });

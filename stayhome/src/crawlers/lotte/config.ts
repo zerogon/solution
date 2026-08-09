@@ -74,6 +74,14 @@ export const LOTTE = {
      * 안내문 기준, 2026-07 홈페이지 통합 이후).
      */
     tabName: "L.POINT 로그인",
+    /**
+     * Proof the switch actually landed. Both tabs' inputs live in the DOM at
+     * once, so `:visible` still resolves to the 리워즈 form until the tab
+     * updates — filling then puts a resort member ID into the wrong form and
+     * the failure is silent: no error, `isLogin` simply stays false until the
+     * login timeout. One run in two died this way.
+     */
+    tabSelectedSelector: '[data-tab-value="LPOINT"][aria-selected="true"]',
     /** `:visible` — both tabs' inputs can coexist in the DOM. */
     idInputSelector: 'input[name="loginId"]:visible',
     pwInputSelector: 'input[name="loginPw"]:visible',
