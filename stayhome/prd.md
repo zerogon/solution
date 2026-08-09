@@ -162,10 +162,15 @@
 
 ## REQ-AUTH-01
 
-Google OAuth 기반 로그인 지원
+ID/비밀번호 로그인 지원 (NextAuth Credentials + bcrypt)
 
-* 사내 Google 계정만 허용
+* 계정은 `users` 테이블에만 존재하며 가입 화면 없음 — 행을 넣는 것이 곧 계정 발급
 * 비인가 계정 접근 차단
+
+> 원안은 "Google OAuth 기반 로그인 / 사내 Google 계정만 허용"이었다. 사내 Google
+> 계정이라는 전제가 성립하지 않아 화이트리스트가 걸러낼 대상이 없었고, 사용자
+> 1인짜리 내부 도구에 외부 IdP 왕복과 그 운영(클라이언트 시크릿 회전, 리디렉션
+> URI 관리)을 얹을 이유가 사라졌다. `allowed_emails` 테이블은 그때의 잔재다.
 
 ---
 
@@ -520,7 +525,7 @@ Neon DB 저장
 
 ## MVP 포함
 
-* Google 로그인
+* ID/비밀번호 로그인 (REQ-AUTH-01 — 원안은 Google OAuth)
 * 2개 리조트 우선 연동
 * 통합 조회 화면
 * Neon DB 캐시 저장

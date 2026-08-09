@@ -12,7 +12,9 @@
 
 - Next.js 16 + React 19 + Tailwind v4 + shadcn v4 (`base-nova` 스타일, base-ui 기반)
 - Prisma 7 + Neon PostgreSQL (`@prisma/adapter-pg`, pooler + direct URL)
-- NextAuth v5 + Google OAuth + DB 이메일 화이트리스트
+- NextAuth v5 **Credentials**(ID/PW · bcrypt, `src/auth.ts`) + JWT 세션.
+  `User.loginId`/`User.password`로 인증하며 Google 프로바이더는 쓰지 않는다
+  (prd.md의 원안이었으나 사내 Google 계정 전제가 성립하지 않았다).
 - Playwright + `@sparticuz/chromium-min` (Vercel Functions 내부 실행)
 - Vercel Cron → Inngest fan-out → 리조트별 함수 (Hobby 60초 제약은 Inngest step 분할로 우회)
 - 자격증명: AES-256-GCM 암호화 (`src/lib/crypto.ts`), 마스킹 + 감사 로그
@@ -93,6 +95,11 @@
   도입(행이 자기 날짜를 신고), `run.ts`가 이미 답을 받은 윈도우를 스킵, `parse.ts`가
   숙박 일수만큼 AND. 60윈도우 → 요청 4번(40초·17,914행). 부수적으로 **2박 행이 체크인
   당일 상태만 보고 있던 기존 버그**가 고쳐졌다(예약가능 6,379→5,720행).
+- **운영 개시 (2026-08-09)**: 프로덕션 배포 + Inngest 앱 sync 완료로 스케줄러가
+  실제로 돌기 시작했다. 그전까지 자동 수집은 **한 번도 실행된 적이 없었고**,
+  원인은 크론 설정이 아니라 `/api/inngest`가 모듈 로드 단계에서 500이었던 것이다
+  (아래 "배포" 절). 첫 정기 실행(18:00 KST) 실측 — 소노 17,914행 / 패스 2번
+  (42.5s + 21.7s), 롯데 78행 / 26.6s(로그인 포함). 60초 스텝 예산에 여유 있음.
 - **Phase F 잔여**: 리솜·한화·오크밸리 확장
 
 ## 조회 필터 (Phase F 준비)
@@ -239,16 +246,65 @@
   · 이것 때문에 **Inngest 앱 sync가 처음부터 불가능**했다. sync는 Inngest가
     `/api/inngest`를 호출해 함수 목록을 읽는 것인데 그 요청이 `serve()`에
     닿지도 못했다. "크론이 안 돈다"의 원인이 크론 설정이 아니라 여기였다.
-- **Git 연결이 없다** — `VERCEL_GIT_*`가 전부 비어 있고 배포는 CLI(`vercel deploy
-  --prod`)로만 이뤄졌다. push해도 자동 배포되지 않는다. 저장소가 프로젝트별
-  브랜치 구조라 Git 연동 시 Root Directory=`stayhome`, Production Branch=`stayhome`.
+- **Git 연동이 붙어 있다** — `stayhome` 브랜치에 push하면 프로덕션 배포가 돈다.
+  확인 방법은 배포의 별칭 목록에 `stayhome-git-stayhome-*`가 있는지
+  (`npx vercel inspect <url>`). 별도 배포 명령은 필요 없다.
+  (2026-08-09 이전 이 문서는 "Git 연결이 없다"고 적고 있었다. 틀렸다 —
+  `VERCEL_GIT_*`가 함수 런타임에서 비어 보이는 것을 연동 부재로 읽은 것이다.)
 - 환경변수는 Vercel에 Sensitive로 등록돼 있어 `vercel env pull`로 **되읽을 수 없다**
   (`[SENSITIVE]`만 나온다). 값 확인은 대시보드에서.
+  **이미 돌고 있는 배포에는 소급되지 않는다** — 값을 바꿨으면 재배포해야 한다
+  (`npx vercel redeploy stayhome-khaki.vercel.app`).
+- **`CHROMIUM_PACK_URL`의 팩 버전은 `playwright-core`가 기대하는 크로미움과
+  맞춰야 한다.** 기준은 `node_modules/playwright-core/browsers.json`의
+  `browserVersion`이고, 팩은 Sparticuz 릴리스의 같은 메이저를 쓴다
+  (playwright 1.60 → Chromium 148 → `chromium-v148.0.0-pack.x64.tar`,
+  Vercel 함수는 x64). 한때 131 대 148로 17버전 벌어져 있었는데, 이 어긋남은
+  launch까지는 성공하고 한참 뒤 CDP 호출이 이유 없이 실패하는 모양으로 나온다.
+  playwright를 올릴 때 `@sparticuz/chromium-min`과 이 URL을 같이 올릴 것.
+  · 값이 비어 있으면 `browser.ts`가 Vercel에서 **즉시 던진다**. 예전에는 조용히
+    로컬 개발 분기로 새어 "npx playwright install 하세요"라는, 원인과 무관한
+    메시지를 남겼다.
+
+### Inngest 설정 (앱 sync)
+
+Inngest는 크론·큐·재시도를 대행하는 외부 서비스다. 우리 코드는 함수 *정의*만
+갖고 있고 실행은 Inngest가 시킨다 — 시간이 되면 `/api/inngest`를 HTTPS로 부른다.
+**앱 sync**는 Inngest가 그 엔드포인트를 호출해 함수 목록과 크론을 읽어가는 절차이고,
+이게 되기 전에는 Inngest가 우리 함수의 존재를 모른다.
+
+- **Vercel 통합**(Inngest → Apps → Sync new app → Vercel)을 쓰면 배포마다 자동
+  sync되고, `INNGEST_SIGNING_KEY`/`INNGEST_EVENT_KEY`도 Inngest가 직접 심어준다.
+  수동 sync는 함수 정의를 바꿀 때마다 다시 눌러야 한다.
+- **Deployment Protection이 sync를 막는다.** 프로덕션 별칭은 열려 있지만 Inngest가
+  호출하는 것은 배포마다 생기는 *생성 URL*이고, 그건 `vercel.com/sso-api`로 302된다.
+  Settings → Deployment Protection → **Protection Bypass for Automation** 시크릿을
+  만들어 Inngest 설정에 넣으면 통과한다(보호를 끄지 않고 기계 하나만 통과시킨다).
+  그 시크릿은 프로젝트 전 배포에 통하는 만능 열쇠이므로 저장소나 클라이언트에 두지 말 것.
+- 판정: `curl -X PUT https://stayhome-khaki.vercel.app/api/inngest`
+  → `{"message":"Successfully registered","modified":true}`면 성공,
+  `{"message":"Your signing key is invalid"}`면 키가 아직 옛 값이다(재배포 확인).
+  서명 없는 GET이 401인 것은 정상이다.
 
 ## 미해결 사항
 
+- **롯데 콜드 로그인이 4번에 1번만 성공한다** (2026-08-09 프로덕션 관측).
+  오버레이 닫힘 · 탭 선택 · 폼 입력까지 로그상 전부 정상인데 `isLogin`이 25초 내내
+  false다. 세션(6시간)이 살아 있는 동안은 영향이 없고, 만료될 때마다 이 확률에 걸린다.
+  실패 시 페이지 body 텍스트를 로그에 남기도록 진단을 넣어둔 상태 — 다음 실패가
+  잠금 안내인지 캡차인지 무반응인지 말해줄 것이다. 재시도가 같은 함수 인스턴스에서
+  겹치면 `net::ERR_INSUFFICIENT_RESOURCES`까지 본 적 있다.
+- **크론 실패가 아무 데도 통보되지 않는다.** `SLACK_WEBHOOK_URL`이 미설정이라
+  `notifySlack`이 무동작이다. 3시간마다 도는 배치에서는 사실상 필수 —
+  실제로 롯데가 여러 번 죽었는데 로그를 직접 보지 않았으면 아무도 몰랐을 상황이었다.
+- **`AllowedEmail`이 사문화됐다.** `prisma/seed.ts`가 채우기만 하고 `authorize()`는
+  조회하지 않는다. Google OAuth → Credentials 전환의 잔재다. 제거(스키마 변경 +
+  운영 마이그레이션)하거나 `authorize()`에서 확인하도록 되살리거나 — 1인용 도구에
+  로그인 계정이 이미 DB 통제라 실익은 작다. 결정 전까지는 "있지만 아무것도 안 하는
+  테이블"이라는 것만 알고 있을 것.
 - 웹 푸시 **구독** 플로우(VAPID 키 · `web-push` · 구독 저장 테이블) 미구현.
   `sw.js`의 `push`/`notificationclick` 핸들러는 준비돼 있어 서버 쪽만 붙이면 된다.
+  위의 Slack 알림과 목적이 겹치므로 둘 다 할 필요는 없다.
 - 사전 존재 lint 오류 2건(`scripts/lotte-codegen.js`의 `require()`,
   `RevealDialog.tsx:38`의 set-state-in-effect) — 이번 작업 이전부터 있던 것.
 

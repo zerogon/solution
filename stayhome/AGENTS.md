@@ -24,6 +24,31 @@ lotteresort.com은 2026-07에 LOTTE HOTELS & RESORTS(lottehotel.com)로 통합�
   (산정호수는 통합 시 라인업 제외. bizCd 출처: CMS 카탈로그
   `resort.lottehotel.com/cms/common/hotel-catalogs/ko_catalogs.json`의 `anotherBookingUrl`)
 
+### 로그인 페이지를 가리는 쿠키 동의 레이어
+
+로그인 화면 앞에 모달이 뜬다 — 제목 `최상의 경험 제공 (쿠키 활용 동의)`,
+버튼 `쿠키 설정 / 전체 동의 / 필수·분석·마케팅 쿠키 더보기 / 확인`.
+이걸 안 닫으면 **탭 클릭이 실패한다.** 실패가 고약한 건 원인과 증상이 떨어져
+있다는 것 — 증상은 몇십 초 뒤 `locator.click: Timeout ... <div class="modal-dimm">
+from <div class="layer-wrap"> subtree intercepts pointer events`라서 "탭 셀렉터가
+깨졌다"처럼 읽힌다. 실제로 탭 자체는 로그에 정상 resolve된다.
+
+- **감지는 `.modal-dimm:visible`로 한다.** `.layer-wrap`을 보면 안 된다 —
+  페이지에 여러 개 있고 자식이 fixed라 래퍼 자신의 박스가 비어 `isVisible()`이
+  false다. 클릭은 막히는데 검사만 통과하는 상태가 되고, 그러면 **로그가 아무것도
+  안 남는다**(그 침묵 자체가 감지가 틀렸다는 신호였다). 래퍼는 버튼을 찾을
+  scope로만 쓰고, 살아 있는 dimm을 가진 것을 고른다.
+- **후보는 `getByText`로 찾는다.** 닫기 컨트롤이 `button` role이 아니라서
+  `getByRole("button", { name: "전체 동의" })`는 못 잡았다.
+- 레이어는 `domcontentloaded` 시점에 아직 DOM에 없다. 잠깐 기다린 뒤 확인하고,
+  탭 클릭은 "닫고-클릭"을 몇 번 반복한다. 긴 타임아웃 하나로는 이 레이스에서
+  회복할 수 없다 — 아무도 안 닫은 오버레이를 상대로 시간을 쓸 뿐이다.
+- 후보가 전부 안 맞으면 레이어의 heading과 버튼 라벨을 로그에 남긴다(로그인당 1회).
+  리전마다 다른 레이어가 뜰 수 있고, 그러지 않으면 여기서 보이지 않는다.
+- 탭 입력창은 **두 탭이 DOM에 공존**하므로 `[data-tab-value="LPOINT"][aria-selected="true"]`가
+  붙은 뒤에 채운다. 안 그러면 리조트 아이디가 리워즈 폼에 들어가고, 실패가
+  자격증명 오류와 구분되지 않는다(에러 없이 `isLogin`만 계속 false).
+
 ## 로컬 검증
 
 ```bash
@@ -32,7 +57,13 @@ npx playwright install chromium    # 최초 1회
 npx tsx scripts/run-crawl.ts       # 수동 크롤 (RefreshButton과 동일 경로)
 npx tsx scripts/check-logs.ts      # crawl_logs / inventory / sessions 확인
 npx tsx scripts/debug-page.ts roomlist   # 로그인 없이 검색+파싱 파이프라인만 테스트
+npx tsx scripts/drop-session.ts LOTTE    # 캐시 세션 삭제 → 다음 크롤이 반드시 로그인
 ```
+
+`drop-session.ts`가 필요한 이유: 유효한 세션이 있으면 크롤이 성공해도 **로그인에
+대해서는 아무것도 말해주지 않는다**(`session valid, skipping login`). 로그인 경로를
+검증하려면 세션을 지우고 시작해야 한다. 반대로 로그인 실패를 조사할 때는 시도가
+실계정에 쌓인다는 것도 같이 기억할 것 — 반복 실패는 잠금 위험이 있다.
 
 성공 조건:
 - `crawl_logs`: `status=SUCCESS`, `rows_upserted > 0`
