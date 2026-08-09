@@ -4,7 +4,7 @@ import { Prisma } from "@/generated/prisma/client";
 import { decrypt } from "@/lib/crypto";
 import { CrawlStatus, CrawlStage } from "@/generated/prisma/enums";
 import type { ResortSlug } from "@/generated/prisma/enums";
-import { launchBrowser, newContextFromState } from "./_shared/browser";
+import { closeBrowser, launchBrowser, newContextFromState } from "./_shared/browser";
 import {
   loadStorageState,
   saveStorageState,
@@ -139,7 +139,7 @@ export async function runResortCrawl(
   let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;
 
   try {
-    browser = await launchBrowser();
+    browser = await launchBrowser(logger);
     const crawler = await loadCrawler(slug);
 
     const cached = await loadStorageState(resort.id);
@@ -257,7 +257,7 @@ export async function runResortCrawl(
     }
     logger("crawl failed", { stage, error: msg });
   } finally {
-    if (browser) await browser.close().catch(() => undefined);
+    if (browser) await closeBrowser(browser, logger);
   }
 
   const finishedAt = new Date();
