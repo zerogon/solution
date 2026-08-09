@@ -131,7 +131,9 @@ export async function performLogin(ctx: CrawlerContext) {
         // the submit button the next step fails — but it gets the run past a
         // layer we have not learned to close yet, and it says so in the log.
         log("[lotte] tab click still blocked — dispatching a DOM click");
-        await tab.evaluate((el) => (el as HTMLElement).click());
+        await tab.evaluate((el) => (el as HTMLElement).click(), undefined, {
+          timeout: LOTTE.login.tabClickTimeoutMs,
+        });
         break;
       }
       log("[lotte] tab click blocked, retrying", { attempt });
@@ -151,6 +153,7 @@ export async function performLogin(ctx: CrawlerContext) {
   await page
     .getByRole("button", { name: LOTTE.login.submitButtonName, exact: true })
     .click({ timeout: 5_000 });
+  log("[lotte] login submitted");
 
   // The SPA may or may not navigate — verify via the session API instead of DOM.
   log("[lotte] waiting for authenticated session");
@@ -174,6 +177,23 @@ export async function performLogin(ctx: CrawlerContext) {
   } catch {
     /* diagnostics only */
   }
+  // The alert selectors above have come back empty on every production
+  // failure so far, so fall back to what the page actually renders. A
+  // screenshot is the natural tool here and is useless on Vercel — nothing
+  // reads /tmp afterwards — while body text lands in the log next to the
+  // error. Input values are not part of innerText, so no credential rides
+  // along with it.
+  let bodyText = "";
+  try {
+    bodyText = (await page.locator("body").innerText())
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 400);
+  } catch {
+    /* diagnostics only */
+  }
+  log("[lotte] login failed — page says", { url: pageUrl, alertText, bodyText });
+
   if (process.env.CRAWLER_DEBUG_DIR) {
     try {
       await page.screenshot({
