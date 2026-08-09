@@ -88,9 +88,15 @@ npm run dev                # 별 터미널
 ## Resort 활성화
 
 검증 통과 후:
-```sql
-UPDATE resorts SET active = true WHERE slug = 'LOTTE';
+
+```bash
+npx tsx scripts/set-active.ts LOTTE true    # 끌 때는 false
 ```
+
+`active` 하나가 두 가지를 동시에 켠다 — `listCrawlableResorts()`가 3시간 크론을
+그 리조트에 팬아웃하고, `getSearchCatalog()`가 조회 화면에 지점을 노출한다.
+둘 다 코드 쪽 절반(등록된 크롤러 / `CATALOG` 등재)을 함께 요구하므로 스크립트가
+그것도 같이 찍는다. 한쪽이 빠져 있으면 에러가 아니라 **빈 필터**로 나타난다.
 
 ## 날짜 규약
 
@@ -266,7 +272,7 @@ npx tsx scripts/run-crawl.ts RESOM hot    # 핫 윈도우 60개 — 윈도우 �
    지점의 `branchName`/`label`/`region`만 뽑는다. **`bizCd` 등 크롤 전용 필드는 넣지 않는다**
    (이 모듈은 `server-only`지만, 넣으면 서버 컴포넌트가 클라이언트로 내려보내게 된다).
 4. `/admin/accounts`에서 해당 리조트 자격증명 등록 (없으면 `run.ts`가 throw)
-5. Neon에서 `UPDATE resorts SET active = true WHERE slug = '<SLUG>'`
+5. `npx tsx scripts/set-active.ts <SLUG> true`
 
 핵심 코드(`run.ts`, `_shared/*`)는 물론 **Inngest 함수·조회 UI·`/api/inventory`도 무수정**이다.
 `crawl-resort`는 slug를 인자로 받는 단일 함수이고(리조트별 함수가 아니다),
