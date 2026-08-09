@@ -92,8 +92,52 @@ async function dismissOverlay(
   log("[lotte] overlay still open — no dismiss candidate matched");
 }
 
+/**
+ * Record the requests a login actually consists of, for the failure path.
+ *
+ * A working login (captured locally, 2026-08-09) is four hops:
+ *
+ *   GET  netfunnel.lottehotel.com/ts.wseq?…&aid=login   ← queue/admission control
+ *   POST members.lpoint.com/exView/api/callLgn_01_001
+ *   POST members.lpoint.com/exBiz/login/login_01_001    ← L.POINT authenticates
+ *   POST api.lottehotel.com/ssoLogin/ssoLogin           → {"code":"0000", …}
+ *
+ * and the context ends up holding Imperva cookies (`reese84`, `visid_incap_*`,
+ * `nlbi_*`, `incap_ses_*`). So there are two gates in front of the form that
+ * have nothing to do with our selectors, and a login that fails at either
+ * leaves the page looking exactly like one that was never submitted — which is
+ * the shape production keeps failing in.
+ *
+ * Bodies are only captured for non-2xx or HTML responses: a challenge page or
+ * an error is the informative case, while the successful JSON carries the
+ * account's login id and is worth nothing in a log.
+ */
+function recordAuthTraffic(ctx: CrawlerContext): string[] {
+  const seen: string[] = [];
+  const wanted = /netfunnel|lpoint|ssoLogin|\/login/i;
+  ctx.page.on("response", async (res) => {
+    const url = res.url();
+    if (!wanted.test(url) || /\.(js|css|png|jpg|gif|svg|woff2?)(\?|$)/i.test(url)) return;
+    const contentType = res.headers()["content-type"] ?? "";
+    let snippet = "";
+    if (res.status() >= 300 || contentType.includes("html")) {
+      try {
+        snippet = (await res.text()).replace(/\s+/g, " ").slice(0, 160);
+      } catch {
+        /* body already consumed */
+      }
+    }
+    if (seen.length < 12) {
+      seen.push(`${res.status()} ${res.request().method()} ${url.slice(0, 120)}${snippet ? ` :: ${snippet}` : ""}`);
+    }
+  });
+  return seen;
+}
+
 export async function performLogin(ctx: CrawlerContext) {
   const { page, credentials, log } = ctx;
+
+  const authTraffic = recordAuthTraffic(ctx);
 
   log("[lotte] navigating to login page");
   await page.goto(LOTTE.loginUrl, {
@@ -193,6 +237,21 @@ export async function performLogin(ctx: CrawlerContext) {
     /* diagnostics only */
   }
   log("[lotte] login failed — page says", { url: pageUrl, alertText, bodyText });
+  // Which of the four hops did we reach? Missing `login_01_001` means L.POINT
+  // never authenticated us; missing `ssoLogin` means it did and lottehotel.com
+  // refused to adopt the session; neither appearing at all points at the gate
+  // in front of the form rather than at the form.
+  log("[lotte] login failed — auth traffic", { hops: authTraffic });
+  try {
+    const cookies = await ctx.context.cookies();
+    log("[lotte] login failed — bot-protection cookies", {
+      present: cookies
+        .map((c) => c.name)
+        .filter((n) => /reese84|incap|nlbi|netfunnel/i.test(n)),
+    });
+  } catch {
+    /* diagnostics only */
+  }
 
   if (process.env.CRAWLER_DEBUG_DIR) {
     try {

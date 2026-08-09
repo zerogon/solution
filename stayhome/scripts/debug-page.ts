@@ -243,6 +243,70 @@ async function main() {
     console.log("buttons:", JSON.stringify(buttons.filter(Boolean).slice(0, 20)));
     // iframe? L.POINT SSO often embeds or redirects
     console.log("frames:", page.frames().map((f) => f.url().slice(0, 120)));
+  } else if (step === "doLogin") {
+    // Run the crawler's own performLogin while recording every request the
+    // page makes, so we learn what a SUCCESSFUL login looks like on the wire.
+    //
+    // This exists because the production login fails silently: the overlay is
+    // dismissed, the tab switches, the form fills, and then `isLogin` simply
+    // stays false for 25s with nothing on the page to say why. Without a
+    // reference recording of the working case there is nothing to diff against.
+    const { performLogin } = await import("../src/crawlers/lotte/login");
+    const { prisma } = await import("../src/lib/prisma");
+    const { decrypt } = await import("../src/lib/crypto");
+
+    const resort = await prisma.resort.findUnique({ where: { slug: "LOTTE" } });
+    const account = resort
+      ? await prisma.resortAccount.findFirst({
+          where: { resortId: resort.id, isPrimary: true },
+          orderBy: { updatedAt: "desc" },
+        })
+      : null;
+    if (!account) throw new Error("No primary LOTTE ResortAccount — add one at /admin/accounts");
+
+    const noise = /google|facebook|doubleclick|kakao|naver|criteo|analytics|gtm|hotjar|clarity|adobe|wcs\.naver|\.(png|jpg|jpeg|gif|svg|woff2?|css|ico)(\?|$)/i;
+    const calls: string[] = [];
+    page.on("request", (req) => {
+      if (req.method() === "GET" || noise.test(req.url())) return;
+      calls.push(`→ ${req.method()} ${req.url().slice(0, 160)}`);
+    });
+    page.on("response", async (res) => {
+      const req = res.request();
+      if (noise.test(res.url())) return;
+      if (req.method() === "GET" && !/login|auth|member|sso|session/i.test(res.url())) return;
+      let body = "";
+      try {
+        const ct = res.headers()["content-type"] ?? "";
+        if (ct.includes("json") || ct.includes("text/plain")) {
+          body = (await res.text()).replace(/\s+/g, " ").slice(0, 240);
+        }
+      } catch {
+        /* body already consumed */
+      }
+      calls.push(`← ${res.status()} ${req.method()} ${res.url().slice(0, 160)}${body ? `\n    ${body}` : ""}`);
+    });
+
+    const ctx = {
+      resortId: resort!.id,
+      slug: "lotte",
+      context,
+      page,
+      credentials: { id: decrypt(account.idEncrypted), pw: decrypt(account.pwEncrypted) },
+      log: (msg: string, meta?: Record<string, unknown>) => console.log(msg, meta ?? ""),
+    };
+    try {
+      await performLogin(ctx);
+      console.log("\n=== LOGIN OK ===");
+    } catch (e) {
+      console.log("\n=== LOGIN FAILED ===");
+      console.log(e instanceof Error ? e.message.slice(0, 400) : String(e));
+    }
+    console.log("\n=== traffic (non-GET + auth-ish) ===");
+    console.log(calls.join("\n"));
+    console.log("\ncookies:", JSON.stringify(
+      (await context.cookies()).map((c) => `${c.name}@${c.domain}`),
+    ));
+    await dump(page, "after-login");
   } else if (step === "roomlist") {
     // Exercise performSearch + parseRoomList without login (API is public for
     // BAR rates) — validates the post-login pipeline end-to-end.

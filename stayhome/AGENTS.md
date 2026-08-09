@@ -24,6 +24,34 @@ lotteresort.com은 2026-07에 LOTTE HOTELS & RESORTS(lottehotel.com)로 통합�
   (산정호수는 통합 시 라인업 제외. bizCd 출처: CMS 카탈로그
   `resort.lottehotel.com/cms/common/hotel-catalogs/ko_catalogs.json`의 `anotherBookingUrl`)
 
+### 로그인은 폼 하나가 아니라 네 홉이고, 앞에 문지기가 둘 있다
+
+`scripts/debug-page.ts doLogin`으로 성공한 로그인을 그대로 녹화한 결과(2026-08-09):
+
+```
+GET  netfunnel.lottehotel.com/ts.wseq?…&aid=login   ← 넷퍼넬(대기열/입장 제어)
+POST members.lpoint.com/exView/api/callLgn_01_001
+POST members.lpoint.com/exBiz/login/login_01_001    ← L.POINT가 실제로 인증
+POST api.lottehotel.com/ssoLogin/ssoLogin           → {"code":"0000", …}
+```
+
+그리고 컨텍스트에 `reese84` · `visid_incap_*` · `nlbi_*` · `incap_ses_*` 쿠키가 쌓인다 —
+**Imperva(Incapsula) WAF + Advanced Bot Protection**이다.
+
+즉 폼 앞에 우리 셀렉터와 무관한 문지기가 둘(넷퍼넬, Imperva) 있고, 둘 중 하나에서
+막히면 **페이지는 제출조차 안 한 것과 똑같아 보인다** — 에러도 알림도 없이 `isLogin`만
+계속 false다. 프로덕션에서 반복되는 실패가 정확히 이 모양이라, 자격증명 오류로 오진하기
+쉽다(실제로 한 번 오진했다).
+
+한국 IP(로컬)에서는 안정적으로 통과하고 Vercel의 미국 리전에서는 4번에 1번쯤만 통과한다는
+비대칭도 이 가설과 맞는다. **로그인 실패를 셀렉터 문제로 의심하기 전에 어느 홉까지 갔는지부터
+볼 것** — `login.ts`가 실패 시 `[lotte] login failed — auth traffic`으로 홉 목록을,
+`— bot-protection cookies`로 문지기 쿠키 유무를 남긴다.
+
+- `login_01_001`이 없다 → L.POINT가 인증을 안 해줬다(자격증명 또는 그 앞 문지기)
+- `ssoLogin`이 없다 → L.POINT는 통과했는데 lottehotel.com이 세션을 안 받았다
+- 둘 다 없다 → 폼이 아니라 그 앞에서 막혔다
+
 ### 로그인 페이지를 가리는 쿠키 동의 레이어
 
 로그인 화면 앞에 모달이 뜬다 — 제목 `최상의 경험 제공 (쿠키 활용 동의)`,
@@ -57,6 +85,7 @@ npx playwright install chromium    # 최초 1회
 npx tsx scripts/run-crawl.ts       # 수동 크롤 (RefreshButton과 동일 경로)
 npx tsx scripts/check-logs.ts      # crawl_logs / inventory / sessions 확인
 npx tsx scripts/debug-page.ts roomlist   # 로그인 없이 검색+파싱 파이프라인만 테스트
+npx tsx scripts/debug-page.ts doLogin    # 실로그인 + 네트워크 녹화 (성공한 로그인의 기준선)
 npx tsx scripts/drop-session.ts LOTTE    # 캐시 세션 삭제 → 다음 크롤이 반드시 로그인
 ```
 
