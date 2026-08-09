@@ -28,48 +28,68 @@ export async function checkLoggedIn(ctx: CrawlerContext): Promise<boolean> {
 /**
  * Close whatever modal layer is covering the login form.
  *
- * An undismissed layer does not fail where it is raised — it fails 20s later
- * on the L.POINT tab click, reported as `.modal-dimm ... intercepts pointer
- * events`, which reads like a broken tab selector. So when no candidate
- * matches, the layer's own heading and buttons go to the log: an overlay that
- * only appears from some regions is otherwise invisible from here.
+ * An undismissed layer does not fail where it is raised — it fails later on
+ * the L.POINT tab click, reported as `.modal-dimm ... intercepts pointer
+ * events`, which reads like a broken tab selector.
+ *
+ * Detection goes through the dimm, not the wrapper. Asking `.layer-wrap`
+ * whether it is visible answered "no" while its dimm was swallowing every
+ * click, so this function returned silently and logged nothing at all — the
+ * absence of a log was the clue that the detector, not the site, was wrong.
+ *
+ * `seen` keeps the identity dump to once per login: the caller retries, and
+ * the same overlay printed three times buries the run it belongs to.
  */
-async function dismissOverlay(ctx: CrawlerContext): Promise<void> {
+async function dismissOverlay(
+  ctx: CrawlerContext,
+  seen: { logged: boolean },
+): Promise<void> {
   const { page, log } = ctx;
-  const layer = page.locator(LOTTE.login.overlaySelector).first();
+  const dimm = page.locator(LOTTE.login.overlayDimmSelector).first();
   // Give a late layer a moment to show itself. Without this the check ran
   // before the layer existed, returned quietly, and the layer arrived in the
   // middle of the tab click instead.
-  await layer
+  await dimm
     .waitFor({ state: "visible", timeout: LOTTE.login.overlayAppearMs })
     .catch(() => {});
-  if (!(await layer.isVisible().catch(() => false))) return;
+  if ((await dimm.count().catch(() => 0)) === 0) return;
+
+  const layer = page
+    .locator(LOTTE.login.overlaySelector)
+    .filter({ has: page.locator(LOTTE.login.overlayDimmSelector) })
+    .first();
+
+  if (!seen.logged) {
+    seen.logged = true;
+    let heading = "";
+    let buttons: string[] = [];
+    try {
+      heading = (await layer.innerText()).replace(/\s+/g, " ").trim().slice(0, 200);
+      buttons = (await layer.locator("button, a").allInnerTexts())
+        .map((t) => t.replace(/\s+/g, " ").trim())
+        .filter(Boolean)
+        .slice(0, 15);
+    } catch {
+      /* diagnostics only */
+    }
+    log("[lotte] overlay detected", { heading, buttons });
+  }
 
   for (const name of LOTTE.login.overlayDismissButtonNames) {
-    const button = layer.getByRole("button", { name, exact: false }).first();
-    if (!(await button.count().catch(() => 0))) continue;
+    // getByText rather than getByRole: the dismiss control has turned up as an
+    // <a> as often as a <button> on this site's layers.
+    const candidate = layer.getByText(name, { exact: false }).first();
+    if (!(await candidate.count().catch(() => 0))) continue;
     try {
-      await button.click({ timeout: 3_000 });
+      await candidate.click({ timeout: 3_000 });
+      await dimm.waitFor({ state: "hidden", timeout: 3_000 }).catch(() => {});
       log("[lotte] overlay dismissed", { via: name });
-      await layer.waitFor({ state: "hidden", timeout: 5_000 }).catch(() => {});
-      if (!(await layer.isVisible().catch(() => false))) return;
+      return;
     } catch {
       /* candidate did not take — try the next one */
     }
   }
-
-  let heading = "";
-  let buttons: string[] = [];
-  try {
-    heading = (await layer.innerText()).replace(/\s+/g, " ").trim().slice(0, 200);
-    buttons = (await layer.locator("button, a[role='button']").allInnerTexts())
-      .map((t) => t.replace(/\s+/g, " ").trim())
-      .filter(Boolean)
-      .slice(0, 12);
-  } catch {
-    /* diagnostics only */
-  }
-  log("[lotte] overlay still open — no dismiss candidate matched", { heading, buttons });
+  log("[lotte] overlay still open — no dismiss candidate matched");
 }
 
 export async function performLogin(ctx: CrawlerContext) {
@@ -96,14 +116,24 @@ export async function performLogin(ctx: CrawlerContext) {
   // before the click. One long click timeout cannot recover from that — it
   // just spends 20s retrying against an overlay nobody closed.
   log("[lotte] switching to L.POINT tab");
+  const seen = { logged: false };
   const tab = page.getByText(LOTTE.login.tabName, { exact: false }).first();
   for (let attempt = 1; ; attempt++) {
-    await dismissOverlay(ctx);
+    await dismissOverlay(ctx, seen);
     try {
       await tab.click({ timeout: LOTTE.login.tabClickTimeoutMs });
       break;
-    } catch (e) {
-      if (attempt >= LOTTE.login.tabClickAttempts) throw e;
+    } catch {
+      if (attempt >= LOTTE.login.tabClickAttempts) {
+        // Last resort: dispatch the click on the element itself. This skips
+        // the hit test the overlay is winning, so it switches the tab even
+        // while the layer is up. It is not a fix — if the layer also blocks
+        // the submit button the next step fails — but it gets the run past a
+        // layer we have not learned to close yet, and it says so in the log.
+        log("[lotte] tab click still blocked — dispatching a DOM click");
+        await tab.evaluate((el) => (el as HTMLElement).click());
+        break;
+      }
       log("[lotte] tab click blocked, retrying", { attempt });
     }
   }

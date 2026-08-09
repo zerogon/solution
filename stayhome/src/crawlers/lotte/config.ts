@@ -40,6 +40,15 @@ export const LOTTE = {
      */
     overlaySelector: ".layer-wrap",
     /**
+     * What actually covers the page — and what Playwright names as the
+     * intercepting element. `.layer-wrap` is the wrong thing to *detect* on:
+     * the page carries several of them and its children are fixed-positioned,
+     * so the wrapper's own box can be empty and `isVisible()` false while the
+     * dimm in its subtree is swallowing every click. It stays as the scope for
+     * finding the dismiss button, chosen by which wrapper holds a live dimm.
+     */
+    overlayDimmSelector: ".modal-dimm:visible",
+    /**
      * The layer is not in the DOM when `domcontentloaded` resolves — a
      * point-in-time check right after `goto` saw nothing and logged nothing,
      * and the layer then appeared *during* the tab click and intercepted it.
