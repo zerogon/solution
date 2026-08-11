@@ -59,7 +59,10 @@ const RESORTS: Array<{
     name: "오크밸리",
     region: "전국",
     baseUrl: "https://oakvalley.co.kr",
-    loginUrl: "https://oakvalley.co.kr/login",
+    // /login does not exist in the SPA's router — the real route is
+    // /account/login. Nothing reads this column at runtime (each crawler's own
+    // config.loginUrl is authoritative), but it is read as documentation.
+    loginUrl: "https://oakvalley.co.kr/account/login",
     active: false,
   },
   {

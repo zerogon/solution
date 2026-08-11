@@ -291,11 +291,130 @@ npx tsx scripts/run-crawl.ts RESOM hot    # 핫 윈도우 60개 — 윈도우 �
 크롤러용 쿠키를 만들어 심으므로(`seedCrawlerCookie`) 파서를 고칠 때마다 실계정에
 로그인이 쌓이지 않는다 — 반복 로그인 실패는 잠금 위험이라 그렇게 만들었다.
 
+# OAKVALLEY 크롤러 (reservation.oakvalley.co.kr 회원 콘도 예약)
+
+오크밸리(원주, HDC그룹)는 **호스트가 둘**이다. 로그인은 `oakvalley.co.kr`(Vite/React SPA,
+`api.oakvalley.co.kr/api/v1/users/sign-in`), 재고는 `reservation.oakvalley.co.kr`
+(2012년식 JSP·Tomcat `JSESSIONID`·jQuery 1.7.2)에 있다. 마케팅 사이트의
+`/api/v1/village`·`/api/v1/condo`는 공개지만 **재고가 없다** — 인벤토리 API로 착각하지 말 것.
+
+수집 대상은 **회원 콘도 예약(CONDO) 하나**다. 쿠폰·패키지(GRP1/GRP2)·성수기 추첨(rslot)은
+다른 상품이라 같은 테이블에 섞으면 "잔여 객실"의 의미가 리조트마다 달라진다(리솜과 같은 판단).
+
+엔드포인트 (2026-08-11 실계정 검증):
+
+```
+POST {apiBase}/users/sign-in                    로그인 (폼 조작으로 유발)
+GET  {rsvBase}/common.session.pns?sessionCheck  세션 검증 → session[0].session_yn
+POST {rsvBase}/frontoffice/condo/c_100.jsp      회원 콘도 예약 화면 (condo_flag=CONDO)
+POST {rsvBase}/condo.calendar.pns?getCalendar   잔여 객실 (월 달력)
+```
+
+롯데·소노·리솜과 갈리는 지점은 넷이다.
+
+- **브리지를 걸을 필요가 없다.** SPA가 로그인 도중 스스로
+  `POST reservation.oakvalley.co.kr/frontMember.pns?login-oak`을 부르고, 그 직후
+  네비게이션 없이 `sessionCheck`가 `session_yn:"Y"`를 답한다. 그래서 `login.ts`는 평범한
+  폼 로그인이고, JSP 페이지 로드는 로그인이 아니라 **검색**의 일이다(아래 `ptSignature`).
+  · 다만 `performLogin`은 sign-in 성공 후 `session_yn`이 `Y`가 될 때까지 **폴링한 뒤**
+    반환한다. `run.ts:181`이 `login()` resolve 즉시 `saveStorageState`를 부르므로, 한 박자
+    이른 반환은 `oak-token`은 있고 `JSESSIONID`는 없는 상태를 저장하게 되고, 그건 이후
+    모든 패스에서 검증 실패로 나타난다.
+  · 실패 메시지는 **"토큰을 못 받았다"와 "토큰은 받았는데 session_yn이 N"을 구분**한다.
+    후자가 사이트 쪽 핸드오프 문제이고, 구분하지 않으면 비밀번호 오류로 오진한다.
+- **`ptSignature` 때문에 요청을 URL로 조립할 수 없다.** JSP의 모든 `<form>`에 서버 생성
+  히든 필드가 있고 매 AJAX POST에 `serialize()`돼 들어간다. **실측: 한 번 수확한 서명으로
+  4연속 동일 성공** — 서명은 렌더가 아니라 세션+폼에 묶여 있다. 그래서 크롤러는
+  패스당 콘도 화면을 **한 번만** 열어 폼 필드를 수확하고, 이후는 평범한
+  `page.request.post`로 쏜다(DOM을 몰지 않는다).
+- **id와 name이 다르고, 그게 결정적이다.** `c_handler.js`는 필드를 **id**로 다루고
+  (`$("#V_T_MONTH")`) `serialize()`는 **name**으로 제출한다(`T_MONTH`). name으로 덮으면
+  id가 그대로 남아 폼이 렌더된 달을 계속 제출하고, 달력은 **어느 달을 물어도 8월을 답한다** —
+  그것도 `success:true`로, 에러 하나 없이. 조사 중 실제로 여기에 한 번 걸렸다.
+  `search.ts`는 오버라이드를 **id로 키잉**하고 전송 시점에 name으로 매핑한다.
+- **응답은 월 달력이고 월말 꼬리가 없다.** `entitys[] = {CD_DATE(일자만), AVA_YN,
+  RM_RMTYPE, RM_REF1, …}`. 실측: 08 요청 → 11~31일, 09 → 1~30, 10 → 1~31.
+  소노는 `nights-1`일 꼬리를 공짜로 받았지만 여기는 **매달 말일이 다음 달 없이는
+  판정 불가**다. 그래서 `search.ts`가 두 달을 받아 하나의 `NightMap`에 병합한 뒤에야
+  `parse.ts`가 행을 만든다(수집과 조립이 분리된 유일한 크롤러인 이유).
+- **`V_IN_BAKSU`(박수)는 재고에 아무 영향이 없다.** 1박·2박·3박 요청의 공통 84건이
+  상태까지 전부 동일했다. 그래서 `parse.ts`가 숙박 일수만큼 AND 한다 — 판정할 밤이
+  하나라도 없으면 행을 **안 만든다**. (`getCalendar_baksu_check`는 날짜를 클릭한 *뒤*
+  최대 연박을 재는 별도 서블릿이고 이것과 다르다. `c_handler.js`는 `V_IN_BAKSU`를
+  한 번도 설정하지 않는다.)
+
+그 밖에:
+
+- **`closingSoon`은 항상 false다. 버그가 아니다.** `AVA_YN`의 관측된 알파벳이 정확히
+  `{"Y","N"}`이고 페이로드 어디에도 잔여 수가 없다. 롯데는 실제 잔여 수를 임계값으로,
+  소노는 사이트의 `E` 코드를 쓰는데 오크밸리는 둘 다 없다 — 네 크롤러에서 이 필드의
+  **세 번째 서로 다른 출처**다. 대기(waitlist)는 "예약 불가인 방에 줄을 설 수 있다"는
+  다른 질문이라 매핑하면 `available=false` 행에 마감임박 칩이 붙는다.
+- **회원권(회원증) 축은 재고에 존재하지 않는다.** 이 계정은 회원권을 5개 보유하는데,
+  5개 전부 **그리고 회원권을 아예 안 보낸 경우까지** 두 빌리지 모두 동일한 달력을 답했다.
+  회원권 목록은 `<select>`가 아니라 `POST common.bungyangmember.pns?getRoomMember`로
+  오지만, 크롤러는 그걸 부를 필요조차 없다. **요청 수를 이 축으로 곱하지 말 것.**
+- 지점 2곳 — 밸리 빌리지(`1101`), 힐스 빌리지(`2101`), 둘 다 **강원**.
+  `/api/v1/village`의 세 번째 빌리지 `SEONGMUNAN`(성문안)은 전 필드가 `null`인 미출시
+  자리표시자라 제외했다.
+- **객실 유형의 평형은 실데이터가 정한다.** `RM_RMTYPE` → `RM_REF1`이 두 빌리지 모두
+  1:1이고(`{"AP":["031"],…}`), 이것이 유일하게 믿을 수 있는 출처다 —
+  `c_handler.js`는 자기 모순이다(`room_type_fx()`는 037→CE·045→DB인데 달력 렌더러는
+  CE를 room_45로, DB를 room_37로 그린다). **데이터는 렌더러 쪽이 맞다: DB=37평, CE=45평.**
+  1:1이라 `RM_REF1`을 `roomType`에 덧붙일 필요는 없다. 미등록 코드는 추측하지 않고
+  코드 그대로 저장하고, `debug-oakvalley.ts diff`가 보고한다.
+- 응답 charset은 UTF-8(`application/x-json;charset=UTF-8`), 깨짐 0.
+- **봇 보호가 없다**(넷퍼넬·Imperva·CAPTCHA·Cloudflare 흔적 0건). 롯데와 달리 실패하면
+  원인은 문지기가 아니라 요청 조립이거나 세션이다.
+- JSP는 네이티브 `alert()`를 남발한다. `bootCondo`가 페이지당 1회 다이얼로그 핸들러를
+  무장하지 않으면 이후 모든 네비게이션과 `evaluate`가 **영구히 멈추고**, 증상이
+  "출력 없이 정지"라 네트워크 지연으로 오독된다.
+
+실사이트 검증(2026-08-11):
+
+- 콜드 로그인 포함 전 지점 1윈도우 **459행 24.2초** — `/api/resorts/[slug]/refresh`의
+  50초 예산 안.
+- **핫 윈도우 60개 → 58스킵 · 검색 2회 · 달력 요청 4회 · 부팅 1회, 909행 23.2초**
+  (세션 재사용). 2박 패스는 `fetched: 0`으로 1박 패스가 받아둔 달력을 그대로 썼다.
+- 1박 51일(8/11~9/30) 구멍 0, 2박 50일 — **하루 적은 것이 정상**이다. 9/30의 둘째 밤이
+  없어 추측 대신 행을 만들지 않았다.
+- 과거 날짜 0행, "2박 가능인데 1박 불가" 모순 0행, `closing_soon` 0행,
+  지점·지역 카탈로그 완전 일치, 객실 유형 9종 각 101행.
+- 클라이언트 번들 유출 0건(`complexCd`/`ptSignature`/`V_T_MONTH`).
+
+## 로컬 검증
+
+```bash
+npx tsx scripts/debug-oakvalley.ts main        # 진입점 · 아웃바운드 호스트
+npx tsx scripts/debug-oakvalley.ts login       # 로그인 폼 (로그인하지 않음)
+npx tsx scripts/debug-oakvalley.ts doLogin     # 실로그인 → 토큰·쿠키 도메인·session_yn
+npx tsx scripts/debug-oakvalley.ts bridge      # SPA→JSP 홉별 session_yn · 폼 필드 · 회원권
+npx tsx scripts/debug-oakvalley.ts session     # JSESSIONID TTL 폴링
+npx tsx scripts/debug-oakvalley.ts cal         # getCalendar 2방식 대조 + 서명 재사용 ×3
+npx tsx scripts/debug-oakvalley.ts probe       # 어떤 오버라이드가 실제로 먹는가
+npx tsx scripts/debug-oakvalley.ts span        # 달 범위 · 박수 무영향 · 월 경계 연속성
+npx tsx scripts/debug-oakvalley.ts memberships # 회원권이 달력을 바꾸는가
+npx tsx scripts/debug-oakvalley.ts rows        # search+parse 단독 실행
+npx tsx scripts/debug-oakvalley.ts diff        # 지점·객실유형 ↔ OAKVALLEY config 대조
+npx tsx scripts/run-crawl.ts OAKVALLEY hot     # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
+```
+
+`doLogin`만 실계정을 쓰고 나머지는 `/tmp/oakvalley-debug-state.json`을 재사용한다.
+리솜의 `seedCrawlerCookie` 같은 변환은 필요 없다 — 오크밸리 인증은 평범한 컨텍스트
+쿠키라 저장된 상태가 그대로 크롤러가 원하는 것이다.
+
+**`probe` 스텝이 존재하는 이유**: `ptSignature`가 붙어 있으면 "요청이 성공했다"가
+"요청이 반영됐다"의 증거가 되지 못한다. 서명된 필드는 조용히 원래 값으로 되돌아갈 수
+있고, 그 결과는 에러가 아니라 **틀린 달의 정답**이다. 한 번에 한 필드씩 바꿔 무엇이
+움직이는지 보는 것이 유일한 판별법이다.
+
 # 새 리조트 추가 (Phase F)
 
 1. `src/crawlers/<slug>/{config,login,search,parse,index}.ts` 작성.
    가장 가까운 것을 복사한다 — 지점마다 한 콜이면 **lotte**, 한 콜에 여러 지점이면
-   **sono**, 응답이 날짜 달력이거나 API가 쿠키가 아니라 토큰을 요구하면 **resom**.
+   **sono**, 응답이 날짜 달력이거나 API가 쿠키가 아니라 토큰을 요구하면 **resom**,
+   요청을 URL로 조립할 수 없거나(서명·토큰이 페이지에 있음) 응답이 월 단위라
+   여러 응답을 병합해야 하면 **oakvalley**.
 2. `src/crawlers/registry.ts`에 lazy import 1줄 추가
 3. `src/lib/resort-catalog.ts`의 `CATALOG`에 `{ properties }` 1항목 추가 —
    지점의 `branchName`/`label`/`region`만 뽑는다. **`bizCd` 등 크롤 전용 필드는 넣지 않는다**

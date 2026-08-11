@@ -16,7 +16,7 @@ const LOADERS: Partial<Record<ResortSlug, LoaderFn>> = {
   [ResortSlug.LOTTE]: async () => (await import("./lotte")).lotteCrawler,
   [ResortSlug.RESOM]: async () => (await import("./resom")).resomCrawler,
   // [ResortSlug.HANWHA]: async () => (await import("./hanwha")).hanwhaCrawler,
-  // [ResortSlug.OAKVALLEY]: async () => (await import("./oakvalley")).oakvalleyCrawler,
+  [ResortSlug.OAKVALLEY]: async () => (await import("./oakvalley")).oakvalleyCrawler,
   [ResortSlug.SONO]: async () => (await import("./sono")).sonoCrawler,
 };
 

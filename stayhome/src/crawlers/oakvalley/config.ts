@@ -1,0 +1,156 @@
+/**
+ * OAKVALLEY — 오크밸리 (원주, HDC그룹) 회원 콘도 예약.
+ *
+ * Structurally unlike the other three crawlers, and every difference below was
+ * measured on the live site (2026-08-11) with `scripts/debug-oakvalley.ts`.
+ *
+ * **Two hosts.** Login is a Vite/React SPA on `oakvalley.co.kr` that POSTs
+ * `api.oakvalley.co.kr/api/v1/users/sign-in`. Availability lives on
+ * `reservation.oakvalley.co.kr` — a 2012-era JSP app (Tomcat `JSESSIONID`,
+ * jQuery 1.7.2) whose AJAX hits `*.pns` servlets. Nothing has to bridge them by
+ * hand: **the SPA itself POSTs `frontMember.pns?login-oak` during sign-in**, and
+ * `common.session.pns?sessionCheck` answers `session_yn:"Y"` immediately after,
+ * with no navigation. So `login.ts` is an ordinary form login; the JSP page load
+ * belongs to *search*, which needs it for the reason below.
+ *
+ * **`ptSignature`.** Every JSP form carries a server-generated hidden signature
+ * that is serialized into each AJAX POST, so a request cannot be built from a
+ * URL the way `resom/search.ts` builds `calendarRooms`. Measured: one harvested
+ * signature answered four identical POSTs in a row, so it is bound to the
+ * session and the form rather than to a render. That is what makes the cheap
+ * shape possible — **boot the condo page once per pass, then fire plain
+ * `page.request.post` calls** — instead of driving the DOM per month.
+ *
+ * **ids and names differ, and it matters.** `c_handler.js` addresses fields by
+ * id (`$("#V_T_MONTH")`) while `serialize()` submits them by name (`T_MONTH`).
+ * Overriding by name left the id untouched, the form kept submitting the month
+ * it was rendered with, and the calendar answered August no matter which month
+ * was asked for — a wrong answer that arrived as `success:true`. `search.ts`
+ * therefore keys its overrides by **id** and maps to name at send time.
+ *
+ * Endpoints (2026-08-11, verified with the live corporate account):
+ *
+ *   POST {apiBase}/users/sign-in                    로그인 (폼 조작으로 유발)
+ *   GET  {rsvBase}/common.session.pns?sessionCheck  세션 검증 → session.session_yn
+ *   POST {rsvBase}/frontoffice/condo/c_100.jsp      회원 콘도 예약 화면 (condo_flag=CONDO)
+ *   POST {rsvBase}/condo.calendar.pns?getCalendar   잔여 객실 (월 달력)
+ *
+ * What the calendar response is:
+ *
+ * - `entitys[] = { CD_DATE, WEEK_DAY, DAYS, AVA_YN, RM_RMTYPE, RM_REF1 }`.
+ *   `CD_DATE` is a **day-of-month**, not a date — the year and month come from
+ *   the request, which is why `parse.ts` takes an explicit scope.
+ * - **One call = exactly one month**, clipped to today, with **no tail past
+ *   month end** (measured: 08 → days 11..31, 09 → 1..30, 10 → 1..31). SONO got
+ *   a `nights-1` tail for free; here the last day of every month is unanswerable
+ *   without the next month, so `search.ts` fetches two months and merges them
+ *   before building any row.
+ * - **`V_IN_BAKSU` (박수) is ignored.** 1박 vs 2박 vs 3박 returned byte-identical
+ *   statuses across all 84 shared entries. So the response is a calendar and
+ *   `parse.ts` ANDs the nights itself. (`getCalendar_baksu_check` is a separate
+ *   servlet the site calls *after* a date is clicked; it is not this one.)
+ * - **`AVA_YN` is binary.** Observed distribution over both villages: only "Y"
+ *   and "N" — no third state, no remaining-room count anywhere in the payload.
+ *   See `parse.ts` for why `closingSoon` is therefore always false.
+ * - **The 회원권 axis does not exist for availability.** This account holds five
+ *   certificates; all five, *and no certificate at all*, returned identical
+ *   calendars for both villages. The request count must not be multiplied by it.
+ *
+ * We collect **회원 콘도 예약 (CONDO) only**. 쿠폰·패키지(GRP1/GRP2)·성수기
+ * 추첨(rslot) are different products and would not mean the same thing as the
+ * Lotte, SONO and RESOM rows they sit next to (the same call made for RESOM).
+ */
+export const OAKVALLEY = {
+  baseUrl: "https://oakvalley.co.kr",
+  /** NOT `/login` — that route does not exist in the SPA's router. */
+  loginUrl: "https://oakvalley.co.kr/account/login",
+  /** Sign-in only. `/api/v1/village` and `/api/v1/condo` are public marketing
+   *  content with no availability — do not mistake them for an inventory API. */
+  apiBase: "https://api.oakvalley.co.kr/api/v1",
+  signInUrlPattern: /users\/sign-in/,
+
+  rsvBase: "https://reservation.oakvalley.co.kr",
+  entranceUrl: "https://reservation.oakvalley.co.kr/frontoffice/p_entrance.jsp",
+  condoUrl: "https://reservation.oakvalley.co.kr/frontoffice/condo/c_100.jsp",
+  sessionCheckUrl: "https://reservation.oakvalley.co.kr/common.session.pns?sessionCheck",
+  calendarUrl: "https://reservation.oakvalley.co.kr/condo.calendar.pns?getCalendar",
+  /** `detailUrl` for every row. The condo page is only reachable by POST, so
+   *  the entrance is the deepest link that survives being pasted into an
+   *  address bar. */
+  bookingUrl: "https://reservation.oakvalley.co.kr/frontoffice/p_entrance.jsp",
+
+  /**
+   * Login form, observed rendered (not inferred from the bundle).
+   *
+   * Scoped to the form because the header renders another control with the
+   * accessible name 로그인 — the trap that made RESOM's submit selector a class
+   * rather than a role query. All three selectors matched exactly once.
+   */
+  login: {
+    idInputSelector: "form.login-form-wrapper input[placeholder='아이디']",
+    pwInputSelector: "form.login-form-wrapper input[type='password']",
+    submitSelector: "form.login-form-wrapper button[type='submit']",
+  },
+
+  /** The dispatcher field on `p_entrance.jsp` that selects 회원 콘도 예약. */
+  condoFlag: "CONDO",
+  /** The form whose fields (incl. `ptSignature`) every calendar POST reuses. */
+  calendarFormSelector: "#data_param_calendar",
+
+  branches: [
+    { value: "밸리 빌리지", label: "밸리 빌리지", region: "강원", complexCd: "1101" },
+    { value: "힐스 빌리지", label: "힐스 빌리지", region: "강원", complexCd: "2101" },
+  ] as const,
+  // A third village (SEONGMUNAN/성문안) exists in /api/v1/village with every
+  // field null — an unreleased placeholder, excluded until it has content.
+
+  /**
+   * `RM_RMTYPE` → display name, taken from the paired `RM_REF1` in real entities
+   * (`{"AP":["031"],…}` — exactly one ref per type, in both villages).
+   *
+   * This is the only trustworthy source for the 평형: `c_handler.js` contradicts
+   * itself, mapping 037→CE and 045→DB in `room_type_fx()` while its calendar
+   * renderer draws CE as room_45 and DB as room_37. The data agrees with the
+   * renderer. An unmapped code is stored bare rather than guessed — `roomType`
+   * is part of the upsert unique key, so a wrong-but-stable name is worse than
+   * an ugly-but-true code, and `debug-oakvalley.ts diff` reports unmapped codes.
+   */
+  roomTypes: {
+    // 밸리 빌리지
+    AP: "31평",
+    BU: "46평",
+    NA: "48평",
+    SE: "52평",
+    // 힐스 빌리지
+    CA: "25평",
+    CC: "35평",
+    DB: "37평",
+    CE: "45평",
+    DD: "48평",
+  } as Record<string, string | undefined>,
+
+  /**
+   * Months fetched per pass: the requested check-in's month and the next one.
+   *
+   * Not a copy of the scheduler's 30-day hot horizon — it is this crawler's own
+   * fact that a month response has no tail, so the month after is what makes a
+   * month-end stay answerable at all. It happens to cover ≥31 days of check-ins
+   * from any starting day, which is why the hot windows collapse the way they do
+   * (see `search.ts`). Keeping the horizon out of `windows.ts` is deliberate:
+   * a second opinion there would show up as "그 날짜만 조용히 빔".
+   */
+  calendarMonths: 2,
+
+  /**
+   * Soft budget for one `searchAvailability` call, below `run.ts`'s 50s pass
+   * budget because browser launch and login come out of the same clock. This
+   * crawler navigates during search, so it must return partial rows on the way
+   * out rather than let `withDeadline` discard the whole window.
+   */
+  passBudgetMs: 30_000,
+
+  timeouts: { navigation: 20_000, login: 25_000, boot: 20_000, api: 15_000 },
+} as const;
+
+export type OakvalleyConfig = typeof OAKVALLEY;
+export type OakvalleyBranch = (typeof OAKVALLEY.branches)[number];
