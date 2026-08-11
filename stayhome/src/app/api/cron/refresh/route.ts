@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { inngest } from "@/lib/inngest/client";
+import {
+  SCHEDULED_CRAWL_PAUSE_REASON,
+  SCHEDULED_CRAWL_PAUSED,
+} from "@/lib/inngest/pause";
 import { listCrawlableResorts } from "@/lib/inngest/targets";
 
 export const runtime = "nodejs";
@@ -23,6 +27,17 @@ export async function GET(req: Request) {
   }
   if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // Same switch as `scheduled-refresh`. Checked after the secret, not before:
+  // an unauthenticated caller should learn nothing about our schedule, paused
+  // or not.
+  if (SCHEDULED_CRAWL_PAUSED) {
+    return NextResponse.json({
+      dispatched: 0,
+      paused: true,
+      reason: SCHEDULED_CRAWL_PAUSE_REASON,
+    });
   }
 
   const slugs = await listCrawlableResorts();

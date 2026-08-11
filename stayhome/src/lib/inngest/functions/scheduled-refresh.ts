@@ -1,4 +1,5 @@
 import { inngest } from "../client";
+import { SCHEDULED_CRAWL_PAUSE_REASON, SCHEDULED_CRAWL_PAUSED } from "../pause";
 import { listCrawlableResorts } from "../targets";
 
 /**
@@ -19,6 +20,14 @@ export const scheduledRefresh = inngest.createFunction(
   { id: "scheduled-refresh", name: "정기 재고 갱신" },
   { cron: "TZ=Asia/Seoul 0 */3 * * *" },
   async ({ step, logger }) => {
+    // Checked before anything else, and before any step: a paused run must cost
+    // nothing and must say so. See `../pause.ts` for why the cron trigger is
+    // still registered rather than removed.
+    if (SCHEDULED_CRAWL_PAUSED) {
+      logger.warn(`scheduled crawling is PAUSED — ${SCHEDULED_CRAWL_PAUSE_REASON}`);
+      return { dispatched: 0, paused: true, reason: SCHEDULED_CRAWL_PAUSE_REASON };
+    }
+
     const slugs = await step.run("list-resorts", listCrawlableResorts);
     if (slugs.length === 0) {
       logger.warn("no crawlable resorts, nothing scheduled");

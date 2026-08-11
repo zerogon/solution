@@ -126,7 +126,10 @@
     name `T_MONTH`) name으로 덮으면 달력이 **어느 달을 물어도 같은 달을 `success:true`로**
     답했다. 그래서 `debug-oakvalley.ts`에 `probe` 스텝이 있다 — 서명이 붙은 사이트에서는
     "성공"이 "반영됨"의 증거가 아니다.
-- **Phase F 잔여**: 한화 확장
+- **Phase F 잔여**: 한화 확장. **그때까지 정기 수집은 일시정지 상태다**
+  (`src/lib/inngest/pause.ts`의 `SCHEDULED_CRAWL_PAUSED = true`, 2026-08-11).
+  5곳이 다 준비된 뒤 한 번에 확인하기로 했다. 재개는 그 상수를 false로 바꾸고
+  배포하면 끝이고, DB나 Inngest 대시보드는 건드릴 것이 없다.
 
 ## 조회 필터 (Phase F 준비)
 
@@ -184,6 +187,14 @@
 ## 스케줄링 (Phase C)
 
 `src/lib/inngest/` + `/api/inngest` + `/api/cron/refresh` + `vercel.json`.
+
+> **현재 정기 수집은 일시정지 중이다** — `src/lib/inngest/pause.ts`의
+> `SCHEDULED_CRAWL_PAUSED = true`. 한화 크롤러 완료 후 재개. 아래 설명은 재개했을
+> 때의 동작이다. 팬아웃 두 경로(`scheduled-refresh` · `/api/cron/refresh`)만 멈추고,
+> 이벤트 직접 발행과 "최신화" 버튼은 그대로 동작한다.
+> **크론 트리거는 지우지 않았다** — 트리거를 지우면 Inngest 대시보드에서 "일부러 껐다"와
+> "sync가 깨졌다"가 구별되지 않고, 이 프로젝트는 정확히 후자로 오래 고생했다(아래 "배포" 절).
+> 3시간마다 no-op 실행이 남는 편이 스케줄러가 살아 있다는 증거가 된다.
 
 - **스케줄 주체는 Inngest 크론이지 Vercel Cron이 아니다.** Vercel Hobby는 크론을
   **하루 1회**로 제한하고, `0 */3 * * *` 같은 표현은 **배포 시 실패**한다
