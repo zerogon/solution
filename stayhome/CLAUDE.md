@@ -153,10 +153,13 @@
     정상**인데, 그때 `stay`를 지우는 첫 구현이 46일치를 요청 윈도우 하나로 뭉개
     **5,520행을 120행으로 만들고 미래 날짜의 상태를 오늘 것으로 발행**했다.
     `rowsUpserted`만 봤으면 SUCCESS로 지나갔을 자리다.
-- **정기 수집 재개 (2026-08-13)**: `SCHEDULED_CRAWL_PAUSED = false`.
-  2026-08-11부터 한화를 기다리며 멈춰 있었고, 5곳이 다 준비된 뒤 한 번에 켠다는
-  원래 계획대로 재개했다. 멈추고/켜는 것은 그 상수 하나이고 DB나 Inngest 대시보드는
-  건드릴 것이 없다.
+- **정기 수집은 다시 멈춰 있다 (2026-08-13, 운영자 요청)**:
+  `src/lib/inngest/pause.ts`의 `SCHEDULED_CRAWL_PAUSED = true`.
+  같은 날 5곳 완성으로 한 번 켰다가 껐다 — **크롤러 문제가 아니다.** 다섯 곳 모두
+  실사이트 검증을 통과했고 `Resort.active`도 전부 true라, 상수를 false로 바꾸고
+  배포하면 즉시 5곳이 팬아웃된다. DB나 Inngest 대시보드는 건드릴 것이 없다.
+  멈춘 것은 정기 팬아웃 두 경로뿐이고, 조회 화면의 "최신화" 버튼과
+  `resort/crawl.requested` 직접 발행은 그대로 동작한다.
 
 ## 조회 필터 (Phase F 준비)
 
@@ -216,8 +219,10 @@
 `src/lib/inngest/` + `/api/inngest` + `/api/cron/refresh` + `vercel.json`.
 
 > **현재 정기 수집은 일시정지 중이다** — `src/lib/inngest/pause.ts`의
-> `SCHEDULED_CRAWL_PAUSED = true`. 한화 크롤러 완료 후 재개. 아래 설명은 재개했을
-> 때의 동작이다. 팬아웃 두 경로(`scheduled-refresh` · `/api/cron/refresh`)만 멈추고,
+> `SCHEDULED_CRAWL_PAUSED = true`, **운영자 요청 (2026-08-13)**. 크롤러 5곳은 전부
+> 검증을 통과했으므로 **고장이 아니고**, 상수를 false로 바꿔 배포하면 바로 돈다.
+> 아래 설명은 재개했을 때의 동작이다.
+> 팬아웃 두 경로(`scheduled-refresh` · `/api/cron/refresh`)만 멈추고,
 > 이벤트 직접 발행과 "최신화" 버튼은 그대로 동작한다.
 > **크론 트리거는 지우지 않았다** — 트리거를 지우면 Inngest 대시보드에서 "일부러 껐다"와
 > "sync가 깨졌다"가 구별되지 않고, 이 프로젝트는 정확히 후자로 오래 고생했다(아래 "배포" 절).

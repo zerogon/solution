@@ -6,7 +6,9 @@
 
 ## 현재 상태 — 운영 중 (2026-08-09~)
 
-대상 리조트 **5곳 전부**(롯데·소노·리솜·오크밸리·한화), 지점 **57곳**을 3시간마다 자동 수집한다.
+대상 리조트 **5곳 전부**(롯데·소노·리솜·오크밸리·한화), 지점 **57곳**을 수집한다.
+스케줄러(3시간 주기)는 **현재 일시정지 상태**다 — `src/lib/inngest/pause.ts`의 상수 하나이고,
+"최신화" 버튼을 통한 수동 수집은 그대로 동작한다.
 
 - ✅ Next.js 16 + React 19 / Tailwind v4 + shadcn v4 (`base-nova`) + Noto Sans KR
 - ✅ Prisma 7 + Neon (User/Resort/ResortAccount/ResortSession/ResortInventory/CrawlLog/AuditLog)
