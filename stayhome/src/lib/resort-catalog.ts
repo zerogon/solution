@@ -2,6 +2,7 @@ import "server-only";
 
 import { prisma } from "@/lib/prisma";
 import { ResortSlug } from "@/generated/prisma/enums";
+import { HANWHA } from "@/crawlers/hanwha/config";
 import { LOTTE } from "@/crawlers/lotte/config";
 import { OAKVALLEY } from "@/crawlers/oakvalley/config";
 import { RESOM } from "@/crawlers/resom/config";
@@ -52,6 +53,15 @@ const CATALOG: Partial<Record<ResortSlug, { properties: ResortProperty[] }>> = {
   // complexCd도 같은 이유로 여기서 떨어져 나간다.
   [ResortSlug.OAKVALLEY]: {
     properties: OAKVALLEY.branches.map((b) => ({
+      branchName: b.value,
+      label: b.label,
+      region: b.region,
+    })),
+  },
+  // brchCd/locCd도 같은 이유로 여기서 떨어져 나간다 — 그 둘은 쌍이 어긋나면
+  // 사이트가 에러가 아니라 0행으로 답하는 값이라 더더욱 크롤러 밖으로 나가면 안 된다.
+  [ResortSlug.HANWHA]: {
+    properties: HANWHA.branches.map((b) => ({
       branchName: b.value,
       label: b.label,
       region: b.region,

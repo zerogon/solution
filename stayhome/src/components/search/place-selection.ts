@@ -33,6 +33,9 @@ export const ALL_PLACES: PlaceSelection = {
  * 그쪽이 `server-only`라 클라이언트 컴포넌트가 읽을 수 없기 때문이다.
  */
 export const REGION_ORDER: readonly string[] = [
+  // 한화의 더플라자 호텔 하나 때문에 생겼다. 리조트가 네 곳일 때까지 이 목록은
+  // 전부 휴양지였고, 서울은 그 예외의 첫 사례다.
+  "서울",
   "강원",
   "경기",
   "충북",

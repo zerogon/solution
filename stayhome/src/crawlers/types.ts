@@ -7,7 +7,25 @@ export interface CrawlerContext {
   slug: string;
   context: BrowserContext;
   page: Page;
-  credentials: { id: string; pw: string };
+  credentials: {
+    id: string;
+    pw: string;
+    /**
+     * `ResortAccount.memo`, verbatim — a second secret for sites whose login
+     * asks for more than a password.
+     *
+     * Only HANWHA reads it: that site answers a correct ID/password with a
+     * second screen demanding the 회원권 비밀번호, and until that screen is
+     * cleared no session exists at all.
+     *
+     * **This is not the same grade of secret as `id`/`pw`.** Those are
+     * AES-encrypted columns; `memo` is a plaintext column that `/admin/accounts`
+     * renders unmasked in the account table. Putting a credential there is the
+     * operator's call, not something this field legitimises — a crawler reading
+     * it should say in its own config why it is acceptable there.
+     */
+    memo?: string;
+  };
   log: CrawlerLogger;
 }
 

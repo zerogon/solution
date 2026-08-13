@@ -408,13 +408,152 @@ npx tsx scripts/run-crawl.ts OAKVALLEY hot     # 핫 윈도우 60개 — 윈도�
 있고, 그 결과는 에러가 아니라 **틀린 달의 정답**이다. 한 번에 한 필드씩 바꿔 무엇이
 움직이는지 보는 것이 유일한 판별법이다.
 
+# HANWHA 크롤러 (booking.hanwharesort.co.kr 회원 객실 예약)
+
+한화리조트는 **호스트가 둘**이다. 로그인은 `www.hanwharesort.co.kr`(JSP/JEUS,
+`/irsweb/resort3/**.do`), 재고는 `booking.hanwharesort.co.kr`(별개 JEUS 앱)에 있고
+예약 쪽 모든 질문이 **범용 게이트웨이 한 곳**을 통한다:
+`POST /rst/cmn/doExecute.mvc`에 `ds=<JSON>`을 urlencoded로 보내고, 어떤 서비스가
+도는지는 본문의 `serviceInfo.INTF_ID`가 정한다.
+
+수집 대상은 **회원 객실 예약 하나**다. 추첨·패키지·쿠폰·조식·테마파크는 다른 상품이라
+같은 테이블에 섞으면 "잔여 객실"의 의미가 리조트마다 달라진다(리솜·오크밸리와 같은 판단).
+
+엔드포인트 (2026-08-13 실계정 검증):
+
+```
+POST www…/irsweb/resort3/member/login.do                     로그인 1/2 (#id · #pwd)
+POST www…/irsweb/resort3/member/login_membership_password.do 로그인 2/2 (회원인증)
+POST www…/irsweb/resort3/sessionCheck.do                     세션 검증 → { resultCode }
+GET  booking…/rst/msi/0010/serviceM01.mvc                    예약 호스트 세션 부팅 → sCustNo
+POST booking…/rst/cmn/doExecute.mvc                          지점 목록 / 잔여 객실
+POST booking…/rst/cmn/getCmnCode.mvc                         공통코드(상태 코드표)
+```
+
+기존 넷과 갈리는 지점은 넷이다.
+
+- **로그인이 두 화면이고, 첫 화면만으로는 아무것도 서지 않는다.** 아이디/비밀번호를
+  넣으면 사이트가 스스로 `login_membership_password.do`로 넘어가 **회원권 비밀번호**를
+  요구한다. `sessionCheck.do`는 그 전까지 `resultCode: -1`, 통과 후 `0`이다.
+  · 그 두 번째 비밀값은 `ResortAccount.memo`에서 온다 — 이것 때문에
+    `CrawlerContext.credentials`에 `memo?: string`이 생겼고, 리조트를 세 번 늘리는
+    동안 무수정이던 `run.ts`·`types.ts`가 처음 바뀌었다. **`memo`는 암호화되지 않고
+    `/admin/accounts` 표에 그대로 렌더링된다** — `idEncrypted`/`pwEncrypted`와 등급이
+    다르다는 사실이 두 파일의 주석에 남아 있다.
+  · `performLogin`은 단발 확인이 아니라 **폴링**한다. 실측에서 1회차가 `-1`,
+    2회차가 `0`이었다 — `run.ts`가 `login()` resolve 즉시 `saveStorageState`를 부르므로
+    한 박자 이른 반환은 "화면 1은 통과, 화면 2는 아님"인 세션을 저장하고, 그건 이후
+    모든 패스에서 만료된 세션과 똑같이 보인다.
+  · 실패는 **세 갈래로 구분**한다 — 회원인증 화면에 닿지도 못함(자격증명 또는 대기열) /
+    회원인증에서 거부(회원권 비밀번호) / 통과했는데 `resultCode`가 안 됨(사이트).
+    안 나누면 넷 다 "비밀번호 오류"로 읽힌다.
+  · 회원권 비밀번호가 **미설정인 계정은 화면 2가 아예 안 뜨고** 바로 로그인된다
+    (사이트 안내문 그대로). 그 경우도 성공으로 처리한다.
+  · **회원인증 페이지 HTML을 덤프하지 말 것.** 그 화면은 `cyber_id`와 `password`를
+    히든 필드로 되돌려 보낸다 — 저장하면 평문 자격증명을 디스크에 쓰는 것이다.
+    `login.ts`와 `debug-hanwha.ts` 둘 다 스크린샷만 남긴다.
+- **예약 호스트는 세션을 자동으로 물려받지 않는다.** 로그인한 채로 잔여객실조회로
+  곧장 가면 `sCustNo=""`, `sContYn="N"`으로 **익명**이고, 에러가 아니라 그냥 일반
+  뷰가 나온다. 예약 호스트 자기 페이지를 한 번 열어야 그 앱의 세션이 선다.
+  `search.ts`의 `bootSession`이 `msi/0010`을 열고 `sCustNo`를 읽는다 —
+  **`CUST_NO`는 계정마다 다르므로 config에 박지 않는다**(소노의 `memNo`와 같은 이유).
+- **`RSRV_CLDR_CL_CD`가 회원 뷰를 여는 유일한 축이다.** 설악 45일 실측:
+  `01`(회원) → 예약가능 422 / 대기예약 223 / 예약마감 45,
+  `02`(일반) → 회원우선 408 / 예약마감 268 / 예약가능 14. 631칸이 달라진다.
+  `CONT_NO`·`MEMB_MAST_NO`는 이 계정에서 빈 값이고 값을 넣어도 안 넣어도 같았다.
+  `RSRV_ROOM_CNT`도 재고에 **무영향**(1·2·3 요청의 690칸 전부 동일).
+- **`STRT_DATE`~`END_DATE`를 문자 그대로, 양끝 포함으로 지킨다.** +30/+31/+45/+60일
+  요청이 각각 31/32/46/61일로 돌아왔고 **월 경계 구멍 0**. 그래서 지점당 한 콜로
+  핫 윈도우 전체가 덮인다(리솜과 같은 모양). 캐시 키는 요청이 아니라 **덮은 범위**라,
+  첫 윈도우가 받아둔 달력을 이후 59개 윈도우가 그대로 쓴다.
+
+그 밖에:
+
+- **`available`은 상태 코드로, `closingSoon`은 잔여 수로 판정한다.** `RSRV_POSBL_CNT`는
+  예약가능 행에서 진짜 잔여 수지만 **불가 행에서는 음수**로 나온다(450행 중 68건).
+  실측 불변식: **예약가능(0101)이 아닌데 잔여>0인 행은 0건.** 그래서 가능 여부는
+  `RSRV_CLDR_RSLT_CD ∈ {0101, 0119}`로, 마감임박은 그 뒤에 잔여 ≤ 2로 본다 —
+  다섯 크롤러에서 이 필드의 **네 번째 서로 다른 출처**다.
+- 상태 코드표는 추측하지 않고 사이트에서 받는다(`getCmnCode.mvc`,
+  `GRP_CD=RSRV_CLDR_RSLT_CD`). `0102~0107`·`0118`은 **추첨**, `0108`은 **대기예약** —
+  둘 다 예약가능이 아니다. 대기를 가능으로 치면 못 자는 방을 보고 차를 몰게 된다.
+- **`BRCH_CD`와 `LOC_CD`는 다른 값이고 쌍으로 보내야 한다.** 조사 중 제주를
+  `1101/1101`(정답 `1100/1101`)로 물었더니 **에러 없이 200에 0행**이 돌아왔다.
+  그 침묵이 만실·크롤 실패와 구분되지 않아서 `search.ts`가 0행을 로그로 크게 남기고
+  `debug-hanwha.ts diff`가 16지점 전부를 매번 재확인한다.
+- 지점 16곳(리조트 12 + 호텔 4). `region`은 사이트 주소(`전라남도`/`강원특별자치도`
+  혼재)가 아니라 **2글자 광역**으로 정규화한다. **더플라자 호텔 때문에 `REGION_ORDER`에
+  `서울`이 추가됐다** — 네 리조트까지 이 목록은 전부 휴양지였다.
+- `roomType`은 응답의 `ROOM_TYPE_NM`. 이름이 없는 엔티티는 코드 그대로 저장하고
+  `diff`가 보고한다(추측하면 upsert 유니크 키가 갈라진다).
+- **봇 보호**: 로그인 호스트에는 없다. 예약 호스트가 넷퍼넬(`netfunnel.js`,
+  `POST /rst/cmn/netKeyChk.mvc`)을 싣고 두 호스트에 F5 BIG-IP ASM 쿠키(`TS*`)가 깔린다.
+  이번 조사에서 대기열에 걸린 적은 없다. 걸리면 증상은 에러가 아니라 **응답 없음**이다.
+
+## 예산이 끊긴 윈도우는 `stay`를 지우는 게 아니라 **좁힌다**
+
+지점이 16곳이라 **첫 윈도우는 예산(30초)에 걸리는 것이 정상**이다. 실측: 13지점
+24초에서 중단. 이때의 처리가 이 크롤러가 새로 가져온 규칙이고, 처음 쓴 방식은 틀렸다.
+
+- `stay`가 붙은 행은 `run.ts`가 "이 범위를 전부 답했다"로 읽고 그 윈도우들을 패스 내내
+  스킵한다. 못 돈 지점이 있는데 그대로 두면 **루프 순서가 고정이라 매 패스 같은 지점이
+  영영 수집되지 않는다.**
+- 그렇다고 **`stay`를 지우면 안 된다.** 46개 체크인 날짜가 전부 요청 윈도우 아래로
+  들어가고, upsert 중복 제거 키(지점+객실유형+날짜)가 그걸 한 날짜로 뭉갠다.
+  실측으로 **5,520행이 120행이 되고, 남은 행은 미래 어느 날의 상태를 오늘 것이라고
+  주장**했다. 조용히 틀린 데이터다.
+- 정답은 **요청받은 숙박만 남기고 나머지를 버리는 것**. 영구 손실이 아니다 —
+  다음 윈도우가 캐시된 달력에서 공짜로 다시 만들어 온전히 스탬프한다.
+
+실사이트 검증(2026-08-13, `run-crawl.ts HANWHA hot`):
+
+```
+윈도우 1: 13지점 fetch → 예산 초과 → 5,520행 중 120행만(요청 숙박)
+윈도우 2: 16지점 (3 fetch + 13 cache) → 6,480행, 온전히 스탬프
+윈도우 3: 16지점 (0 fetch + 16 cache) → 6,624행
+결과: 60/60 윈도우 · 57스킵 · 요청 16번 · 13,224행 · 35.6초
+```
+
+- 콜드 로그인 포함 단일 윈도우 32.1초 — `/api/resorts/[slug]/refresh`의 50초 예산 안.
+- 1박 46일 / 2박 45일 — **하루 적은 것이 정상**(마지막 날의 둘째 밤이 범위 밖이라
+  추측 대신 행을 만들지 않았다). 과거 날짜 0행, "2박 가능인데 1박 불가" 모순 0행,
+  `closing_soon`이 `available=false`에 붙은 행 0건.
+- 지점 16곳·지역 9곳 카탈로그 완전 일치, 객실유형 107종, 지점명 충돌 0
+  (전체 5개 리조트 57지점에서도 0).
+- 클라이언트 번들 유출 0건(`brchCd`/`locCd`/`TFO00HBS`/`RSRV_CLDR`/`doExecute`).
+
+## 로컬 검증
+
+```bash
+npx tsx scripts/debug-hanwha.ts main       # 진입점 · 아웃바운드 호스트 · 예약 진입점
+npx tsx scripts/debug-hanwha.ts login      # 로그인 폼 (로그인하지 않음)
+npx tsx scripts/debug-hanwha.ts doLogin    # 실로그인 2단계 → 쿠키 · sessionCheck
+npx tsx scripts/debug-hanwha.ts bridge     # www→booking 홉별로 sCustNo가 언제 생기나
+npx tsx scripts/debug-hanwha.ts session    # 세션 TTL 폴링
+npx tsx scripts/debug-hanwha.ts cal        # 회원 화면의 실제 요청 ↔ 우리 config 필드 대조
+npx tsx scripts/debug-hanwha.ts span       # 범위 · 월 경계 · 객실수 무영향 · 회원/일반 분리
+npx tsx scripts/debug-hanwha.ts rows       # search+parse 단독 실행
+npx tsx scripts/debug-hanwha.ts diff       # 지점 16곳 · 지역 · 객실유형 ↔ config 대조
+npx tsx scripts/run-crawl.ts HANWHA hot    # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
+```
+
+`doLogin`만 실계정을 쓰고 나머지는 `/tmp/hanwha-debug-state.json`을 재사용한다.
+
+**`cal` 스텝이 존재하는 이유**: 이 사이트는 틀린 요청에 에러로 답하지 않는다.
+`BRCH_CD`/`LOC_CD` 쌍이 어긋나면 **200에 0행**, `RSRV_CLDR_CL_CD`가 틀리면 **가득 찬,
+그럴듯한, 틀린 달력**이다. 그래서 "우리 요청이 성공했다"가 "사이트와 같은 질문을 했다"의
+증거가 되지 못한다. 유일한 판별법은 회원 화면이 스스로 쏘는 요청을 녹화해 필드 단위로
+대조하는 것이고, `cal`이 그걸 한다(2026-08-13 기준 `only theirs`·`only ours`·`differing`
+전부 0). 오크밸리 `probe`와 같은 이유에서 나온 다른 형태의 스텝이다.
+
 # 새 리조트 추가 (Phase F)
 
 1. `src/crawlers/<slug>/{config,login,search,parse,index}.ts` 작성.
    가장 가까운 것을 복사한다 — 지점마다 한 콜이면 **lotte**, 한 콜에 여러 지점이면
    **sono**, 응답이 날짜 달력이거나 API가 쿠키가 아니라 토큰을 요구하면 **resom**,
    요청을 URL로 조립할 수 없거나(서명·토큰이 페이지에 있음) 응답이 월 단위라
-   여러 응답을 병합해야 하면 **oakvalley**.
+   여러 응답을 병합해야 하면 **oakvalley**, 로그인이 화면 여러 개거나 지점이 많아
+   한 패스에 다 못 도는 규모면 **hanwha**.
 2. `src/crawlers/registry.ts`에 lazy import 1줄 추가
 3. `src/lib/resort-catalog.ts`의 `CATALOG`에 `{ properties }` 1항목 추가 —
    지점의 `branchName`/`label`/`region`만 뽑는다. **`bizCd` 등 크롤 전용 필드는 넣지 않는다**
@@ -458,6 +597,11 @@ SELECT DISTINCT resort_name, branch_name, region FROM resort_inventory ORDER BY 
 - **넓은 응답이 곧 "그 숙박이 가능하다"는 뜻은 아니다.** 소노처럼 날짜별 달력을 주는
   사이트라면 숙박 일수만큼 AND 해야 한다(위 SONO 절). 판정할 밤이 없으면 행을
   만들지 말 것 — 없는 행은 조회에서 "데이터 없음"이지만, 틀린 행은 헛걸음이다.
+- **예산이 끊겨 지점을 다 못 돌았으면 `stay`를 지우지 말고 요청 윈도우로 좁혀라.**
+  `stay`를 지우면 응답이 덮은 날짜가 전부 요청 윈도우 아래로 들어가고, upsert 중복
+  제거가 그걸 한 날짜로 뭉갠다 — 한화에서 5,520행이 120행이 되고 남은 행이 미래
+  날짜의 상태를 오늘 것으로 주장했다. 반대로 `stay`를 그대로 두면 못 돈 지점 몫까지
+  윈도우가 스킵되고, 루프 순서가 고정이라 같은 지점이 매번 빠진다. 상세는 위 HANWHA 절.
 
 행 수가 크게 늘 수 있다는 것도 염두에 둘 것. `upsertInventory`는 다중행 INSERT 한
 문장이라 Postgres의 바인드 파라미터 상한 65,535(행당 12개)에 걸린다 —

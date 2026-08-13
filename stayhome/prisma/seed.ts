@@ -51,8 +51,11 @@ const RESORTS: Array<{
     name: "한화리조트",
     region: "전국",
     baseUrl: "https://www.hanwharesort.co.kr",
-    loginUrl: "https://www.hanwharesort.co.kr/login",
+    // /login is the site's error page. Nothing reads this column at runtime
+    // (hanwha/config.ts is authoritative), but it is read as documentation.
+    loginUrl: "https://www.hanwharesort.co.kr/irsweb/resort3/member/login.do",
     active: false,
+    memo: "로그인 2단계 — ID/PW 뒤에 회원인증(회원권 비밀번호) 화면. 그 값은 계정 메모에 있다",
   },
   {
     slug: ResortSlug.OAKVALLEY,

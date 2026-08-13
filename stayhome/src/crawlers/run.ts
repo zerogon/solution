@@ -163,6 +163,11 @@ export async function runResortCrawl(
       credentials: {
         id: decrypt(account.idEncrypted),
         pw: decrypt(account.pwEncrypted),
+        // Not decrypted because it is not encrypted: `memo` is a plaintext
+        // column. It travels here for HANWHA, whose login demands a second
+        // secret (회원권 비밀번호) that has nowhere else to live today — see
+        // the grade note on `CrawlerContext.credentials`.
+        memo: account.memo ?? undefined,
       },
       log: logger,
     };

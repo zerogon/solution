@@ -6,18 +6,17 @@
 
 ## 현재 상태 — 운영 중 (2026-08-09~)
 
-리조트 **3곳**(롯데·소노·리솜)을 3시간마다 자동 수집한다.
+대상 리조트 **5곳 전부**(롯데·소노·리솜·오크밸리·한화), 지점 **57곳**을 3시간마다 자동 수집한다.
 
 - ✅ Next.js 16 + React 19 / Tailwind v4 + shadcn v4 (`base-nova`) + Noto Sans KR
 - ✅ Prisma 7 + Neon (User/Resort/ResortAccount/ResortSession/ResortInventory/CrawlLog/AuditLog)
 - ✅ NextAuth v5 **Credentials**(ID/PW · bcrypt) + JWT 세션
 - ✅ AES-256-GCM 자격증명 암호화 + 감사 로그 · `/admin/accounts`(마스킹/등록/복호화)
-- ✅ 크롤러: 롯데 4지점 · 소노 32지점 · 리솜 3지점 (`src/crawlers/<slug>/`)
+- ✅ 크롤러: 롯데 4 · 소노 32 · 리솜 3 · 오크밸리 2 · 한화 16 지점 (`src/crawlers/<slug>/`)
 - ✅ 스케줄러: Inngest 크론(3시간) → 리조트 팬아웃 → step 분할 크롤 · `/admin/crawl-logs`
 - ✅ 조회 UI: 월 캘린더 + 리조트/지역/지점 3축 필터 + 라이브 "최신화"
 - ✅ PWA (manifest + 자체 작성 `sw.js` + 오프라인 폴백 + 멀티 브라우저 설치 프롬프트)
 - ✅ Vercel 배포 (`stayhome-khaki.vercel.app`, `stayhome` 브랜치 push → 자동 배포)
-- ⏳ 한화 · 오크밸리 크롤러
 - ⏳ 크롤 실패 알림(`SLACK_WEBHOOK_URL` 미설정) · 웹 푸시 구독 플로우
 
 전체 설계는 `prd.md`, 작업 규약은 `CLAUDE.md` / `AGENTS.md` 참조.
