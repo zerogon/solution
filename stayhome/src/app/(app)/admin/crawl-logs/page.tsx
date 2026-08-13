@@ -1,6 +1,7 @@
 import { ScrollText } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
+import { formatKstDateTime } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -28,14 +29,8 @@ const STATUS_VARIANT: Record<
 
 const LOG_LIMIT = 50;
 
-function formatStarted(d: Date): string {
-  return d.toLocaleString("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+// 서버 컴포넌트가 렌더하므로 서버 타임존(Vercel=UTC)이 그대로 나온다 — KST 고정.
+const formatStarted = formatKstDateTime;
 
 export default async function CrawlLogsPage() {
   const [resorts, logs] = await Promise.all([

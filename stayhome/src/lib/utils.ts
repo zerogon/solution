@@ -83,6 +83,27 @@ export function addMonthsIso(s: string, n: number): string {
     .slice(0, 10);
 }
 
+/**
+ * Timestamp(진짜 시각) → KST 표시 문자열. 기본 "08.11 18:00".
+ *
+ * 위의 날짜 유틸들과 달리 이건 달력 날짜가 아니라 **인스턴트**를 다룬다 —
+ * `CrawlLog.startedAt` 같은 값이다. `timeZone`을 빼면 포맷이 실행 환경의 로컬
+ * 타임존을 따르는데, Vercel 함수는 UTC라 화면에는 9시간 이른 시각이 한국어
+ * 로케일로 찍힌다(로케일은 타임존을 정하지 않는다). 서버 컴포넌트가 렌더하므로
+ * 브라우저 타임존은 아무 영향이 없다.
+ */
+export function formatKstDateTime(
+  d: Date,
+  opts: Intl.DateTimeFormatOptions = {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  },
+): string {
+  return d.toLocaleString("ko-KR", { ...opts, timeZone: "Asia/Seoul" });
+}
+
 const KO_WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"] as const;
 
 /** "2026-08-05" → "8.5(수)". UTC getters only, per the date convention above. */
