@@ -1,4 +1,4 @@
-import { readdir, rm, stat, statfs } from "node:fs/promises";
+import { readdir, readFile, rm, stat, statfs } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, type Browser, type BrowserContext } from "playwright-core";
@@ -37,8 +37,17 @@ export async function launchBrowser(
     );
   }
   if (packUrl) {
-    await sweepStaleProfiles(log);
-    log("[browser] resources before launch", await resourceSnapshot());
+    await reclaimTmp(log);
+    const before = await resourceSnapshot();
+    log("[browser] resources before launch", before);
+    // Launching below the watermark does not fail here — it succeeds and then
+    // dies mid-navigation, reported as the resort site's fault. Name the cause
+    // while the evidence is still on disk.
+    if ((before.tmpFreeMb ?? Number.POSITIVE_INFINITY) < TMP_LOW_MB) {
+      log("[browser] /tmp is low — what is holding it", {
+        entries: await tmpBreakdown(),
+      });
+    }
 
     // Production / Vercel: always headless (no display available)
     const chromiumMin = (await import("@sparticuz/chromium-min")).default;
@@ -79,23 +88,95 @@ const EXTRA_ARGS = [
 const PROFILE_PREFIXES = ["playwright_", "playwright-artifacts-"];
 
 /**
+ * How old a leftover must be before age alone proves nobody is using it.
+ *
+ * Every route that launches a browser is capped at `maxDuration = 60`, so a
+ * directory untouched for 90 seconds cannot belong to a live invocation. This
+ * used to be 5 minutes, which was safe but useless: the debris that actually
+ * fills `/tmp` is seconds old when the next crawl starts, so the sweep found
+ * nothing and the next crawl launched into a full disk anyway.
+ */
+const STALE_PROFILE_MS = 90 * 1000;
+
+/**
+ * Free `/tmp` below which a browser will launch and then fail in ways that read
+ * like the resort site's fault (`ERR_INSUFFICIENT_RESOURCES`, "Target page,
+ * context or browser has been closed").
+ *
+ * Measured on Vercel 2026-08-23: a fresh instance has 513MB of 525MB free, one
+ * HANWHA crawl ends at 17MB, and every crawl that lands on that warm instance
+ * afterwards fails — including Inngest's own retries, which is how a single
+ * heavy crawl turned into five failed resorts.
+ */
+const TMP_LOW_MB = 120;
+
+/**
+ * Give `/tmp` back what the last crawl left in it.
+ *
+ * Run before launch *and* after teardown. Before-only was the old shape and it
+ * cannot work: the leftovers are newer than any safe age cutoff at that point,
+ * and the invocation that made them is the one that knows they are finished.
+ */
+async function reclaimTmp(
+  log: (msg: string, meta?: Record<string, unknown>) => void,
+): Promise<void> {
+  await dropExtractedPack(log);
+  await sweepStaleProfiles(log);
+}
+
+/**
+ * Delete the compressed pack `@sparticuz/chromium-min` downloaded, once the
+ * binary it carries has been inflated.
+ *
+ * The library extracts the tarball to `/tmp/chromium-pack`, inflates
+ * `chromium.br` · `fonts.tar.br` · `swiftshader.tar.br` out of it into `/tmp`,
+ * and never removes it. But its own `executablePath()` returns early whenever
+ * `/tmp/chromium` exists, so from the second launch on this instance nothing
+ * will ever read the pack again — it is a compressed second copy of a browser
+ * we already have, sitting in a 525MB filesystem next to the extracted one.
+ *
+ * Guarded on `/tmp/chromium` existing precisely because that is the same
+ * condition the library short-circuits on: if the binary is there, the pack is
+ * unreachable code; if it is not, the pack is still the source and we leave it.
+ */
+async function dropExtractedPack(
+  log: (msg: string, meta?: Record<string, unknown>) => void,
+): Promise<void> {
+  const binary = join(tmpdir(), "chromium");
+  const pack = join(tmpdir(), "chromium-pack");
+  try {
+    await stat(binary);
+  } catch {
+    return; // no inflated binary yet — the pack is still the source
+  }
+  let freedMb: number;
+  try {
+    freedMb = Math.round((await dirSize(pack)) / 1024 / 1024);
+  } catch {
+    return; // no pack to drop
+  }
+  await rm(pack, { recursive: true, force: true }).catch(() => undefined);
+  if (freedMb > 0) log("[browser] dropped extracted chromium pack", { freedMb });
+}
+
+/**
  * Delete Playwright temp profiles left behind by earlier invocations.
  *
  * `browser.close()` removes its own, but a run that dies hard — an exhausted
  * function, a killed invocation — does not get that far, and the next
- * invocation on the same warm instance inherits the debris. Ten leftover
- * profiles are enough to matter next to an extracted Chromium in a 512MB `/tmp`.
+ * invocation on the same warm instance inherits the debris.
  *
- * Only directories older than {@link STALE_PROFILE_MS} are removed, so a
- * concurrently running crawl (a different resort's fan-out landing on this same
- * instance) is never touched — its profile is seconds old.
+ * Ownership is decided by asking the kernel, not the clock: a profile that no
+ * live process names in its `--user-data-dir` is finished, whatever its mtime.
+ * That matters because a concurrent crawl's profile is exactly as young as our
+ * own, so an age test either spares both or deletes both. `/proc` is only
+ * readable on Linux; anywhere else this falls back to {@link STALE_PROFILE_MS}.
  */
-const STALE_PROFILE_MS = 5 * 60 * 1000;
-
 async function sweepStaleProfiles(
   log: (msg: string, meta?: Record<string, unknown>) => void,
 ): Promise<void> {
   const dir = tmpdir();
+  const inUse = await profilesInUse();
   let removed = 0;
   try {
     const entries = await readdir(dir);
@@ -104,8 +185,15 @@ async function sweepStaleProfiles(
       if (!PROFILE_PREFIXES.some((p) => name.startsWith(p))) continue;
       const path = join(dir, name);
       try {
-        const info = await stat(path);
-        if (info.mtimeMs > cutoff) continue;
+        // `playwright-artifacts-*` is not a user-data-dir, so no process names
+        // it and /proc can never vouch for it — it stays on the age rule.
+        const askKernel = inUse !== null && name.startsWith("playwright_");
+        if (askKernel) {
+          if (inUse!.has(path)) continue;
+        } else {
+          const info = await stat(path);
+          if (info.mtimeMs > cutoff) continue;
+        }
         await rm(path, { recursive: true, force: true });
         removed++;
       } catch {
@@ -116,6 +204,69 @@ async function sweepStaleProfiles(
     // Sweeping is an optimization; never let it fail a crawl.
   }
   if (removed > 0) log("[browser] swept stale profiles", { removed });
+}
+
+/**
+ * Every `--user-data-dir` a live process is currently running with, or null
+ * where `/proc` cannot be read.
+ */
+async function profilesInUse(): Promise<Set<string> | null> {
+  const FLAG = "--user-data-dir=";
+  try {
+    const pids = (await readdir("/proc")).filter((n) => /^\d+$/.test(n));
+    const inUse = new Set<string>();
+    for (const pid of pids) {
+      let argv: string;
+      try {
+        argv = await readFile(`/proc/${pid}/cmdline`, "utf8");
+      } catch {
+        continue; // the process exited between readdir and read
+      }
+      for (const arg of argv.split("\0")) {
+        if (arg.startsWith(FLAG)) inUse.add(arg.slice(FLAG.length));
+      }
+    }
+    return inUse;
+  } catch {
+    return null;
+  }
+}
+
+/** Recursive size in bytes, capped so a pathological tree cannot stall a crawl. */
+async function dirSize(path: string, budget = { entries: 20_000 }): Promise<number> {
+  const info = await stat(path);
+  if (!info.isDirectory()) return info.size;
+  let total = 0;
+  for (const name of await readdir(path)) {
+    if (budget.entries-- <= 0) break;
+    try {
+      total += await dirSize(join(path, name), budget);
+    } catch {
+      // vanished mid-walk; it is not holding anything either way
+    }
+  }
+  return total;
+}
+
+/** The biggest things in `/tmp`, largest first, as `"name 123MB"`. */
+async function tmpBreakdown(limit = 8): Promise<string[]> {
+  const dir = tmpdir();
+  try {
+    const sized: Array<[string, number]> = [];
+    for (const name of await readdir(dir)) {
+      try {
+        sized.push([name, await dirSize(join(dir, name))]);
+      } catch {
+        // ignore
+      }
+    }
+    return sized
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([name, bytes]) => `${name} ${Math.round(bytes / 1024 / 1024)}MB`);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -174,5 +325,9 @@ export async function closeBrowser(
   ]).catch(() => false);
 
   if (!closed) log("[browser] close did not finish in time — abandoning it", { timeoutMs });
+  // The invocation that made the mess is the only one that knows it is done.
+  // Leaving it for the next crawl's pre-launch sweep does not work: by then the
+  // debris is too young for any age cutoff that is safe under concurrency.
+  await reclaimTmp(log);
   log("[browser] resources after teardown", await resourceSnapshot());
 }
