@@ -87,6 +87,21 @@ npx tsx scripts/check-logs.ts      # crawl_logs / inventory / sessions 확인
 npx tsx scripts/debug-page.ts roomlist   # 로그인 없이 검색+파싱 파이프라인만 테스트
 npx tsx scripts/debug-page.ts doLogin    # 실로그인 + 네트워크 녹화 (성공한 로그인의 기준선)
 npx tsx scripts/drop-session.ts LOTTE    # 캐시 세션 삭제 → 다음 크롤이 반드시 로그인
+npx tsx scripts/login-check.ts           # 5곳 로그인만 순차 점검 (아래)
+```
+
+`login-check.ts`는 리조트별 `debug-*.ts doLogin`과 다른 질문에 답한다. 그 스텝들은 충실도가
+제각각이라(롯데·한화는 크롤러의 `performLogin`을 부르지만 소노·리솜·오크밸리는 스크립트가
+폼을 직접 몬다) "사이트에 로그인이 되나"까지만 말해준다. `login-check.ts`는 5곳 모두에서
+`registry` → `crawler.login()` → `validateSession()`으로 **`run.ts`와 같은 경로**를 태우므로
+"크롤러의 로그인이 되나"에 답한다. `crawl_logs`·`resort_sessions`·`resort_inventory`에
+아무것도 쓰지 않고(`--save` 명시 시 세션만 저장), 재시도하지 않으며(실계정 잠금 위험),
+자격증명은 길이만 찍는다. 순차 실행이고, 실패 스크린샷을 남기려면 `CRAWLER_DEBUG_DIR`이
+필요하다 — 없으면 각 크롤러가 스크린샷을 조용히 건너뛴다.
+
+```bash
+CRAWLER_DEBUG_DIR=/tmp/login-check npx tsx scripts/login-check.ts          # 5곳 전부
+npx tsx scripts/login-check.ts HANWHA SONO                                 # 일부만
 ```
 
 `drop-session.ts`가 필요한 이유: 유효한 세션이 있으면 크롤이 성공해도 **로그인에
@@ -489,6 +504,9 @@ POST booking…/rst/cmn/getCmnCode.mvc                         공통코드(상�
 - **봇 보호**: 로그인 호스트에는 없다. 예약 호스트가 넷퍼넬(`netfunnel.js`,
   `POST /rst/cmn/netKeyChk.mvc`)을 싣고 두 호스트에 F5 BIG-IP ASM 쿠키(`TS*`)가 깔린다.
   이번 조사에서 대기열에 걸린 적은 없다. 걸리면 증상은 에러가 아니라 **응답 없음**이다.
+  · **다만 한국 밖에서는 연결 자체가 거부된다.** Vercel `iad1`에서 로그인 호스트로
+    `page.goto` 하면 `net::ERR_CONNECTION_RESET`이다 — 봇 판정 이전, TCP 단계다.
+    이것 때문에 함수 리전을 `icn1`(서울)로 옮겼다(`CLAUDE.md`의 "배포" 절).
 
 ## 예산이 끊긴 윈도우는 `stay`를 지우는 게 아니라 **좁힌다**
 
