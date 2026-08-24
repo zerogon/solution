@@ -77,6 +77,31 @@ from <div class="layer-wrap"> subtree intercepts pointer events`라서 "탭 셀�
   붙은 뒤에 채운다. 안 그러면 리조트 아이디가 리워즈 폼에 들어가고, 실패가
   자격증명 오류와 구분되지 않는다(에러 없이 `isLogin`만 계속 false).
 
+### 요금은 재고 응답 안에 이미 있다 (금액 조사, 2026-08-24)
+
+`roomList`의 한 객실은 키 **49개**를 갖고 있고 `parse.ts`의 `RoomListPayload`는 그중 5개만
+선언한다("Subset ... we rely on"이라고 스스로 적어둔 그대로다). 나머지에 요금이 있다 —
+`keys` 스텝이 세어서 확인했다.
+
+| 키 | 뜻 | 관측 (속초, 1박) |
+| --- | --- | --- |
+| `roomAvgAmt` | **숙박 기간의 1박 평균가** | 238,620 |
+| `minRateAmt` | 그 숙박에서 가장 싼 하룻밤 | 238,620 |
+| `earlybirdRateAmt` | 얼리버드 적용 시 1박가 | 265,000 |
+| `pointAmt` · `pointFullAmt` | 적립 포인트(원이 아님) | 662 · 16,558 |
+
+- **총액이 아니라 1박 값이다.** 같은 방을 1·2·3박으로 물었을 때 `roomAvgAmt`가
+  238,620 → 234,255 → 232,800으로 *줄었다*. 평일이 섞이며 평균이 내려간 것이고,
+  숙박 총액은 `roomAvgAmt × 박수`다 — 2박 234,255×2 = 468,510 = 238,620(주말) + 229,890(평일)로
+  `minRateAmt`와 산술이 정확히 맞는다. 이 값을 그대로 "2박 요금"이라 부르면 실제의 절반을
+  발행하게 되고, 그건 2026-08-09에 고친 소노 2박 버그와 같은 모양이다.
+- **BAR 공시가이지 회원가가 아니다.** 요청이 `rsvType=BAR`이고 응답의 `memberType`은
+  전 객실 `""`이다. 사이트 자신도 비로그인 상태에서 `memberNo=`를 빈 값으로 보낸다.
+  즉 이 숫자는 "지금 아무나 예약하면 내는 값"이지 제휴 담당자가 안내할 값이 아닐 수 있다.
+- **추가 호출이 없다.** 크롤러가 이미 받아 버리고 있는 응답 안이라 요청 수·예산에 영향 0.
+- `roomNm`은 13개 객실이 전부 서로 달라(`parse.ts:44-47`의 dedupe가 실제로 지우는 게 없다)
+  행 하나에 정확한 값 하나를 붙일 수 있다.
+
 ## 로컬 검증
 
 ```bash
@@ -86,6 +111,7 @@ npx tsx scripts/run-crawl.ts       # 수동 크롤 (RefreshButton과 동일 경�
 npx tsx scripts/check-logs.ts      # crawl_logs / inventory / sessions 확인
 npx tsx scripts/debug-page.ts roomlist   # 로그인 없이 검색+파싱 파이프라인만 테스트
 npx tsx scripts/debug-page.ts doLogin    # 실로그인 + 네트워크 녹화 (성공한 로그인의 기준선)
+npx tsx scripts/debug-page.ts keys       # 응답 키 전수 조사 (금액 조사, 로그인 불필요)
 npx tsx scripts/drop-session.ts LOTTE    # 캐시 세션 삭제 → 다음 크롤이 반드시 로그인
 npx tsx scripts/login-check.ts           # 5곳 로그인만 순차 점검 (아래)
 ```
@@ -204,6 +230,19 @@ POST {apiBase}/memberReservation/room/list/pc     잔여 객실
   "소노벨 A 비발디파크", room/list는 "소노벨 비발디파크 A"라고 부른다 — 파서가
   응답의 `storeNm`을 읽으면 그 순간 카탈로그와 어긋난다.
 
+### 요금은 없다 (금액 조사, 2026-08-24)
+
+`rmTypeList`의 한 엔트리는 키 **15개**이고 그중 돈은 하나도 없다 — 240엔트리 전수:
+`ciYmd errorId errorMsg levelYn pyeongCd resortTypeCd resortTypeNm rmTypeCd roomTypeCd
+roomTypeNm rsvRmCnt rsvStatusCd rsvStatusNm storeCd viewCd`. 지점 객체(`body[]`)도
+`storeCd storeNm outsYn` 셋뿐이라 "지점 최저가" 같은 것도 없다.
+
+그리고 이 리조트는 **요금이 나왔더라도 행에 붙일 수 없었다.** `parse.ts:60-66`이
+평형·뷰 변형을 한 행으로 접는데, 실측에서 150개 (날짜, 객실유형) 그룹 중 **90개가
+2개 이상의 변형을 접고 있고** `rsvRmCnt`는 그중 83개에서 서로 다르다(최대 차이 34).
+즉 접힌 행에 "그 방의 값"이라는 건 존재하지 않는다 — 요금을 붙이려면 최저가로 접고
+행이 스스로 "부터"라고 말해야 한다.
+
 ## 로컬 검증
 
 ```bash
@@ -216,6 +255,7 @@ POST_BODY='{...}' npx tsx scripts/debug-sono.ts apiPost <url>
 npx tsx scripts/debug-sono.ts rows ["지점명"]   # search+parse 단독 실행
 npx tsx scripts/debug-sono.ts span             # 한 콜이 덮는 범위 · nights 무영향 재확인
 npx tsx scripts/debug-sono.ts diff       # 사이트 지점 목록 ↔ SONO.branches 대조
+npx tsx scripts/debug-sono.ts keys ["지점명"]   # 응답 키 전수 조사 (금액 조사, 잘림 없음)
 ```
 
 `doLogin`이 세션을 파일로 남기고 나머지 스텝이 재사용한다 — 스텝마다 로그인하면
@@ -287,6 +327,38 @@ GET  {apiBase}/roomReservation/calendarRooms    잔여 객실 (날짜별 달력)
 스킵·요청 2세트(6콜) 4,186행 21초**(세션 재사용). 30일 핫 윈도우에 1박·2박 모두 결측
 0일, 과거 날짜 0행, "2박 가능인데 1박 불가" 모순 0행, 지점·지역 카탈로그 완전 일치.
 
+### 요금은 있다. 단 재고 응답이 아니라 객실 하나마다 묻는 별도 콜이다 (금액 조사, 2026-08-24)
+
+`calendarRooms` 엔트리에는 `rmAmt`와 `rentRmAmt`가 **있다.** 그런데 506엔트리 전부
+`"0"`이고, 옆에 `rmAmtCd:"O12"` / `rentRmAmtCd:"O20"`라는 요금 코드만 들어 있다.
+**필드가 있다고 값이 있는 게 아니다** — 이걸 그대로 읽으면 전 객실을 0원으로 발행한다.
+
+실제 요금은 `GET {apiBase}/roomReservation/stockPrice`가 답한다.
+
+```
+{"rmAmtCd":"O12","rmAmtList":[{"oprtYmd":"20260907","rmAmt":252000}],"totalRmAmt":252000,
+ "rentRmAmtCd":"O20","rentRmAmtList":[…],"totalRentRmAmt":316000,
+ "rmAmtStndNm":"기본","totalCmpnyRmAmt":0,"totalCmpnyRentRmAmt":0,"isPossible":true}
+```
+
+- **회원가다.** 화면이 이 값으로 "객실요금 / 회사지원금(`totalCmpnyRmAmt`) /
+  임직원 결제 금액(`rmAmt - totalCmpnyRmAmt`)"을 그린다. 다섯 곳 중 제휴 담당자가
+  안내할 값에 가장 가까운 숫자다.
+- **총액과 밤별 내역을 같이 준다** — `totalRmAmt` + `rmAmtList[]`. 우리가 합산할 필요가 없다.
+- **`isWait`와 `rentYn`이 필수다.** 둘 다 달력 엔트리에 없는 필드라, 빼면 400이 나면서
+  `"대기예약여부는 필수값입니다"`처럼 빠진 항목을 한국어로 알려준다.
+- **예약 가능한 숙박에만 값이 있다.** 같은 방을 2·3박으로 물으면 `isPossible:false`에
+  전 금액이 `null`이다. 즉 "요금 없음"과 "예약 불가"가 같은 응답으로 온다.
+- ⚠️ **비용이 이 발견의 핵심이다.** SPA는 사용자가 객실을 *클릭할 때* 이 콜을 한 번 한다
+  (`RoomReservationView`가 달력 엔트리를 통째로 복사해 `coYmd`만 다시 계산해 보낸다).
+  즉 행 하나에 콜 하나이고, 실측 0.2~1.8초다. 3지점 × 객실유형 11종 × 46일이면
+  **1,500콜**이라 30초 패스 예산에 들어갈 여지가 없다.
+- 📌 **문서 정정**: `debug-resom.ts` 머리말이 번들에서 봤다고 적어둔 `room/price/list`는
+  **패키지 예약**(`Wt = "/package"`)의 요금이다. 회원 객실 예약(`ct = "/roomReservation"`)의
+  요금 콜은 이름이 아예 다르다(`stockPrice`). 접근자 이름은 양쪽 다 `selectRoomPrice`라
+  번들만 보고 고르면 **패키지 요금을 회원 객실 재고 옆에 붙이게 되고, 응답 어디에도
+  그렇다고 적혀 있지 않다.**
+
 ## 로컬 검증
 
 ```bash
@@ -298,6 +370,7 @@ npx tsx scripts/debug-resom.ts api <url>  # 저장된 세션 + 인증 헤더로 
 npx tsx scripts/debug-resom.ts rows       # search+parse 단독 실행
 npx tsx scripts/debug-resom.ts span       # 한 콜이 덮는 범위 · nights 무영향 재확인
 npx tsx scripts/debug-resom.ts diff       # allCondos ↔ RESOM.branches 대조
+npx tsx scripts/debug-resom.ts keys       # 응답 키 전수 조사 + stockPrice (금액 조사)
 npx tsx scripts/run-crawl.ts RESOM        # run.ts 전체 경로
 npx tsx scripts/run-crawl.ts RESOM hot    # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
 ```
@@ -397,6 +470,22 @@ POST {rsvBase}/condo.calendar.pns?getCalendar   잔여 객실 (월 달력)
   지점·지역 카탈로그 완전 일치, 객실 유형 9종 각 101행.
 - 클라이언트 번들 유출 0건(`complexCd`/`ptSignature`/`V_T_MONTH`).
 
+### 요금은 없다 — 그리고 "키를 다 세어봤다"던 기록이 틀렸었다 (금액 조사, 2026-08-24)
+
+`getCalendar` 엔티티의 실제 키는 **14개**다:
+`AVA_YN CD_DATE DAYS IMSI_SORT ORI_RM_DATE RM_COMPLEX RM_DATE RM_REF1 RM_RMTYPE
+RMTYPE_DESC ROOM_TYPE_CODE ROOM_TYPE_NAME SEC_DIV WEEK_DAY`. 돈은 없고, `entitys2`는
+길이 0이며(파서가 `unknown[]`으로 열어두고 안 보던 자리), 콘도 화면이 부르는 다른 JSON은
+공지·이벤트·회원권 셋뿐이다.
+
+📌 **정정**: `debug-oakvalley.ts` 머리말은 엔티티 키를 `{CD_DATE, WEEK_DAY, DAYS, AVA_YN,
+RM_RMTYPE, RM_REF1}` **6개로 열거**하고 있었다. 결론("잔여 수도 요금도 없다")은 그대로
+유지되지만, 그 결론을 떠받치던 열거가 절반이었다. 다섯 리조트 중 유일하게 "전수 열거가
+있어서 단정 가능"하다고 믿었던 곳이 이곳이었다는 점이 이 조사의 교훈이다 —
+**세어본 적 없는 목록은 목록처럼 보여도 목록이 아니다.**
+(부수 소득: `RMTYPE_DESC`가 "31타입"·"노스48타입"을, `SEC_DIV`가 동을 이미 답하고 있다.
+`OAKVALLEY.roomTypes`의 하드코딩과 대조해볼 만한 자리다.)
+
 ## 로컬 검증
 
 ```bash
@@ -411,6 +500,7 @@ npx tsx scripts/debug-oakvalley.ts span        # 달 범위 · 박수 무영향 
 npx tsx scripts/debug-oakvalley.ts memberships # 회원권이 달력을 바꾸는가
 npx tsx scripts/debug-oakvalley.ts rows        # search+parse 단독 실행
 npx tsx scripts/debug-oakvalley.ts diff        # 지점·객실유형 ↔ OAKVALLEY config 대조
+npx tsx scripts/debug-oakvalley.ts keys        # 응답 키 전수 조사 (금액 조사)
 npx tsx scripts/run-crawl.ts OAKVALLEY hot     # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
 ```
 
@@ -540,6 +630,25 @@ POST booking…/rst/cmn/getCmnCode.mvc                         공통코드(상�
   (전체 5개 리조트 57지점에서도 0).
 - 클라이언트 번들 유출 0건(`brchCd`/`locCd`/`TFO00HBS`/`RSRV_CLDR`/`doExecute`).
 
+### 요금은 없다 — 시즌과 할인율만 있다 (금액 조사, 2026-08-24)
+
+`ds_result` 한 행은 키 **18개**이고 그중 금액은 없다:
+`ALLC_ROOM_CNT BRCH_CD LOC_CD MSG PP_DSCNT_RT ROOM_TYPE_CD ROOM_TYPE_NM RSRV_CLDR_RSLT_CD
+RSRV_LOC_DIV_CD RSRV_POSBL_CNT RSRV_POSBL_YN SESN_CD SESN_DATE SESN_NM SORT_SEQ
+USER_CALC_GRAD_CD WAIT_POSBL_CNT WAIT_SEQ`.
+
+가장 요금에 가까운 둘은 **요금이 아니다** — `PP_DSCNT_RT`는 할인율(관측 0·2·10)이고
+`SESN_NM`은 시즌 이름("가을 비수기 준주말")이다. 즉 사이트는 요금을 결정하는 축은
+알려주면서 결정된 값은 이 응답에 싣지 않는다.
+
+**이 사이트에서 Q2는 URL 문제가 아니다.** 모든 예약 질문이 `doExecute.mvc` 하나를 지나고
+`serviceInfo.INTF_ID`가 어느 서비스를 돌릴지 정하므로, 요금 서비스가 있다면 다른 URL이
+아니라 다른 INTF_ID로 나타난다. 잔여객실조회 화면이 실제로 부르는 서비스는 5개이고
+(`ITSCTM0160` `ITSCTM9000` `REMPRR0120` `SLESTA0604` `REMPRR0113`), **우리가 부르는
+`REMPRR0113`을 뺀 넷은 요청이 `CORP_CD`/`CUST_NO`뿐이다** — 날짜도 지점도 객실유형도 묻지
+않으므로 숙박 요금을 답할 수 있는 서비스가 아니다. 요금은 이 화면보다 뒤(실제 예약 단계)에
+있고, 거기는 수집 대상이 아니다.
+
 ## 로컬 검증
 
 ```bash
@@ -552,6 +661,7 @@ npx tsx scripts/debug-hanwha.ts cal        # 회원 화면의 실제 요청 ↔ 
 npx tsx scripts/debug-hanwha.ts span       # 범위 · 월 경계 · 객실수 무영향 · 회원/일반 분리
 npx tsx scripts/debug-hanwha.ts rows       # search+parse 단독 실행
 npx tsx scripts/debug-hanwha.ts diff       # 지점 16곳 · 지역 · 객실유형 ↔ config 대조
+npx tsx scripts/debug-hanwha.ts keys       # 응답 키 전수 조사 + 게이트웨이 서비스 목록 (금액 조사)
 npx tsx scripts/run-crawl.ts HANWHA hot    # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
 ```
 

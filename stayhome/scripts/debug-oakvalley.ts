@@ -23,6 +23,12 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *   response envelope is `{entitys, entitys2, errMsg, success, totalCount}` and
  *   `entitys[]` carries `{CD_DATE, WEEK_DAY, DAYS, AVA_YN, RM_RMTYPE, RM_REF1}`
  *   — a **day-of-month**, not a date, and a binary Y/N with no remaining count.
+ *   **Corrected 2026-08-24**: that list is the six keys this crawler reads, not
+ *   the six the response has. A census (`keys`) counts **14**: the six above
+ *   plus `IMSI_SORT ORI_RM_DATE RM_COMPLEX RM_DATE RMTYPE_DESC ROOM_TYPE_CODE
+ *   ROOM_TYPE_NAME SEC_DIV`. The conclusions still hold — no remaining count,
+ *   no rate, `entitys2` empty — but they had been resting on a list nobody had
+ *   actually counted.
  * - Every JSP `<form>` carries a server-generated hidden `ptSignature` that is
  *   `serialize()`d into each AJAX POST, so requests cannot be built from
  *   scratch the way `resom/search.ts` builds `calendarRooms`. Whether a
@@ -738,6 +744,104 @@ function thisMonth(): { year: number; month: number } {
   return { year: kst.getUTCFullYear(), month: kst.getUTCMonth() + 1 };
 }
 
+// ─── 금액 조사 (2026-08-24) ──────────────────────────────────────────────
+//
+// Every crawler's payload interface calls itself a "Subset of the response we
+// rely on". That is honest, and it means nobody has ever asked what else is in
+// there — a rate could have been riding in every response since July and we
+// would not know. These three helpers ask.
+//
+// `keyCensus` is `debug-hanwha.ts`'s `fingerprint()` run backwards. That one
+// narrows a row to four fields on purpose, to compare two responses; this one
+// widens to every field, to find out what a response even has.
+//
+// **Counting matters more than listing.** A rate that only rides on peak-season
+// rows would appear in 3 entities out of 450, and `Object.keys(rows[0])` would
+// miss precisely the thing we came for — silently, and the silence would read
+// as "this site publishes no rates".
+
+function keyCensus(label: string, rows: Array<Record<string, unknown>>) {
+  console.log(`\n=== key census: ${label} — ${rows.length} entities ===`);
+  if (!rows.length) {
+    // Said out loud because an empty census looks exactly like a clean "no
+    // rate key here", and it is not evidence of anything.
+    console.log("  (no entities — this census proves nothing)");
+    return;
+  }
+  const seen = new Map<string, unknown[]>();
+  for (const row of rows) {
+    for (const [k, v] of Object.entries(row ?? {})) {
+      const values = seen.get(k) ?? [];
+      values.push(v);
+      seen.set(k, values);
+    }
+  }
+  const width = Math.max(...[...seen.keys()].map((k) => k.length));
+  for (const [key, values] of [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const seenIn = `${values.length}/${rows.length}`.padStart(11);
+    console.log(`  ${key.padEnd(width)} ${seenIn}  ${valueAlphabet(values)}`);
+  }
+  console.log("\n  two entities in full:");
+  console.log(
+    JSON.stringify(rows.slice(0, 2), null, 2)
+      .split("\n")
+      .map((l) => `  ${l}`)
+      .join("\n"),
+  );
+}
+
+/**
+ * Distinct values when there are few enough to read, plus a numeric range
+ * whenever every value parses as a number.
+ *
+ * The range is what makes a rate recognisable: a remaining-room count lands in
+ * the single or double digits, a 원 amount in the hundred-thousands. Reading
+ * key names alone would not separate them — `RM_REF1` looks like a reference
+ * and holds "031" (a 평형 code), while a rate might be called something as
+ * bland as `amt1`.
+ */
+function valueAlphabet(values: unknown[]): string {
+  const distinct = [...new Set(values.map((v) => JSON.stringify(v) ?? "undefined"))];
+  const nums = values.map(asNumber).filter((n): n is number => n !== null);
+  const range =
+    nums.length === values.length ? ` min=${Math.min(...nums)} max=${Math.max(...nums)}` : "";
+  return distinct.length <= 12
+    ? `{${distinct.join(", ")}}${range}`
+    : `${distinct.length} distinct${range}  e.g. ${distinct.slice(0, 3).join(", ")}`;
+}
+
+/** "320,000" and "320000원" are numbers here; "", "Y" and null are not. */
+function asNumber(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v !== "string") return null;
+  const cleaned = v.replace(/[,\s원]/g, "");
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Every key of the envelope, arrays flagged by length rather than expanded.
+ *
+ * Each parser reaches straight for the one array it reads — hanwha's
+ * `ds.Data.ds_result`, oakvalley's `entitys`. A sibling array carrying rates
+ * would sit directly beside it and never be looked at.
+ */
+function envelopeKeys(label: string, payload: unknown, path = "", depth = 0) {
+  if (!path) console.log(`\n=== envelope: ${label} ===`);
+  if (Array.isArray(payload)) {
+    console.log(`  ${path || "(root)"} [] length=${payload.length}`);
+    return;
+  }
+  if (payload === null || typeof payload !== "object" || depth > 3) {
+    console.log(`  ${path || "(root)"} = ${JSON.stringify(payload)?.slice(0, 100)}`);
+    return;
+  }
+  for (const [k, v] of Object.entries(payload)) {
+    envelopeKeys(label, v, path ? `${path}.${k}` : k, depth + 1);
+  }
+}
+
 async function main() {
   const step = process.argv[2] ?? "main";
   const urlArg = process.argv[3];
@@ -978,6 +1082,107 @@ async function main() {
 
     console.log("\nsample entities:");
     console.log(JSON.stringify((sA.payload?.entitys ?? []).slice(0, 6), null, 2));
+    console.log("dialogs:", JSON.stringify(dialogs));
+  } else if (step === "keys") {
+    // 금액 조사, Oak Valley. This is the one resort whose payload keys are
+    // already enumerated in full at the top of this file — so the honest
+    // question here is not "what is in `entitys`" (we know) but the two things
+    // that enumeration never covered:
+    //
+    //   1. `entitys2`, which the parser declares as `unknown[]` and never opens.
+    //   2. whether a rate lives on a *different* servlet the crawler never calls.
+    //
+    // A "no rates here" verdict has to answer both, or it is just a narrower
+    // claim wearing a wider one's clothes.
+    const pns = recordJson(page);
+    await gotoCondo(page);
+    await sessionCheck(page, "pre-keys");
+    const form = await harvestCalForm(page);
+
+    const { year, month } = thisMonth();
+    const complexCd = process.env.OAK_COMPLEX ?? "1101";
+    const membership = form.memberships[0];
+
+    // Q1 — the calendar itself, censused rather than summarized.
+    const first = await calViaPost(page, form, { complexCd, year, month, baksu: 1, membership });
+    let payload: Record<string, unknown> | null = null;
+    try {
+      payload = JSON.parse(first.text) as Record<string, unknown>;
+    } catch {
+      console.log(`  calendar did not parse as JSON: ${first.text.slice(0, 300)}`);
+    }
+    if (payload) {
+      envelopeKeys("condo.calendar.pns?getCalendar", payload);
+      keyCensus("entitys[] — 1박", (payload.entitys ?? []) as Array<Record<string, unknown>>);
+      // `entitys2` is declared `unknown[]` in parse.ts and opened by nobody.
+      // If a rate rides anywhere in this response, this is where it hides.
+      const second = (payload.entitys2 ?? []) as unknown[];
+      console.log(`\n=== entitys2 — ${second.length} elements ===`);
+      if (second.length) {
+        keyCensus("entitys2[]", second as Array<Record<string, unknown>>);
+      } else {
+        console.log("  (empty — the parser's `unknown[]` was never hiding anything here)");
+      }
+    }
+
+    // Q3 — 박수 changes nothing about availability (measured, see `span`).
+    // Asked again of every numeric key, because "the calendar ignores 박수" and
+    // "a rate ignores 박수" are different claims and only the first was tested.
+    console.log("\n=== numeric keys across 1 / 2 / 3 박 (Q3) ===");
+    const byBaksu = new Map<number, Array<Record<string, unknown>>>();
+    byBaksu.set(1, ((payload?.entitys ?? []) as Array<Record<string, unknown>>));
+    for (const baksu of [2, 3]) {
+      const r = await calViaPost(page, form, { complexCd, year, month, baksu, membership });
+      try {
+        byBaksu.set(
+          baksu,
+          (JSON.parse(r.text) as { entitys?: Array<Record<string, unknown>> }).entitys ?? [],
+        );
+      } catch {
+        byBaksu.set(baksu, []);
+      }
+    }
+    const key = (e: Record<string, unknown>) => `${e.CD_DATE}|${e.RM_RMTYPE}`;
+    const probe = (byBaksu.get(1) ?? [])[0];
+    if (!probe) {
+      console.log("  (no entities — nothing to compare)");
+    } else {
+      const numericKeys = [
+        ...new Set(
+          (byBaksu.get(1) ?? []).flatMap((e) =>
+            Object.entries(e)
+              .filter(([, v]) => asNumber(v) !== null)
+              .map(([k]) => k),
+          ),
+        ),
+      ];
+      console.log(`  probe entity: ${key(probe)}`);
+      for (const k of numericKeys) {
+        const cells = [1, 2, 3].map((b) => {
+          const hit = (byBaksu.get(b) ?? []).find((e) => key(e) === key(probe));
+          return `${b}박=${hit ? String(hit[k]) : "-"}`;
+        });
+        console.log(`  ${k}: ${cells.join("  ")}`);
+      }
+    }
+
+    // Q6 — rows are keyed by `RM_RMTYPE` alone. If two entities on one date
+    // share a type and disagree, a rate could not be attributed to the row.
+    console.log("\n=== same date + RM_RMTYPE, more than one entity (Q6) ===");
+    const groups = new Map<string, Array<Record<string, unknown>>>();
+    for (const e of byBaksu.get(1) ?? []) {
+      groups.set(key(e), [...(groups.get(key(e)) ?? []), e]);
+    }
+    const collided = [...groups.entries()].filter(([, rows]) => rows.length > 1);
+    for (const [k, rows] of collided.slice(0, 5)) {
+      console.log(`  ${k} — ${rows.length}: ${JSON.stringify(rows).slice(0, 400)}`);
+    }
+    console.log(`  ${collided.length} of ${groups.size} (date, room type) pairs carry more than one entity`);
+
+    // Q2 — every JSON call the condo screen made. A rate servlet the crawler
+    // never asks for would be listed here and nowhere else.
+    console.log("\n=== JSON calls the condo screen made (Q2) ===");
+    console.log(pns.length ? pns.map((c) => `  ${c.line}`).join("\n") : "  (none)");
     console.log("dialogs:", JSON.stringify(dialogs));
   } else if (step === "span") {
     // The three measurements that decide `InventoryRow.stay`. Guessing here is

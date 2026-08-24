@@ -152,6 +152,104 @@ function recordJson(page: Page) {
   return calls;
 }
 
+// ─── 금액 조사 (2026-08-24) ──────────────────────────────────────────────
+//
+// Every crawler's payload interface calls itself a "Subset of the response we
+// rely on". That is honest, and it means nobody has ever asked what else is in
+// there — a rate could have been riding in every response since July and we
+// would not know. These three helpers ask.
+//
+// `keyCensus` is `debug-hanwha.ts`'s `fingerprint()` run backwards. That one
+// narrows a row to four fields on purpose, to compare two responses; this one
+// widens to every field, to find out what a response even has.
+//
+// **Counting matters more than listing.** A rate that only rides on peak-season
+// rows would appear in 3 entities out of 450, and `Object.keys(rows[0])` would
+// miss precisely the thing we came for — silently, and the silence would read
+// as "this site publishes no rates".
+
+function keyCensus(label: string, rows: Array<Record<string, unknown>>) {
+  console.log(`\n=== key census: ${label} — ${rows.length} entities ===`);
+  if (!rows.length) {
+    // Said out loud because an empty census looks exactly like a clean "no
+    // rate key here", and it is not evidence of anything.
+    console.log("  (no entities — this census proves nothing)");
+    return;
+  }
+  const seen = new Map<string, unknown[]>();
+  for (const row of rows) {
+    for (const [k, v] of Object.entries(row ?? {})) {
+      const values = seen.get(k) ?? [];
+      values.push(v);
+      seen.set(k, values);
+    }
+  }
+  const width = Math.max(...[...seen.keys()].map((k) => k.length));
+  for (const [key, values] of [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const seenIn = `${values.length}/${rows.length}`.padStart(11);
+    console.log(`  ${key.padEnd(width)} ${seenIn}  ${valueAlphabet(values)}`);
+  }
+  console.log("\n  two entities in full:");
+  console.log(
+    JSON.stringify(rows.slice(0, 2), null, 2)
+      .split("\n")
+      .map((l) => `  ${l}`)
+      .join("\n"),
+  );
+}
+
+/**
+ * Distinct values when there are few enough to read, plus a numeric range
+ * whenever every value parses as a number.
+ *
+ * The range is what makes a rate recognisable: a remaining-room count lands in
+ * the single or double digits, a 원 amount in the hundred-thousands. Reading
+ * key names alone would not separate them — `RM_REF1` looks like a reference
+ * and holds "031" (a 평형 code), while a rate might be called something as
+ * bland as `amt1`.
+ */
+function valueAlphabet(values: unknown[]): string {
+  const distinct = [...new Set(values.map((v) => JSON.stringify(v) ?? "undefined"))];
+  const nums = values.map(asNumber).filter((n): n is number => n !== null);
+  const range =
+    nums.length === values.length ? ` min=${Math.min(...nums)} max=${Math.max(...nums)}` : "";
+  return distinct.length <= 12
+    ? `{${distinct.join(", ")}}${range}`
+    : `${distinct.length} distinct${range}  e.g. ${distinct.slice(0, 3).join(", ")}`;
+}
+
+/** "320,000" and "320000원" are numbers here; "", "Y" and null are not. */
+function asNumber(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v !== "string") return null;
+  const cleaned = v.replace(/[,\s원]/g, "");
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Every key of the envelope, arrays flagged by length rather than expanded.
+ *
+ * Each parser reaches straight for the one array it reads — hanwha's
+ * `ds.Data.ds_result`, oakvalley's `entitys`. A sibling array carrying rates
+ * would sit directly beside it and never be looked at.
+ */
+function envelopeKeys(label: string, payload: unknown, path = "", depth = 0) {
+  if (!path) console.log(`\n=== envelope: ${label} ===`);
+  if (Array.isArray(payload)) {
+    console.log(`  ${path || "(root)"} [] length=${payload.length}`);
+    return;
+  }
+  if (payload === null || typeof payload !== "object" || depth > 3) {
+    console.log(`  ${path || "(root)"} = ${JSON.stringify(payload)?.slice(0, 100)}`);
+    return;
+  }
+  for (const [k, v] of Object.entries(payload)) {
+    envelopeKeys(label, v, path ? `${path}.${k}` : k, depth + 1);
+  }
+}
+
 async function main() {
   const step = process.argv[2] ?? "main";
   const urlArg = process.argv[3];
@@ -604,6 +702,146 @@ async function main() {
       );
     }
     console.log(`\n(today = ${toIsoDate(parseDate(todayKstIso()))})`);
+  } else if (step === "keys") {
+    // 금액 조사, SONO. `doSearch` already dumps bodies, but it truncates at
+    // `API_MAX ?? 6_000` characters and one call is 2.6MB — so what it has been
+    // showing all along is the first few entries of the first store. A rate key
+    // could have been in every response since August and stayed off-screen.
+    //
+    // This step asks one store only. Narrowing the request is what makes a full,
+    // untruncated census affordable; `storeCdList` is an array precisely so the
+    // caller can decide how much to ask for.
+    const { SONO } = await import("../src/crawlers/sono/config");
+    const { fetchMemberNo } = await import("../src/crawlers/sono/login");
+    const { todayKstIso, parseDate, addDaysUtc } = await import("../src/lib/utils");
+    const { formatDateCompact } = await import("../src/crawlers/sono/format");
+
+    const store = SONO.branches.find((b) => b.value === urlArg) ?? SONO.branches[0];
+    const ctx = {
+      resortId: "debug",
+      slug: "sono",
+      context,
+      page,
+      credentials: { id: "", pw: "" },
+      log: (m: string, meta?: Record<string, unknown>) => console.log(m, meta ?? ""),
+    };
+    // Q2 — anything the reservation screen loads besides the room list.
+    const calls = recordJson(page);
+    await page.goto(SITE.home, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    const memNo = await fetchMemberNo(ctx);
+    if (!memNo) throw new Error("no memNo — run `doLogin` first");
+    console.log(`store: ${store.value} (storeCd=${store.storeCd})`);
+
+    const checkin = addDaysUtc(parseDate(todayKstIso()), 14);
+    const call = async (nights: number) => {
+      const res = await page.request.post(
+        `${SONO.apiBase}/memberReservation/room/list/pc?lang=ko&deviceType=PC&mobileAppYn=N`,
+        {
+          timeout: SONO.timeouts.api,
+          headers: {
+            "content-type": "application/json",
+            Accept: "application/json",
+            Referer: SONO.bookingUrl,
+          },
+          data: {
+            memNo,
+            ...SONO.request,
+            ciYmd: formatDateCompact(checkin),
+            coYmd: formatDateCompact(addDaysUtc(checkin, nights)),
+            nights,
+            storeCdList: [store.storeCd],
+            rmTypeCode: "",
+          },
+        },
+      );
+      const json = (await res.json()) as Record<string, unknown>;
+      const body = (json.body ?? []) as Array<Record<string, unknown>>;
+      const entries = body.flatMap((s) => (s.rmTypeList ?? []) as Array<Record<string, unknown>>);
+      return { json, body, entries, status: res.status() };
+    };
+
+    const one = await call(1);
+    console.log(`\nHTTP ${one.status}: ${one.body.length} stores, ${one.entries.length} entries`);
+    envelopeKeys("room/list/pc response", one.json);
+    // The store object wraps the room list; a per-store total (a "from" price
+    // on the store card) would live here rather than on the entries.
+    keyCensus(
+      "body[] — the store objects",
+      one.body.map((s) => Object.fromEntries(Object.entries(s).filter(([k]) => k !== "rmTypeList"))),
+    );
+    keyCensus("body[].rmTypeList[] — 1박", one.entries);
+
+    // Q3 — `nights` is known to change no status or count (span step). Asked
+    // again of every numeric key: "the calendar ignores nights" and "a rate
+    // ignores nights" are separate claims and only the first was measured.
+    console.log("\n=== numeric keys across 1 / 2 / 3 nights (Q3) ===");
+    const key = (e: Record<string, unknown>) => `${e.storeCd}|${e.ciYmd}|${e.rmTypeCd}`;
+    const byNights = new Map<number, Array<Record<string, unknown>>>([[1, one.entries]]);
+    for (const nights of [2, 3]) byNights.set(nights, (await call(nights)).entries);
+    const probe = one.entries[0];
+    if (!probe) {
+      console.log("  (no entries — pick another date and re-run)");
+    } else {
+      const numericKeys = [
+        ...new Set(
+          one.entries.flatMap((e) =>
+            Object.entries(e)
+              .filter(([, v]) => asNumber(v) !== null)
+              .map(([k]) => k),
+          ),
+        ),
+      ];
+      console.log(`  probe entry: ${key(probe)}`);
+      for (const k of numericKeys) {
+        const cells = [1, 2, 3].map((n) => {
+          const hit = (byNights.get(n) ?? []).find((e) => key(e) === key(probe));
+          return `${n}박=${hit ? String(hit[k]) : "-"}`;
+        });
+        console.log(`  ${k}: ${cells.join("  ")}`);
+      }
+    }
+
+    // Q6 — THE question for this resort. `parse.ts:60-66` folds several
+    // `rmTypeCd` (평형/뷰 variants) into one row on purpose, because the row
+    // stores booleans and nothing is lost. A rate is not a boolean: if the
+    // variants disagree, this resort's rows cannot carry an exact amount and a
+    // rate would have to be folded to a minimum and labelled "부터".
+    console.log("\n=== variants folded into one row: do their numbers agree? (Q6) ===");
+    const groups = new Map<string, Array<Record<string, unknown>>>();
+    for (const e of one.entries) {
+      const roomType = [e.resortTypeNm, e.roomTypeNm].filter(Boolean).join(" ");
+      const g = `${e.ciYmd}|${roomType}`;
+      groups.set(g, [...(groups.get(g) ?? []), e]);
+    }
+    const multi = [...groups.entries()].filter(([, rows]) => rows.length > 1);
+    console.log(`  ${multi.length} of ${groups.size} (date, room type) groups fold more than one variant`);
+    const numericKeys = [
+      ...new Set(
+        one.entries.flatMap((e) =>
+          Object.entries(e)
+            .filter(([, v]) => asNumber(v) !== null)
+            .map(([k]) => k),
+        ),
+      ),
+    ];
+    for (const k of numericKeys) {
+      let spread = 0;
+      let widest = 0;
+      for (const [, rows] of multi) {
+        const nums = rows.map((r) => asNumber(r[k])).filter((n): n is number => n !== null);
+        if (nums.length < 2) continue;
+        const gap = Math.max(...nums) - Math.min(...nums);
+        if (gap > 0) spread++;
+        widest = Math.max(widest, gap);
+      }
+      console.log(
+        `  ${k}: ${spread}/${multi.length} groups disagree, widest gap ${widest}` +
+          (spread ? "  ← cannot be one exact number on the row" : ""),
+      );
+    }
+
+    console.log("\n=== JSON calls the site made (Q2) ===");
+    console.log(calls.length ? calls.map((c) => `  ${c.line}`).join("\n") : "  (none)");
   } else if (step === "diff") {
     // Drift watchdog: the config list is the runtime source of truth, so the
     // only way it can rot is silently. Symptom would be "필터를 눌렀는데 0건",

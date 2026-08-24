@@ -19,6 +19,13 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *   only needed for login and search should be a plain JSON request.
  * - The bundle contains an axios layer with `room/list`, `room/price/list`,
  *   `api/detail/...` under an `/api/user/...` prefix, same origin.
+ *   **Corrected 2026-08-24**: those three hang off `Wt = "/package"` and belong
+ *   to 패키지 예약, not the 회원 객실 예약 we collect. That group is
+ *   `ct = "/roomReservation"` and its rate call is `stockPrice`. Both groups
+ *   export the accessor under the same name (`selectRoomPrice`), so reading the
+ *   bundle for the name rather than the prefix picks the wrong product — and a
+ *   package price sitting next to member-room availability would not announce
+ *   itself. See the `keys` step.
  * - Routes: /login /roomReservation /packageReservation /drawLots /myPage.
  *   We collect **회원 객실 예약 only** — package/draw/coupon flows are a
  *   different product and would not mean the same thing as the Lotte and SONO
@@ -315,6 +322,104 @@ function printPayloads(payloads: ReturnType<typeof recordPayloads>) {
     console.log(`\n### ${p.method} ${p.url}`);
     if (p.post) console.log("request:", p.post.slice(0, 2_000));
     console.log("response:", p.body.slice(0, Number(process.env.API_MAX ?? 6_000)));
+  }
+}
+
+// ─── 금액 조사 (2026-08-24) ──────────────────────────────────────────────
+//
+// Every crawler's payload interface calls itself a "Subset of the response we
+// rely on". That is honest, and it means nobody has ever asked what else is in
+// there — a rate could have been riding in every response since July and we
+// would not know. These three helpers ask.
+//
+// `keyCensus` is `debug-hanwha.ts`'s `fingerprint()` run backwards. That one
+// narrows a row to four fields on purpose, to compare two responses; this one
+// widens to every field, to find out what a response even has.
+//
+// **Counting matters more than listing.** A rate that only rides on peak-season
+// rows would appear in 3 entities out of 450, and `Object.keys(rows[0])` would
+// miss precisely the thing we came for — silently, and the silence would read
+// as "this site publishes no rates".
+
+function keyCensus(label: string, rows: Array<Record<string, unknown>>) {
+  console.log(`\n=== key census: ${label} — ${rows.length} entities ===`);
+  if (!rows.length) {
+    // Said out loud because an empty census looks exactly like a clean "no
+    // rate key here", and it is not evidence of anything.
+    console.log("  (no entities — this census proves nothing)");
+    return;
+  }
+  const seen = new Map<string, unknown[]>();
+  for (const row of rows) {
+    for (const [k, v] of Object.entries(row ?? {})) {
+      const values = seen.get(k) ?? [];
+      values.push(v);
+      seen.set(k, values);
+    }
+  }
+  const width = Math.max(...[...seen.keys()].map((k) => k.length));
+  for (const [key, values] of [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const seenIn = `${values.length}/${rows.length}`.padStart(11);
+    console.log(`  ${key.padEnd(width)} ${seenIn}  ${valueAlphabet(values)}`);
+  }
+  console.log("\n  two entities in full:");
+  console.log(
+    JSON.stringify(rows.slice(0, 2), null, 2)
+      .split("\n")
+      .map((l) => `  ${l}`)
+      .join("\n"),
+  );
+}
+
+/**
+ * Distinct values when there are few enough to read, plus a numeric range
+ * whenever every value parses as a number.
+ *
+ * The range is what makes a rate recognisable: a remaining-room count lands in
+ * the single or double digits, a 원 amount in the hundred-thousands. Reading
+ * key names alone would not separate them — `RM_REF1` looks like a reference
+ * and holds "031" (a 평형 code), while a rate might be called something as
+ * bland as `amt1`.
+ */
+function valueAlphabet(values: unknown[]): string {
+  const distinct = [...new Set(values.map((v) => JSON.stringify(v) ?? "undefined"))];
+  const nums = values.map(asNumber).filter((n): n is number => n !== null);
+  const range =
+    nums.length === values.length ? ` min=${Math.min(...nums)} max=${Math.max(...nums)}` : "";
+  return distinct.length <= 12
+    ? `{${distinct.join(", ")}}${range}`
+    : `${distinct.length} distinct${range}  e.g. ${distinct.slice(0, 3).join(", ")}`;
+}
+
+/** "320,000" and "320000원" are numbers here; "", "Y" and null are not. */
+function asNumber(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v !== "string") return null;
+  const cleaned = v.replace(/[,\s원]/g, "");
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Every key of the envelope, arrays flagged by length rather than expanded.
+ *
+ * Each parser reaches straight for the one array it reads — hanwha's
+ * `ds.Data.ds_result`, oakvalley's `entitys`. A sibling array carrying rates
+ * would sit directly beside it and never be looked at.
+ */
+function envelopeKeys(label: string, payload: unknown, path = "", depth = 0) {
+  if (!path) console.log(`\n=== envelope: ${label} ===`);
+  if (Array.isArray(payload)) {
+    console.log(`  ${path || "(root)"} [] length=${payload.length}`);
+    return;
+  }
+  if (payload === null || typeof payload !== "object" || depth > 3) {
+    console.log(`  ${path || "(root)"} = ${JSON.stringify(payload)?.slice(0, 100)}`);
+    return;
+  }
+  for (const [k, v] of Object.entries(payload)) {
+    envelopeKeys(label, v, path ? `${path}.${k}` : k, depth + 1);
   }
 }
 
@@ -644,6 +749,217 @@ async function main() {
             : "  ← nights MATTERS (response answers the stay)"),
       );
     }
+  } else if (step === "keys") {
+    // 금액 조사, RESOM. This is the resort where the answer is most likely to be
+    // "yes, but not here": the bundle notes at the top of this file already
+    // record a `room/price/list` endpoint sitting beside `room/list` under the
+    // same `/api/user/...` prefix. The crawler has never called it.
+    //
+    // So this step asks two questions the others only ask one of:
+    //   Q1  does `calendarRooms` — the call we already make — carry a rate?
+    //   Q2  if not, what does `room/price/list` answer, and what does it COST?
+    // Q2's cost half is not curiosity. A second call per property turns 3
+    // requests into 6, and the failure mode of a slower window is not an error
+    // — it is far-out windows quietly never being collected.
+    const { RESOM } = await import("../src/crawlers/resom/config");
+    const { fetchCalendar } = await import("../src/crawlers/resom/search");
+    const { todayKstIso, parseDate, addDaysUtc, toIsoDate } = await import("../src/lib/utils");
+
+    const ctx = {
+      resortId: "debug",
+      slug: "resom",
+      context,
+      page,
+      credentials: { id: "", pw: "" },
+      log: (m: string, meta?: Record<string, unknown>) => console.log(m, meta ?? ""),
+    };
+    const calls = recordJson(page);
+    await page.goto(SITE.book, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    // `fetchCalendar` reads the bearer token out of the crawler's own cookie,
+    // not out of the site's pinia blob — so the saved debug session has to be
+    // translated into that cookie first, exactly as the `rows` step does.
+    await seedCrawlerCookie(page, context);
+    const auth = await readAuth(page);
+    // The member number is per-account and the rate call wants it, same as the
+    // calendar does — read it from the site rather than pinning it here.
+    const { fetchMember } = await import("../src/crawlers/resom/login");
+    const member = await fetchMember(ctx);
+    if (!member) throw new Error("auth/info gave no member — run `doLogin` first");
+    const branch = RESOM.branches[0];
+    const condos = (await (
+      await page.request.get(`${SITE.book}/api/user/reservation/roomReservation/allCondos`, {
+        timeout: 30_000,
+        headers: authHeaders(auth),
+      })
+    ).json()) as Array<{ condoCd: string; roomTypeList: Array<Record<string, unknown>> }>;
+    const condo = condos.find((c) => c.condoCd === branch.condoCd);
+    const codes = (condo?.roomTypeList ?? []).map((r) => String(r.rmTypeCd));
+    console.log(`branch=${branch.value} (condoCd=${branch.condoCd}) roomTypes=${codes.length}`);
+
+    // `allCondos` is the room-type catalogue the crawler already reads for
+    // codes. If a list price lives anywhere static, it lives here.
+    keyCensus("allCondos[].roomTypeList[]", condo?.roomTypeList ?? []);
+
+    // Q1 — the availability calendar itself.
+    const checkin = addDaysUtc(parseDate(todayKstIso()), 14);
+    const cal = await fetchCalendar(ctx, branch, codes, { checkin, nights: 1 });
+    const dates = Object.keys(cal).sort();
+    const entries = Object.values(cal).flat() as unknown as Array<Record<string, unknown>>;
+    console.log(`\ncalendarRooms: ${dates.length} dates, ${entries.length} entries`);
+    console.log(`  date keys: ${dates[0]} → ${dates[dates.length - 1]}`);
+    keyCensus("calendarRooms[date][] — 1박", entries);
+
+    // Q3 — nights is known not to move availability. Asked again per numeric key.
+    console.log("\n=== numeric keys across 1 / 2 / 3 nights (Q3) ===");
+    const byNights = new Map<number, Array<Record<string, unknown>>>();
+    for (const nights of [1, 2, 3]) {
+      const c =
+        nights === 1
+          ? cal
+          : await fetchCalendar(ctx, branch, codes, { checkin, nights });
+      byNights.set(
+        nights,
+        Object.entries(c).flatMap(([d, list]) =>
+          (list as unknown as Array<Record<string, unknown>>).map((e) => ({ ...e, __date: d })),
+        ),
+      );
+    }
+    const key = (e: Record<string, unknown>) => `${e.__date}|${e.rmTypeCd}|${e.dongNm ?? ""}`;
+    const probe = (byNights.get(1) ?? [])[0];
+    if (!probe) {
+      console.log("  (no entries — pick another date and re-run)");
+    } else {
+      const numericKeys = [
+        ...new Set(
+          (byNights.get(1) ?? []).flatMap((e) =>
+            Object.entries(e)
+              .filter(([k, v]) => k !== "__date" && asNumber(v) !== null)
+              .map(([k]) => k),
+          ),
+        ),
+      ];
+      console.log(`  probe entry: ${key(probe)}`);
+      for (const k of numericKeys) {
+        const cells = [1, 2, 3].map((n) => {
+          const hit = (byNights.get(n) ?? []).find((e) => key(e) === key(probe));
+          return `${n}박=${hit ? String(hit[k]) : "-"}`;
+        });
+        console.log(`  ${k}: ${cells.join("  ")}`);
+      }
+    }
+
+    // Q2 — the rate endpoint, found by reading the bundle rather than guessing
+    // paths at the server (every guess came back 404, which teaches nothing).
+    //
+    // The note at the top of this file recorded `room/price/list` from the
+    // bundle, and that path is real — but it hangs off `Wt = "/package"`, so it
+    // prices the **패키지 예약** product this crawler deliberately does not
+    // collect. The 회원 객실 예약 group is `ct = "/roomReservation"` and its
+    // rate call is a different name entirely:
+    //
+    //   selectRoomPrice: e => me(`${ct}/stockPrice`, { params: e })
+    //
+    // Same accessor name, different product, different URL. Calling the wrong
+    // one would have published package prices against member-room availability
+    // and nothing in the response would have said so.
+    console.log("\n=== roomReservation/stockPrice — the member-room rate call (Q2) ===");
+    const ymd = (d: Date) => toIsoDate(d).replace(/-/g, "");
+    // The SPA does not call this with a hand-built query: it takes the calendar
+    // entry the user clicked, copies it whole, recomputes `coYmd` from the stay
+    // length, and posts that. Two fields it adds are not in the calendar at all,
+    // and the server names them when they are missing —
+    //   isWait  (대기예약여부)  · rentYn  (회원카드 대여여부)
+    // — which is why the first attempts here came back 400 rather than empty.
+    const priced = entries.find((e) => e.statusBooking === 1) ?? entries[0];
+    const priceQuery = (nights: number) => {
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(priced ?? {})) {
+        if (v === null || typeof v === "object") continue;
+        q.set(k, String(v));
+      }
+      q.set("memNo", member.memNo);
+      q.set("memInd", member.memInd);
+      q.set("nights", String(nights));
+      // The entry's own `coYmd` is the end of the *requested span*, not of this
+      // stay. Sending it unchanged would price a 46-night booking.
+      q.set("coYmd", ymd(addDaysUtc(parseDate(
+        `${String(priced?.ciYmd).slice(0, 4)}-${String(priced?.ciYmd).slice(4, 6)}-${String(priced?.ciYmd).slice(6, 8)}`,
+      ), nights)));
+      q.set("isWait", "N");
+      q.set("rentYn", "N");
+      return q.toString();
+    };
+    console.log(`  probe room: ${String(priced?.rmTypeNm)} @ ${String(priced?.ciYmd)}`);
+
+    const priceByNights = new Map<number, Array<Record<string, unknown>>>();
+    for (const nights of [1, 2, 3]) {
+      const url = `${RESOM.apiBase}/roomReservation/stockPrice?${priceQuery(nights)}`;
+      const started = Date.now();
+      const res = await page.request.get(url, { timeout: 30_000, headers: authHeaders(auth) });
+      const text = await res.text();
+      console.log(
+        `  nights=${nights}: HTTP ${res.status()} in ${Date.now() - started}ms, ${text.length}B`,
+      );
+      if (!res.ok()) {
+        // A 400 here names the field it wanted, which is the useful half.
+        console.log(`    body: ${text.slice(0, 400)}`);
+        continue;
+      }
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        console.log(`    not JSON: ${text.slice(0, 200)}`);
+      }
+      if (!parsed) continue;
+      if (nights === 1) {
+        envelopeKeys("roomReservation/stockPrice", parsed);
+        console.log(`  full body: ${JSON.stringify(parsed).slice(0, 1_500)}`);
+      }
+      // The response is one priced stay, not a list — `rmAmtList` is the
+      // per-night breakdown inside it.
+      const obj = parsed as Record<string, unknown>;
+      const nightly = (obj.rmAmtList ?? []) as Array<Record<string, unknown>>;
+      priceByNights.set(nights, Array.isArray(nightly) ? nightly : []);
+      console.log(
+        `    totalRmAmt=${String(obj.totalRmAmt)} rentTotal=${String(obj.totalRentRmAmt)} ` +
+          `회사지원금=${String(obj.totalCmpnyRmAmt)} isPossible=${String(obj.isPossible)} ` +
+          `nightly rows=${Array.isArray(nightly) ? nightly.length : 0}`,
+      );
+      if (nights === 1 && Array.isArray(nightly) && nightly.length) {
+        keyCensus("stockPrice rmAmtList[] — the per-night breakdown", nightly);
+      }
+    }
+    // Q3 for the rate itself. A per-night rate that ignores `nights` has to be
+    // summed by us; a total that doubles does not. The two are indistinguishable
+    // from one call, and getting it wrong shows a half-price 2박 with no error.
+    const priceOne = priceByNights.get(1) ?? [];
+    if (priceOne.length) {
+      console.log("\n=== stockPrice numeric keys across 1 / 2 / 3 nights (Q3) ===");
+      const pKey = (r: Record<string, unknown>) =>
+        `${r.rmTypeCd ?? ""}|${r.ciYmd ?? r.rmDate ?? ""}`;
+      const pProbe = priceOne[0];
+      const pNumeric = [
+        ...new Set(
+          priceOne.flatMap((r) =>
+            Object.entries(r)
+              .filter(([, v]) => asNumber(v) !== null)
+              .map(([k]) => k),
+          ),
+        ),
+      ];
+      console.log(`  probe row: ${pKey(pProbe)}`);
+      for (const k of pNumeric) {
+        const cells = [1, 2, 3].map((n) => {
+          const hit = (priceByNights.get(n) ?? []).find((r) => pKey(r) === pKey(pProbe));
+          return `${n}박=${hit ? String(hit[k]) : "-"}`;
+        });
+        console.log(`  ${k}: ${cells.join("  ")}`);
+      }
+    }
+
+    console.log("\n=== JSON calls the booking site made (Q2, sibling sweep) ===");
+    console.log(calls.length ? calls.map((c) => `  ${c.line}`).join("\n") : "  (none)");
   } else if (step === "diff") {
     // Drift watchdog: RESOM.branches is the runtime source of truth for
     // `branchName`, so the only way it can rot is silently. The symptom would

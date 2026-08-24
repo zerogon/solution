@@ -308,6 +308,104 @@ function plusDays(d: Date, n: number): Date {
   return new Date(d.getTime() + n * 86_400_000);
 }
 
+// ─── 금액 조사 (2026-08-24) ──────────────────────────────────────────────
+//
+// Every crawler's payload interface calls itself a "Subset of the response we
+// rely on". That is honest, and it means nobody has ever asked what else is in
+// there — a rate could have been riding in every response since July and we
+// would not know. These three helpers ask.
+//
+// `keyCensus` is `debug-hanwha.ts`'s `fingerprint()` run backwards. That one
+// narrows a row to four fields on purpose, to compare two responses; this one
+// widens to every field, to find out what a response even has.
+//
+// **Counting matters more than listing.** A rate that only rides on peak-season
+// rows would appear in 3 entities out of 450, and `Object.keys(rows[0])` would
+// miss precisely the thing we came for — silently, and the silence would read
+// as "this site publishes no rates".
+
+function keyCensus(label: string, rows: Array<Record<string, unknown>>) {
+  console.log(`\n=== key census: ${label} — ${rows.length} entities ===`);
+  if (!rows.length) {
+    // Said out loud because an empty census looks exactly like a clean "no
+    // rate key here", and it is not evidence of anything.
+    console.log("  (no entities — this census proves nothing)");
+    return;
+  }
+  const seen = new Map<string, unknown[]>();
+  for (const row of rows) {
+    for (const [k, v] of Object.entries(row ?? {})) {
+      const values = seen.get(k) ?? [];
+      values.push(v);
+      seen.set(k, values);
+    }
+  }
+  const width = Math.max(...[...seen.keys()].map((k) => k.length));
+  for (const [key, values] of [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const seenIn = `${values.length}/${rows.length}`.padStart(11);
+    console.log(`  ${key.padEnd(width)} ${seenIn}  ${valueAlphabet(values)}`);
+  }
+  console.log("\n  two entities in full:");
+  console.log(
+    JSON.stringify(rows.slice(0, 2), null, 2)
+      .split("\n")
+      .map((l) => `  ${l}`)
+      .join("\n"),
+  );
+}
+
+/**
+ * Distinct values when there are few enough to read, plus a numeric range
+ * whenever every value parses as a number.
+ *
+ * The range is what makes a rate recognisable: a remaining-room count lands in
+ * the single or double digits, a 원 amount in the hundred-thousands. Reading
+ * key names alone would not separate them — `RM_REF1` looks like a reference
+ * and holds "031" (a 평형 code), while a rate might be called something as
+ * bland as `amt1`.
+ */
+function valueAlphabet(values: unknown[]): string {
+  const distinct = [...new Set(values.map((v) => JSON.stringify(v) ?? "undefined"))];
+  const nums = values.map(asNumber).filter((n): n is number => n !== null);
+  const range =
+    nums.length === values.length ? ` min=${Math.min(...nums)} max=${Math.max(...nums)}` : "";
+  return distinct.length <= 12
+    ? `{${distinct.join(", ")}}${range}`
+    : `${distinct.length} distinct${range}  e.g. ${distinct.slice(0, 3).join(", ")}`;
+}
+
+/** "320,000" and "320000원" are numbers here; "", "Y" and null are not. */
+function asNumber(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v !== "string") return null;
+  const cleaned = v.replace(/[,\s원]/g, "");
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Every key of the envelope, arrays flagged by length rather than expanded.
+ *
+ * Each parser reaches straight for the one array it reads — hanwha's
+ * `ds.Data.ds_result`, oakvalley's `entitys`. A sibling array carrying rates
+ * would sit directly beside it and never be looked at.
+ */
+function envelopeKeys(label: string, payload: unknown, path = "", depth = 0) {
+  if (!path) console.log(`\n=== envelope: ${label} ===`);
+  if (Array.isArray(payload)) {
+    console.log(`  ${path || "(root)"} [] length=${payload.length}`);
+    return;
+  }
+  if (payload === null || typeof payload !== "object" || depth > 3) {
+    console.log(`  ${path || "(root)"} = ${JSON.stringify(payload)?.slice(0, 100)}`);
+    return;
+  }
+  for (const [k, v] of Object.entries(payload)) {
+    envelopeKeys(label, v, path ? `${path}.${k}` : k, depth + 1);
+  }
+}
+
 async function main() {
   const step = process.argv[2] ?? "main";
   const arg = process.argv[3];
@@ -549,6 +647,171 @@ async function main() {
           ? "  ← WARNING: the member view is no longer distinct; config.request may be stale"
           : "  ← member view confirmed distinct"),
     );
+  } else if (step === "keys") {
+    // 금액 조사, HANWHA. Last of the five, deliberately: this login is two
+    // screens and spends the 회원권 비밀번호, so it is the most expensive one to
+    // repeat and repeats are what lock a corporate account. Everything this
+    // investigation needs from this site is therefore asked in one visit.
+    //
+    // Nothing in this file has ever looked at a raw response row. `recordGateway`
+    // decodes the REQUEST only, and `fingerprint()` deliberately keeps four
+    // fields so two responses can be compared. Both are the right tools for the
+    // questions they were built for, and both would show a rate to nobody.
+    // Q2 for this site is not "which URL" — every reservation question goes
+    // through the one gateway and `serviceInfo.INTF_ID` decides which service
+    // runs. A rate service would therefore be invisible to a URL sweep and show
+    // up only as another INTF_ID the member screen fires. So record those.
+    const gateway = recordGateway(page);
+    await page.goto(SITE.entrance, { waitUntil: "domcontentloaded", timeout: 40_000 });
+    await page.waitForTimeout(3_000);
+    const custNo = await readCustNo(page);
+    if (!custNo) throw new Error("booking host does not know us — run doLogin first");
+    await page.goto(SITE.calendarPage, { waitUntil: "domcontentloaded", timeout: 40_000 });
+    await page.waitForTimeout(6_000);
+    console.log("\n=== INTF_IDs the 잔여객실조회 screen fired (Q2) ===");
+    const byIntf = new Map<string, number>();
+    for (const c of gateway) byIntf.set(c.intf, (byIntf.get(c.intf) ?? 0) + 1);
+    for (const [intf, n] of byIntf) {
+      console.log(`  ${intf} ×${n}${intf === HANWHA.calendarService.INTF_ID ? "  ← the one we call" : ""}`);
+      // What a service ASKS for names what it answers. A rate service would ask
+      // for a date, a room type and a member — printing the request is how we
+      // tell it apart from a code table or a banner feed without calling it.
+      const sample = gateway.find((c) => c.intf === intf)?.search;
+      if (sample) {
+        const redacted = Object.fromEntries(
+          Object.entries(sample).map(([k, v]) =>
+            /CUST_NO|MEMB_NO|CUST_IDNT/.test(k) && v ? [k, "<set>"] : [k, v],
+          ),
+        );
+        console.log(`      asks: ${JSON.stringify(redacted).slice(0, 400)}`);
+      }
+    }
+    if (!byIntf.size) console.log("  (none — the screen may render server-side)");
+
+    const branch = HANWHA.branches.find((b) => b.value === arg) ?? HANWHA.branches[0];
+    const start = plusDays(todayKst(), 14);
+    const to = ymd(plusDays(start, 7));
+    console.log(`branch: ${branch.value} (${branch.brchCd}/${branch.locCd})  ${ymd(start)} → ${to}`);
+
+    // The envelope, not just the one array the parser opens. `ds.Data` could
+    // hold a sibling dataset — this gateway multiplexes every reservation
+    // question through one URL, so a rate dataset would arrive the same way.
+    const raw = await page.request.post(SITE.gateway, {
+      timeout: 30_000,
+      headers: { Referer: SITE.calendarPage },
+      form: {
+        ds: JSON.stringify({
+          ds_search: [
+            {
+              ...HANWHA.request,
+              BRCH_CD: branch.brchCd,
+              LOC_CD: branch.locCd,
+              CUST_NO: custNo,
+              STRT_DATE: ymd(start),
+              END_DATE: to,
+            },
+          ],
+          serviceInfo: HANWHA.calendarService,
+        }),
+      },
+    });
+    const text = await raw.text();
+    let payload: unknown = null;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      console.log(`  unparseable: ${text.slice(0, 300)}`);
+    }
+    if (payload) envelopeKeys("doExecute.mvc envelope", payload);
+
+    // Q1 — the calendar rows, every key counted.
+    const member = await calendar(page, custNo, branch, ymd(start), to);
+    console.log(`\nHTTP ${member.status}, ${member.rows.length} rows in ${member.ms}ms`);
+    keyCensus("ds_result[] — 회원(01)", member.rows);
+
+    // Q4 — 회원 vs 일반. `span`'s M4 already proves the two views differ in
+    // availability; this asks whether they differ in any NUMBER, which is the
+    // only way to tell a member rate from a rack rate. Getting this backwards
+    // would put a rack rate on screen labelled as the price a colleague pays.
+    const general = await calendar(page, custNo, branch, ymd(start), to, {
+      RSRV_CLDR_CL_CD: "02",
+    });
+    console.log(`\n=== 일반(02) for comparison — ${general.rows.length} rows ===`);
+    keyCensus("ds_result[] — 일반(02)", general.rows);
+
+    const key = (r: Record<string, unknown>) => `${r.SESN_DATE}|${r.ROOM_TYPE_CD}`;
+    const generalByKey = new Map(general.rows.map((r) => [key(r), r]));
+    const numericKeys = [
+      ...new Set(
+        member.rows.flatMap((r) =>
+          Object.entries(r)
+            .filter(([, v]) => asNumber(v) !== null)
+            .map(([k]) => k),
+        ),
+      ),
+    ];
+    console.log("\n=== numeric keys: does 회원(01) differ from 일반(02)? (Q4) ===");
+    for (const k of numericKeys) {
+      let shared = 0;
+      let differing = 0;
+      for (const r of member.rows) {
+        const other = generalByKey.get(key(r));
+        if (!other) continue;
+        shared++;
+        if (String(r[k]) !== String(other[k])) differing++;
+      }
+      console.log(
+        `  ${k}: shared=${shared} differing=${differing}` +
+          (differing ? "  ← member-dependent" : ""),
+      );
+    }
+
+    // Q3 — RSRV_ROOM_CNT is measured not to move availability. A rate could
+    // still scale with it (a room count is not a stay length, but it is the
+    // only quantity axis this request has).
+    console.log("\n=== numeric keys across RSRV_ROOM_CNT 1 / 2 / 3 (Q3) ===");
+    const byCnt = new Map<string, Record<string, unknown>[]>([["1", member.rows]]);
+    for (const cnt of ["2", "3"]) {
+      byCnt.set(cnt, (await calendar(page, custNo, branch, ymd(start), to, { RSRV_ROOM_CNT: cnt })).rows);
+    }
+    const probe = member.rows[0];
+    if (!probe) {
+      console.log("  (no rows — pick another branch or date and re-run)");
+    } else {
+      console.log(`  probe row: ${key(probe)}`);
+      for (const k of numericKeys) {
+        const cells = ["1", "2", "3"].map((c) => {
+          const hit = (byCnt.get(c) ?? []).find((r) => key(r) === key(probe));
+          return `cnt=${c}:${hit ? String(hit[k]) : "-"}`;
+        });
+        console.log(`  ${k}: ${cells.join("  ")}`);
+      }
+    }
+
+    // Q6 — rows are keyed by ROOM_TYPE_NM. Two entities sharing a date and a
+    // name must agree on a number, or the row cannot carry an exact one.
+    console.log("\n=== same date + ROOM_TYPE_NM, more than one entity (Q6) ===");
+    const groups = new Map<string, Record<string, unknown>[]>();
+    for (const r of member.rows) {
+      const g = `${r.SESN_DATE}|${String(r.ROOM_TYPE_NM ?? r.ROOM_TYPE_CD ?? "")}`;
+      groups.set(g, [...(groups.get(g) ?? []), r]);
+    }
+    const multi = [...groups.entries()].filter(([, rows]) => rows.length > 1);
+    console.log(`  ${multi.length} of ${groups.size} (date, room type name) groups hold more than one entity`);
+    for (const k of numericKeys) {
+      let spread = 0;
+      let widest = 0;
+      for (const [, rows] of multi) {
+        const nums = rows.map((r) => asNumber(r[k])).filter((n): n is number => n !== null);
+        if (nums.length < 2) continue;
+        const gap = Math.max(...nums) - Math.min(...nums);
+        if (gap > 0) spread++;
+        widest = Math.max(widest, gap);
+      }
+      if (multi.length) {
+        console.log(`  ${k}: ${spread}/${multi.length} groups disagree, widest gap ${widest}`);
+      }
+    }
   } else if (step === "rows") {
     // Exercise hanwha/search.ts + parse.ts standalone.
     const { performSearch } = await import("../src/crawlers/hanwha/search");

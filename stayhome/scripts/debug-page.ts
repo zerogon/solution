@@ -4,7 +4,7 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
 
 // Site exploration helper for rewriting the Lotte crawler against
 // lottehotel.com. Usage: npx tsx scripts/debug-page.ts <step> [url]
-// Steps: main | login | resort | custom (custom just opens [url] and dumps)
+// Steps: main | login | resort | keys | custom (custom just opens [url] and dumps)
 const OUT = process.env.DEBUG_OUT ?? "/tmp/lotte-debug";
 
 async function acceptCookies(page: Page) {
@@ -49,6 +49,104 @@ async function dumpLinks(page: Page, containerSel: string, label: string) {
       .filter((l) => l.text || l.href),
   );
   console.log(`${label} links:`, JSON.stringify(links, null, 2));
+}
+
+// ─── 금액 조사 (2026-08-24) ──────────────────────────────────────────────
+//
+// Every crawler's payload interface calls itself a "Subset of the response we
+// rely on". That is honest, and it means nobody has ever asked what else is in
+// there — a rate could have been riding in every response since July and we
+// would not know. These three helpers ask.
+//
+// `keyCensus` is `debug-hanwha.ts`'s `fingerprint()` run backwards. That one
+// narrows a row to four fields on purpose, to compare two responses; this one
+// widens to every field, to find out what a response even has.
+//
+// **Counting matters more than listing.** A rate that only rides on peak-season
+// rows would appear in 3 entities out of 450, and `Object.keys(rows[0])` would
+// miss precisely the thing we came for — silently, and the silence would read
+// as "this site publishes no rates".
+
+function keyCensus(label: string, rows: Array<Record<string, unknown>>) {
+  console.log(`\n=== key census: ${label} — ${rows.length} entities ===`);
+  if (!rows.length) {
+    // Said out loud because an empty census looks exactly like a clean "no
+    // rate key here", and it is not evidence of anything.
+    console.log("  (no entities — this census proves nothing)");
+    return;
+  }
+  const seen = new Map<string, unknown[]>();
+  for (const row of rows) {
+    for (const [k, v] of Object.entries(row ?? {})) {
+      const values = seen.get(k) ?? [];
+      values.push(v);
+      seen.set(k, values);
+    }
+  }
+  const width = Math.max(...[...seen.keys()].map((k) => k.length));
+  for (const [key, values] of [...seen.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const seenIn = `${values.length}/${rows.length}`.padStart(11);
+    console.log(`  ${key.padEnd(width)} ${seenIn}  ${valueAlphabet(values)}`);
+  }
+  console.log("\n  two entities in full:");
+  console.log(
+    JSON.stringify(rows.slice(0, 2), null, 2)
+      .split("\n")
+      .map((l) => `  ${l}`)
+      .join("\n"),
+  );
+}
+
+/**
+ * Distinct values when there are few enough to read, plus a numeric range
+ * whenever every value parses as a number.
+ *
+ * The range is what makes a rate recognisable: a remaining-room count lands in
+ * the single or double digits, a 원 amount in the hundred-thousands. Reading
+ * key names alone would not separate them — `RM_REF1` looks like a reference
+ * and holds "031" (a 평형 code), while a rate might be called something as
+ * bland as `amt1`.
+ */
+function valueAlphabet(values: unknown[]): string {
+  const distinct = [...new Set(values.map((v) => JSON.stringify(v) ?? "undefined"))];
+  const nums = values.map(asNumber).filter((n): n is number => n !== null);
+  const range =
+    nums.length === values.length ? ` min=${Math.min(...nums)} max=${Math.max(...nums)}` : "";
+  return distinct.length <= 12
+    ? `{${distinct.join(", ")}}${range}`
+    : `${distinct.length} distinct${range}  e.g. ${distinct.slice(0, 3).join(", ")}`;
+}
+
+/** "320,000" and "320000원" are numbers here; "", "Y" and null are not. */
+function asNumber(v: unknown): number | null {
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v !== "string") return null;
+  const cleaned = v.replace(/[,\s원]/g, "");
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Every key of the envelope, arrays flagged by length rather than expanded.
+ *
+ * Each parser reaches straight for the one array it reads — hanwha's
+ * `ds.Data.ds_result`, oakvalley's `entitys`. A sibling array carrying rates
+ * would sit directly beside it and never be looked at.
+ */
+function envelopeKeys(label: string, payload: unknown, path = "", depth = 0) {
+  if (!path) console.log(`\n=== envelope: ${label} ===`);
+  if (Array.isArray(payload)) {
+    console.log(`  ${path || "(root)"} [] length=${payload.length}`);
+    return;
+  }
+  if (payload === null || typeof payload !== "object" || depth > 3) {
+    console.log(`  ${path || "(root)"} = ${JSON.stringify(payload)?.slice(0, 100)}`);
+    return;
+  }
+  for (const [k, v] of Object.entries(payload)) {
+    envelopeKeys(label, v, path ? `${path}.${k}` : k, depth + 1);
+  }
 }
 
 async function main() {
@@ -307,6 +405,123 @@ async function main() {
       (await context.cookies()).map((c) => `${c.name}@${c.domain}`),
     ));
     await dump(page, "after-login");
+  } else if (step === "keys") {
+    // 금액 조사, Lotte. Runs first of the five because it is the only one that
+    // costs no login at all: the `roomlist` step above already leans on the
+    // room list API being public for BAR rates. Repeated logins against the
+    // corporate accounts risk locking them, so the census order is "cheapest
+    // login first", not "most curious first".
+    const { LOTTE } = await import("../src/crawlers/lotte/config");
+    const { formatDateCompact } = await import("../src/crawlers/lotte/format");
+    const { parseDate, todayKstIso, addDaysUtc } = await import("../src/lib/utils");
+
+    // Far enough out that rooms are still open, near enough to sit inside the
+    // hot window the scheduler actually collects.
+    const checkin = addDaysUtc(parseDate(todayKstIso()), 14);
+    const bizCd = LOTTE.branches[0].bizCd;
+    const stayUrl = (nights: number) =>
+      `${LOTTE.bookingUrl}?bizCd=${bizCd}` +
+      `&checkinDt=${formatDateCompact(checkin)}` +
+      `&checkoutDt=${formatDateCompact(addDaysUtc(checkin, nights))}` +
+      `&roomCnt=1&reservationType=BAR`;
+    console.log(`branch: ${LOTTE.branches[0].label} (bizCd=${bizCd})`);
+    console.log(`checkin: ${formatDateCompact(checkin)}`);
+
+    // Q2 — is a rate on a *different* call? The room list is only one of the
+    // JSON requests the booking page fires, and the crawler only ever looks at
+    // that one. Anything else it loads is invisible to us today.
+    const siblings: string[] = [];
+    page.on("response", async (res) => {
+      const ct = res.headers()["content-type"] ?? "";
+      if (!ct.includes("json")) return;
+      if (/google|facebook|doubleclick|analytics|adobe|criteo|kakao/.test(res.url())) return;
+      let bytes = -1;
+      try {
+        bytes = (await res.body()).byteLength;
+      } catch {
+        // Body already discarded — the URL is still the useful half.
+      }
+      siblings.push(
+        `${res.status()} ${res.request().method()} ${String(bytes).padStart(8)}B  ${res.url().slice(0, 200)}`,
+      );
+    });
+    await page.goto(stayUrl(1), { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForTimeout(12_000);
+    await acceptCookies(page);
+    await page.waitForTimeout(5_000);
+    console.log("\n=== sibling JSON responses (Q2) ===");
+    console.log(siblings.length ? siblings.join("\n") : "  (none)");
+
+    // Q1/Q3 — the same room asked three stay lengths. The hypothesis to
+    // disprove is "per-night": SONO/RESOM/OAKVALLEY/HANWHA all ignore the stay
+    // length entirely (measured, see their config comments), so a number that
+    // does not move is per-night and we would have to sum it ourselves.
+    // Believing the opposite is how the 2박 bug of 2026-08-09 happened.
+    const byNights = new Map<number, Array<Record<string, unknown>>>();
+    for (const nights of [1, 2, 3]) {
+      const res = await page.request.get(LOTTE.roomListApiUrl, {
+        params: {
+          rsvType: "BAR",
+          procType: "",
+          bizCd,
+          checkinDt: formatDateCompact(checkin),
+          checkoutDt: formatDateCompact(addDaysUtc(checkin, nights)),
+          roomCnt: "1",
+        },
+        headers: { Accept: "application/json", Referer: `${LOTTE.bookingUrl}?bizCd=${bizCd}` },
+        timeout: LOTTE.timeouts.api,
+      });
+      const payload = (await res.json()) as Record<string, unknown>;
+      const rooms = (payload.roomList ?? []) as Array<Record<string, unknown>>;
+      byNights.set(nights, rooms);
+      console.log(`\nnights=${nights}: HTTP ${res.status()}, ${rooms.length} rooms`);
+      if (nights === 1) {
+        envelopeKeys("roomList response", payload);
+        keyCensus("roomList[] — 1박", rooms);
+      }
+    }
+
+    const one = byNights.get(1) ?? [];
+    const probe = one[0];
+    console.log("\n=== numeric keys across 1 / 2 / 3 nights (Q3) ===");
+    if (!probe) {
+      console.log("  (no rooms returned — pick another date and re-run)");
+    } else {
+      const numericKeys = [
+        ...new Set(
+          one.flatMap((r) =>
+            Object.entries(r)
+              .filter(([, v]) => asNumber(v) !== null)
+              .map(([k]) => k),
+          ),
+        ),
+      ];
+      console.log(`  probe room: ${String(probe.roomNm)}`);
+      for (const key of numericKeys) {
+        const cells = [1, 2, 3].map((n) => {
+          const room = (byNights.get(n) ?? []).find((r) => r.roomNm === probe.roomNm);
+          return `${n}박=${room ? String(room[key]) : "-"}`;
+        });
+        console.log(`  ${key}: ${cells.join("  ")}`);
+      }
+    }
+
+    // Q6 — `parse.ts:44-47` keeps one row per `roomNm` and drops the rest. If
+    // two entries share a name and disagree on a number, this resort's rows
+    // cannot carry one exact amount either, and a rate would have to be folded
+    // (minimum, labelled "부터") rather than picked arbitrarily.
+    console.log("\n=== entries sharing a roomNm (Q6) ===");
+    const groups = new Map<string, Array<Record<string, unknown>>>();
+    for (const r of one) {
+      const name = String(r.roomNm ?? "");
+      groups.set(name, [...(groups.get(name) ?? []), r]);
+    }
+    const collided = [...groups.entries()].filter(([, rows]) => rows.length > 1);
+    for (const [name, rows] of collided) {
+      console.log(`  ${name} — ${rows.length} entries`);
+      console.log(`    ${JSON.stringify(rows).slice(0, 600)}`);
+    }
+    console.log(`  ${collided.length} of ${groups.size} names carry more than one entry`);
   } else if (step === "roomlist") {
     // Exercise performSearch + parseRoomList without login (API is public for
     // BAR rates) — validates the post-login pipeline end-to-end.
