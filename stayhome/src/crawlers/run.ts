@@ -44,6 +44,14 @@ const INITIAL_WINDOW_ESTIMATE_MS = 8_000;
  */
 const UPSERT_CHUNK_ROWS = 1_000;
 
+/**
+ * 유령 행 삭제 한 문장이 다루는 `(지점, 체크인, 체크아웃)` 그룹 수.
+ *
+ * 그룹당 바인드 파라미터가 3개라 상한 65,535까지는 한참 남지만, 소노처럼 지점 32곳 ×
+ * 날짜 50개가 한 패스에 들어오는 경우를 대비해 upsert와 같은 방식으로 끊는다.
+ */
+const DELETE_CHUNK_GROUPS = 2_000;
+
 export interface RunResult {
   resortId: string;
   status: CrawlStatus;
@@ -364,5 +372,73 @@ async function upsertInventory(
         synced_at    = EXCLUDED.synced_at
     `;
   }
+
+  await removeVanishedRows(resortId, entries, now);
   return entries.length;
+}
+
+/**
+ * 이번 응답에서 사라진 행을 지운다.
+ *
+ * 쓰기 경로가 순수 upsert라, 어제 있었고 오늘 응답에 없는 객실은 아무도 건드리지
+ * 않아 옛 값 그대로 남는다. 2026-08-24에 롯데 속초 8/24→8/25가 정확히 그랬다 —
+ * 16행은 그날 갱신됐는데 호텔 객실 3종만 08-11의 `available=true`를 단 채 남아
+ * 화면 맨 위에 초록 배지로 떠 있었고, 실제 사이트에는 그 방이 없었다.
+ *
+ * ## 무엇을 근거로 지우는가
+ *
+ * 판정 단위는 `(지점, 체크인, 체크아웃)` 그룹이고 규칙은 하나다:
+ *
+ * > 그 그룹에서 **1행 이상 받았다면** 사이트가 그 지점·그 날짜에 대해 답한 것이다.
+ * > 그 답에 없는 객실은 지금 예약할 수 없다.
+ *
+ * **0행 그룹은 절대 건드리지 않는다.** 그룹 목록을 방금 쓴 행에서 뽑기 때문에
+ * 그건 자동으로 보장된다 — 응답이 비었으면 그룹이 존재하지 않는다. 이 구분이
+ * 이 함수의 전부다. 지점 단위 실패는 조용히 0행이 되는데(`lotte/search.ts`가
+ * 예외를 삼키고 계속한다) 그걸 "전부 마감"으로 읽으면 크롤 실패가 "전 객실 매진"으로
+ * 발행된다.
+ *
+ * ## 왜 `available = false`가 아니라 삭제인가
+ *
+ * 마킹은 "예약 불가"라는 주장인데, 소노·리솜·오크밸리·한화는 밤 하나가 결측이면
+ * 행을 아예 만들지 않으므로 사라진 행에는 "불가"와 "판정 못 함"이 섞여 있다.
+ * 이 프로젝트의 규약은 판정할 수 없으면 행을 만들지 않는 것이고(AGENTS.md의
+ * `InventoryRow.stay` 절), 삭제가 그 규약과 같은 말이다. 지워진 자리는 조회에서
+ * "데이터 없음"이고, 다음 크롤이 답을 받으면 그대로 복구된다.
+ *
+ * ## 왜 `synced_at <> now`로 충분한가
+ *
+ * 이 호출이 쓴 행은 전부 같은 `now`를 갖는다(모든 청크가 한 값을 공유). 그래서
+ * "우리가 답을 받은 그룹 안에서 우리가 쓰지 않은 행"은 정확히 그 그룹의
+ * `synced_at <> now`다. 객실명 목록을 통째로 바인딩할 필요가 없어 파라미터가
+ * 행 수가 아니라 **그룹 수**에 비례한다 — 소노 한 패스가 수천 행이라 이 차이가 크다.
+ */
+async function removeVanishedRows(
+  resortId: string,
+  entries: { row: InventoryRow; stay: string }[],
+  now: Date,
+): Promise<void> {
+  const groups = new Map<string, { branchName: string; checkin: string; checkout: string }>();
+  for (const { row, stay } of entries) {
+    const [checkin, checkout] = stay.split("/");
+    groups.set(`${stay}\u0000${row.branchName}`, {
+      branchName: row.branchName,
+      checkin,
+      checkout,
+    });
+  }
+
+  const all = [...groups.values()];
+  for (let i = 0; i < all.length; i += DELETE_CHUNK_GROUPS) {
+    const tuples = all
+      .slice(i, i + DELETE_CHUNK_GROUPS)
+      .map((g) => Prisma.sql`(${g.branchName}, ${g.checkin}::date, ${g.checkout}::date)`);
+
+    await prisma.$executeRaw`
+      DELETE FROM resort_inventory
+      WHERE resort_id = ${resortId}
+        AND (branch_name, checkin_date, checkout_date) IN (${Prisma.join(tuples)})
+        AND synced_at <> ${now}
+    `;
+  }
 }

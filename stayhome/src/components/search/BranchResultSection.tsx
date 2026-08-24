@@ -10,16 +10,8 @@ import {
   TONE_SURFACE,
   toneOf,
 } from "@/lib/availability-tone";
+import { checkedLabel, syncedLabel } from "@/lib/freshness";
 import type { InventoryRow } from "./types";
-
-function relativeTime(iso: string): string {
-  const min = Math.round((Date.now() - new Date(iso).getTime()) / 60_000);
-  if (min < 1) return "방금 전 갱신";
-  if (min < 60) return `${min}분 전 갱신`;
-  const hr = Math.round(min / 60);
-  if (hr < 24) return `${hr}시간 전 갱신`;
-  return `${Math.round(hr / 24)}일 전 갱신`;
-}
 
 /**
  * 한 지점의 결과 묶음.
@@ -28,17 +20,35 @@ function relativeTime(iso: string): string {
  * 각 행의 메타 줄을 읽어야만 알 수 있었다. 지점을 섹션 머리로 올리고 객실은
  * 그 아래 조밀한 목록으로 내린다.
  */
-export function BranchResultSection({ rows }: { rows: InventoryRow[] }) {
+export function BranchResultSection({
+  rows,
+  now,
+}: {
+  rows: InventoryRow[];
+  /**
+   * 신선도 기준 시각. 호출부에서 한 번만 정해 내려보낸다 — 행마다 `Date.now()`를
+   * 부르면 임계값 경계의 행들이 서로 다른 등급을 받고, 리렌더마다 값이 흔들린다.
+   */
+  now: number;
+}) {
   const head = rows[0];
-  const availableCount = rows.filter((r) => r.available).length;
 
-  // 예약 가능 → 마감임박 → 마감 순. 같은 상태 안에서는 객실명 가나다순.
+  const tones = new Map(rows.map((r) => [r.id, toneOf(r, now)]));
+  const availableCount = rows.filter(
+    (r) => tones.get(r.id) === "available" || tones.get(r.id) === "closingSoon",
+  ).length;
+  const unverifiedCount = rows.filter((r) => tones.get(r.id) === "unverified").length;
+
+  // 확인된 가용 → 마감임박 → 확인 필요 → 마감. 같은 상태 안에서는 객실명 가나다순.
   const sorted = [...rows].sort((a, b) => {
-    const d = TONE_ORDER[toneOf(a)] - TONE_ORDER[toneOf(b)];
+    const d = TONE_ORDER[tones.get(a.id)!] - TONE_ORDER[tones.get(b.id)!];
     return d !== 0 ? d : a.roomType.localeCompare(b.roomType, "ko");
   });
 
   // 지점 안에서 갱신 시각이 섞일 수 있으므로 가장 오래된 것을 대표로 보여준다.
+  // 이 값 하나로는 "어느 행이 낡았는지"를 말할 수 없어서 — 실제로 오늘 갱신된 16행과
+  // 13일 된 3행이 이 헤더 아래 나란히 있었다 — 낡은 행 수를 함께 낸다. 행 단위 판정은
+  // 아래 목록의 배지가 한다.
   const oldestSync = rows.reduce(
     (acc, r) => (r.syncedAt < acc ? r.syncedAt : acc),
     head.syncedAt,
@@ -66,15 +76,23 @@ export function BranchResultSection({ rows }: { rows: InventoryRow[] }) {
           <span className="font-mono tabular-nums">
             예약 가능 {availableCount}/{rows.length}
           </span>
+          {unverifiedCount > 0 && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="font-mono tabular-nums text-slate-600">
+                확인 필요 {unverifiedCount}
+              </span>
+            </>
+          )}
           <span aria-hidden>·</span>
-          <span>{relativeTime(oldestSync)}</span>
+          <span>{syncedLabel(oldestSync, now)}</span>
         </div>
       </header>
 
       {/* 넓은 화면에서 한 줄짜리 객실 행이 세로로만 쌓이면 결과 컬럼이 텅 비어 보인다. */}
       <ul className="grid gap-1.5 2xl:grid-cols-2">
         {sorted.map((row) => {
-          const tone = toneOf(row);
+          const tone = tones.get(row.id)!;
           return (
             <li
               key={row.id}
@@ -95,8 +113,17 @@ export function BranchResultSection({ rows }: { rows: InventoryRow[] }) {
                   "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium",
                   TONE_BADGE[tone],
                 )}
+                // 강등된 행은 배지가 상태가 아니라 나이를 말한다. 왜 등급이 내려갔는지는
+                // 배지 자체로는 알 수 없으므로 title에 원래 기록을 남긴다.
+                title={
+                  tone === "unverified"
+                    ? `마지막 수집 시점에는 ${row.closingSoon ? "마감임박" : "예약 가능"}이었습니다. 실제 예약 가능 여부는 최신화 후 확인하세요.`
+                    : undefined
+                }
               >
-                {TONE_LABEL[tone]}
+                {tone === "unverified"
+                  ? checkedLabel(row.syncedAt, now)
+                  : TONE_LABEL[tone]}
               </span>
               {row.detailUrl && (
                 <a

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { CalendarSearch, RefreshCw, Search, SearchX, TriangleAlert } from "lucide-react";
 
 import { addDaysIso, todayKstIso } from "@/lib/utils";
+import { toneOf } from "@/lib/availability-tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
@@ -69,6 +70,11 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
 
   const {
     data: rows,
+    // 신선도의 기준 시각. `Date.now()`를 렌더에서 부르면 리렌더마다 값이 달라져
+    // 임계값 경계의 행이 깜빡이고, React 컴파일러가 순수성 위반으로 막는다.
+    // 그보다 이 값이 의미상으로도 맞다 — 묻는 것은 "지금 몇 시인가"가 아니라
+    // "이 행들을 받았을 때 얼마나 낡아 있었나"이다.
+    dataUpdatedAt,
     isFetching,
     isError,
     error,
@@ -86,18 +92,25 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
       committed.checkout !== checkout ||
       committed.resort !== place.resort);
 
-  /** 축별 예약 가능 건수 — 필터 칩 배지용. 한 번의 순회로 세 축을 다 센다. */
+  /**
+   * 축별 예약 가능 건수 — 필터 칩 배지용. 한 번의 순회로 세 축을 다 센다.
+   *
+   * `row.available`이 아니라 `toneOf`로 센다. 이 배지는 "여기 눌러 볼 만하다"는 신호라
+   * 확인되지 않은 행을 넣으면 사용자를 13일 된 데이터로 안내하게 된다.
+   * (위 `stale`과 헷갈리지 말 것 — 저건 폼과 결과가 어긋났다는 뜻이고 데이터 나이와 무관하다.)
+   */
   const counts = useMemo<PlaceCounts | undefined>(() => {
     if (!rows) return undefined;
     const acc: PlaceCounts = { byProperty: {}, byRegion: {}, byResort: {} };
     for (const row of rows) {
-      if (!row.available) continue;
+      const tone = toneOf(row, dataUpdatedAt);
+      if (tone !== "available" && tone !== "closingSoon") continue;
       acc.byProperty[row.branchName] = (acc.byProperty[row.branchName] ?? 0) + 1;
       acc.byRegion[row.region] = (acc.byRegion[row.region] ?? 0) + 1;
       acc.byResort[row.resortSlug] = (acc.byResort[row.resortSlug] ?? 0) + 1;
     }
     return acc;
-  }, [rows]);
+  }, [rows, dataUpdatedAt]);
 
   /** 지역·지점 축은 서버에 보내지 않고 여기서 좁힌다. */
   const visibleRows = useMemo(
@@ -232,6 +245,7 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
           place={place}
           catalog={catalog}
           rows={visibleRows}
+          now={dataUpdatedAt}
           hasTarget={target != null}
           isFetching={isFetching}
           isError={isError}
@@ -247,6 +261,7 @@ function Results({
   place,
   catalog,
   rows,
+  now,
   hasTarget,
   isFetching,
   isError,
@@ -256,6 +271,8 @@ function Results({
   place: PlaceSelection;
   catalog: ResortCatalogEntry[];
   rows: InventoryRow[] | undefined;
+  /** 행 신선도를 재는 기준 시각 — 이 행들을 받은 순간(React Query의 `dataUpdatedAt`). */
+  now: number;
   hasTarget: boolean;
   isFetching: boolean;
   isError: boolean;
@@ -320,6 +337,7 @@ function Results({
     <div className="space-y-6">
       <AvailabilitySummary
         rows={rows}
+        now={now}
         committed={committed}
         place={place}
         catalog={catalog}
@@ -335,7 +353,7 @@ function Results({
                 <span className="h-px flex-1 bg-border" aria-hidden />
               </h3>
             )}
-            <BranchResultSection rows={group} />
+            <BranchResultSection rows={group} now={now} />
           </Fragment>
         );
       })}
