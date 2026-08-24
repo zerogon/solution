@@ -2,25 +2,66 @@ import type { CrawlerContext } from "../types";
 import { LOTTE } from "./config";
 
 /**
+ * What a login learns about itself while it runs.
+ *
+ * The hop list has always gone to stdout only, which is fine while somebody is
+ * watching a terminal and useless three hours later: Vercel Hobby keeps runtime
+ * logs briefly, and `CrawlLog.errorMessage` — the one record that survives —
+ * used to say nothing but "isLogin is still false". This carries the few facts
+ * that pick a branch of the decision tree so the stored error can name itself.
+ */
+export interface AuthTrace {
+  /** Every auth-related response, in order, for the log. */
+  hops: string[];
+  /** Decisive hops only, compacted to their result fields (see SAFE_FIELDS). */
+  signals: string[];
+  /**
+   * Set when the isLogin probe answered with something that is not our JSON.
+   * A WAF challenge and a genuine logged-out answer both end this function
+   * returning false, and only this field tells them apart.
+   */
+  probeBlocked: string | null;
+}
+
+export function newAuthTrace(): AuthTrace {
+  return { hops: [], signals: [], probeBlocked: null };
+}
+
+/**
  * Probe the session via the isLogin endpoint. `page.request` shares the
  * browser context's cookies, so this validates a restored storageState without
  * any page navigation.
+ *
+ * `trace` is optional because `validateSession` asks this question with no
+ * login in progress; during a login it is what distinguishes "the site says we
+ * are not logged in" from "the site did not answer us at all".
  */
-export async function checkLoggedIn(ctx: CrawlerContext): Promise<boolean> {
+export async function checkLoggedIn(
+  ctx: CrawlerContext,
+  trace?: AuthTrace,
+): Promise<boolean> {
   const { page, log } = ctx;
   try {
     const res = await page.request.get(LOTTE.isLoginUrl, {
       timeout: LOTTE.timeouts.api,
       headers: { Accept: "application/json" },
     });
-    if (!res.ok()) return false;
+    const contentType = res.headers()["content-type"] ?? "";
+    if (!res.ok()) {
+      // Used to be a silent `return false`, which made an Imperva 403 read
+      // exactly like a logged-out session for the whole 25s poll.
+      log("[lotte] isLogin probe rejected", { status: res.status(), contentType });
+      if (trace) trace.probeBlocked = `${res.status()} ${contentType.slice(0, 40)}`;
+      return false;
+    }
     const body = (await res.json()) as { code?: string; data?: boolean };
     log("[lotte] isLogin probe", { code: body.code, data: body.data });
     return body.data === true;
   } catch (e) {
-    log("[lotte] session validation failed", {
-      error: e instanceof Error ? e.message : String(e),
-    });
+    // A 200 that carries a challenge page lands here, on `res.json()`.
+    const msg = e instanceof Error ? e.message : String(e);
+    log("[lotte] session validation failed", { error: msg });
+    if (trace) trace.probeBlocked = msg.slice(0, 60);
     return false;
   }
 }
@@ -93,6 +134,38 @@ async function dismissOverlay(
 }
 
 /**
+ * The hops that decide the verdict, as opposed to the ones that merely happen.
+ *
+ * `callLgn_01_001` is the bridge page L.POINT renders inside the login page,
+ * `login_01_001` is where L.POINT actually authenticates, and
+ * `ssoLogin/ssoLogin` is lottehotel.com adopting the result. The pattern is
+ * anchored on the last path segment so `ssoLogin/lpointInit` — which fires on
+ * every visit, logged in or not — does not count as the handoff.
+ */
+const DECISIVE_HOP = /callLgn_01_001|login_01_001|ssoLogin\/ssoLogin/i;
+
+/**
+ * The only fields we lift out of a 2xx auth response.
+ *
+ * A whitelist rather than a length cap, and that is the whole point: these
+ * bodies also carry the account's login id, member number and name. Asking for
+ * result codes by name means the rest cannot ride along by accident, however
+ * the site rearranges its payload.
+ */
+const SAFE_FIELDS =
+  /"(code|rtnCode|resultCode|rsltCd|errCd|errorCode|status|result|msg|message|rsltMsg|errMsg)"\s*:\s*(?:"([^"\\]{0,40})"|(-?[\d.]{1,12}|true|false|null))/gi;
+
+/** Pull `code="0000" msg="…"` out of a JSON body without carrying anything else. */
+function safeFields(body: string): string {
+  const out: string[] = [];
+  for (const m of body.matchAll(SAFE_FIELDS)) {
+    out.push(`${m[1]}=${m[2] ?? m[3]}`);
+    if (out.length >= 6) break;
+  }
+  return out.join(" ");
+}
+
+/**
  * Record the requests a login actually consists of, for the failure path.
  *
  * A working login (captured locally, 2026-08-09) is four hops:
@@ -108,17 +181,25 @@ async function dismissOverlay(
  * leaves the page looking exactly like one that was never submitted — which is
  * the shape production keeps failing in.
  *
- * Bodies are only captured for non-2xx or HTML responses: a challenge page or
- * an error is the informative case, while the successful JSON carries the
- * account's login id and is worth nothing in a log.
+ * Bodies: a challenge page or an error is captured whole (they are the
+ * informative case and carry nobody's data), while a 2xx JSON gives up only
+ * its result codes — see `SAFE_FIELDS`. The old rule captured nothing at all
+ * from a 2xx, which is why the 2026-08-24 production failure could show that
+ * `login_01_001` ran but not whether it said yes.
+ *
+ * `signals` is kept separately from `hops` and is never capped. The cap on
+ * `hops` exists so a chatty page cannot fill a log line, but the verdict is
+ * read off the decisive hops — and in the 08-24 failure the eleven captured
+ * hops left exactly one slot, so a successful `ssoLogin` would have been the
+ * first thing the cap threw away.
  */
-function recordAuthTraffic(ctx: CrawlerContext): string[] {
-  const seen: string[] = [];
+function recordAuthTraffic(ctx: CrawlerContext, trace: AuthTrace): void {
   const wanted = /netfunnel|lpoint|ssoLogin|\/login/i;
   ctx.page.on("response", async (res) => {
     const url = res.url();
     if (!wanted.test(url) || /\.(js|css|png|jpg|gif|svg|woff2?)(\?|$)/i.test(url)) return;
     const contentType = res.headers()["content-type"] ?? "";
+    const decisive = DECISIVE_HOP.test(url);
     let snippet = "";
     if (res.status() >= 300 || contentType.includes("html")) {
       try {
@@ -126,18 +207,47 @@ function recordAuthTraffic(ctx: CrawlerContext): string[] {
       } catch {
         /* body already consumed */
       }
+    } else if (decisive) {
+      try {
+        snippet = safeFields(await res.text());
+      } catch {
+        /* body already consumed */
+      }
     }
-    if (seen.length < 12) {
-      seen.push(`${res.status()} ${res.request().method()} ${url.slice(0, 120)}${snippet ? ` :: ${snippet}` : ""}`);
+    if (trace.hops.length < 20) {
+      trace.hops.push(
+        `${res.status()} ${res.request().method()} ${url.slice(0, 120)}${snippet ? ` :: ${snippet}` : ""}`,
+      );
+    }
+    if (decisive) {
+      const name = url.split("?")[0].split("/").pop() ?? url;
+      trace.signals.push(`${name}(${res.status()})${snippet ? ` ${snippet.slice(0, 60)}` : ""}`);
     }
   });
-  return seen;
+}
+
+/**
+ * Which branch of the decision tree in AGENTS.md this failure is on.
+ *
+ * The tree was already written down; this makes the code walk it so the answer
+ * reaches `CrawlLog` instead of only the operator who happened to be tailing
+ * the runtime log within the hour.
+ */
+function loginVerdict(trace: AuthTrace): string {
+  if (trace.probeBlocked) return "PROBE_BLOCKED";
+  const reached = (re: RegExp) => trace.signals.some((s) => re.test(s));
+  const lpoint = reached(/login_01_001/i);
+  const sso = reached(/ssoLogin/i);
+  if (!lpoint && !sso) return "GATE_BLOCKED";
+  if (lpoint && !sso) return "SSO_NOT_ISSUED";
+  return "SSO_REJECTED";
 }
 
 export async function performLogin(ctx: CrawlerContext) {
   const { page, credentials, log } = ctx;
 
-  const authTraffic = recordAuthTraffic(ctx);
+  const trace = newAuthTrace();
+  recordAuthTraffic(ctx, trace);
 
   log("[lotte] navigating to login page");
   await page.goto(LOTTE.loginUrl, {
@@ -204,7 +314,7 @@ export async function performLogin(ctx: CrawlerContext) {
   const deadline = Date.now() + LOTTE.timeouts.login;
   while (Date.now() < deadline) {
     await page.waitForTimeout(1_500);
-    if (await checkLoggedIn(ctx)) {
+    if (await checkLoggedIn(ctx, trace)) {
       log("[lotte] login success");
       return;
     }
@@ -241,14 +351,16 @@ export async function performLogin(ctx: CrawlerContext) {
   // never authenticated us; missing `ssoLogin` means it did and lottehotel.com
   // refused to adopt the session; neither appearing at all points at the gate
   // in front of the form rather than at the form.
-  log("[lotte] login failed — auth traffic", { hops: authTraffic });
+  log("[lotte] login failed — auth traffic", {
+    hops: trace.hops,
+    signals: trace.signals,
+  });
+  let botCookies: string[] = [];
   try {
-    const cookies = await ctx.context.cookies();
-    log("[lotte] login failed — bot-protection cookies", {
-      present: cookies
-        .map((c) => c.name)
-        .filter((n) => /reese84|incap|nlbi|netfunnel/i.test(n)),
-    });
+    botCookies = (await ctx.context.cookies())
+      .map((c) => c.name)
+      .filter((n) => /reese84|incap|nlbi|netfunnel/i.test(n));
+    log("[lotte] login failed — bot-protection cookies", { present: botCookies });
   } catch {
     /* diagnostics only */
   }
@@ -262,8 +374,40 @@ export async function performLogin(ctx: CrawlerContext) {
       /* diagnostics only */
     }
   }
+  // Everything above this line goes to stdout, which on Vercel Hobby is gone in
+  // an hour. What the throw carries is what `CrawlLog` keeps, so it carries the
+  // verdict and the evidence the verdict was read from — capped, because this
+  // string is also rendered in a toast and in the crawl-logs table.
+  const verdict = loginVerdict(trace);
+  const evidence = [
+    trace.signals.length ? `hops=${trace.signals.join(" ")}` : "hops=none",
+    trace.probeBlocked ? `probe=${trace.probeBlocked}` : "",
+    botCookies.length ? `bot=${dedupeCookieFamilies(botCookies).join(",")}` : "bot=none",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 200);
   throw new Error(
-    `LOGIN_FAILED: isLogin이 계속 false. url=${pageUrl}` +
-      (alertText ? ` page_alerts="${alertText}"` : ""),
+    `LOGIN_FAILED[${verdict}]: isLogin이 계속 false. ${evidence} url=${pageUrl}` +
+      (alertText ? ` page_alerts="${alertText.slice(0, 80)}"` : ""),
   );
+}
+
+/**
+ * `visid_incap_3207427` and `visid_incap_3184905` are the same fact twice —
+ * Imperva issues one per protected site id, and this login touches four. The
+ * question the error answers is which gatekeepers were present, not how many
+ * site ids they cover.
+ */
+function dedupeCookieFamilies(names: string[]): string[] {
+  const families = new Set<string>();
+  for (const n of names) {
+    if (/reese84/i.test(n)) families.add("reese84");
+    else if (/visid_incap/i.test(n)) families.add("visid_incap");
+    else if (/incap_ses/i.test(n)) families.add("incap_ses");
+    else if (/nlbi/i.test(n)) families.add("nlbi");
+    else if (/netfunnel/i.test(n)) families.add("netfunnel");
+    else families.add(n.slice(0, 16));
+  }
+  return [...families].slice(0, 6);
 }

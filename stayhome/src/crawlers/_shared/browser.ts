@@ -53,7 +53,7 @@ export async function launchBrowser(
     const chromiumMin = (await import("@sparticuz/chromium-min")).default;
     const executablePath = await chromiumMin.executablePath(packUrl);
     return chromium.launch({
-      args: [...chromiumMin.args, ...EXTRA_ARGS],
+      args: await packArgs(log),
       executablePath,
       headless: true,
     });
@@ -61,7 +61,78 @@ export async function launchBrowser(
   // Local dev: respect CRAWLER_HEADLESS env so we can watch the browser
   // while debugging selectors. Default is headless to match production.
   const headless = process.env.CRAWLER_HEADLESS !== "false";
+  // `CRAWLER_PACK_ARGS=1` borrows production's flag set while keeping the local
+  // chromium and the local exit IP. Without it there is no way to ask whether a
+  // site is refusing our address or our browser: the two only ever differed
+  // together. See the LOTTE note in CLAUDE.md.
+  if (process.env.CRAWLER_PACK_ARGS) {
+    return chromium.launch({ args: await packArgs(log), headless });
+  }
   return chromium.launch({ headless });
+}
+
+/**
+ * Flags `@sparticuz/chromium-min` sets that we may choose not to inherit.
+ *
+ * The library tunes for "boot a browser in a serverless container at all",
+ * which is not the same goal as "look like the browser a person would use".
+ * Two groups are separable and each is its own experiment:
+ *
+ *   isolation — puts cross-origin frames in the renderer of their parent.
+ *     LOTTE's login is a `members.lpoint.com` frame inside a lottehotel.com
+ *     page that has to hand control back to its parent, and that handoff is
+ *     the exact hop production stops at.
+ *   websec — same-origin policy off. Nothing we crawl needs it, and a page
+ *     that checks `event.origin` before accepting a message is entitled to a
+ *     different answer when it is off.
+ *
+ * Dropping either costs memory and process count, which on Vercel is `/tmp`
+ * and RSS — the resource this file already exists to protect. So they are
+ * dropped deliberately, one at a time, with the resource snapshots read.
+ */
+const PACK_ARG_GROUPS: Record<string, string[]> = {
+  isolation: [
+    "--single-process",
+    "--no-zygote",
+    "--disable-site-isolation-trials",
+    "--disable-features=AudioServiceOutOfProcess,IsolateOrigins,site-per-process",
+  ],
+  websec: ["--disable-web-security", "--allow-running-insecure-content"],
+};
+
+/**
+ * Which groups to leave behind. Empty means "behave exactly as before".
+ *
+ * `CRAWLER_DROP_PACK_ARGS=isolation,websec` overrides it for an experiment so a
+ * question can be asked without a code change — but the answer, once known,
+ * belongs in this constant where it is reviewable.
+ */
+const DROPPED_PACK_ARG_GROUPS: string[] = [];
+
+async function packArgs(
+  log: (msg: string, meta?: Record<string, unknown>) => void,
+): Promise<string[]> {
+  const chromiumMin = (await import("@sparticuz/chromium-min")).default;
+  const dropped = (process.env.CRAWLER_DROP_PACK_ARGS ?? DROPPED_PACK_ARG_GROUPS.join(","))
+    .split(",")
+    .map((g) => g.trim())
+    .filter(Boolean);
+
+  const drop = new Set(dropped.flatMap((g) => PACK_ARG_GROUPS[g] ?? []));
+  const unknown = dropped.filter((g) => !PACK_ARG_GROUPS[g]);
+  if (unknown.length) log("[browser] unknown pack-arg group, ignored", { unknown });
+
+  const args = chromiumMin.args.filter((a) => !drop.has(a));
+  if (drop.size) {
+    log("[browser] pack args dropped", {
+      groups: dropped,
+      // Say what was actually removed, not what we meant to remove: the
+      // library rewords its own flags between releases and a stale entry here
+      // would silently drop nothing while the log claimed otherwise.
+      removed: chromiumMin.args.filter((a) => drop.has(a)),
+    });
+  }
+  return [...args, ...EXTRA_ARGS];
 }
 
 /**
