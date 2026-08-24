@@ -3,6 +3,7 @@ import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { RESOM, type ResomBranch } from "./config";
 import { formatDateCompact } from "./format";
 import { authHeaders, fetchMember, readAuth } from "./login";
+import { attachPrices } from "./price";
 import { parseCalendar, type CalendarPayload } from "./parse";
 
 /** `GET {apiBase}/roomReservation/allCondos` — the room-type catalog. */
@@ -47,6 +48,12 @@ export async function performSearch(
 
   const roomTypes = await fetchRoomTypes(ctx);
 
+  // 요금을 붙여도 되는 상황인가. 두 번 판정한다 — 라우트는 "사람이 지점 하나를
+  // 지목해 눌렀다"를 알고(`params.withPrices`), 여기는 그 요금이 실제로 얼마나
+  // 비싼지를 안다. 어긋나면 증상이 항상 "요금이 안 나옴"(안전)이고 "예산 초과"
+  // (재고 행 전멸)가 될 수 없다.
+  const wantsPrices = params.withPrices === true && branches.length === 1;
+
   const out: InventoryRow[] = [];
   const failures: string[] = [];
   for (const branch of branches) {
@@ -70,6 +77,34 @@ export async function performSearch(
         rows: rows.length,
         checkinDates: dates.size,
       });
+
+      if (wantsPrices) {
+        // 두 겹으로 감싼다. `attachPrices`가 내부에서 전부 삼키지만, 예상 못 한
+        // 예외 하나(엔트리 모양이 바뀌어 생긴 TypeError 같은 것)가 여기까지 새면
+        // `withDeadline`이 아니라 그냥 예외로 이 지점 45일치 행이 전멸한다.
+        // 지점 루프가 예외를 삼키는 것과 같은 판단이다(아래 catch 주석).
+        try {
+          const auth = await readAuth(ctx);
+          const member = await fetchMember(ctx);
+          if (auth && member) {
+            await attachPrices(ctx, {
+              payload,
+              rows,
+              branch,
+              checkin: params.checkin,
+              nights,
+              auth,
+              member,
+            });
+          }
+        } catch (e) {
+          log("[resom] price pass failed, inventory kept", {
+            branch: branch.value,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
+      }
+
       out.push(...rows);
     } catch (e) {
       // One property failing must not cost the others: run.ts wraps the whole

@@ -8,8 +8,10 @@ import {
   TONE_LABEL,
   TONE_ORDER,
   TONE_SURFACE,
+  showsPrice,
   toneOf,
 } from "@/lib/availability-tone";
+import { PRICE_KIND_LABEL, formatKrw, perNightAverage } from "@/lib/price";
 import { checkedLabel, syncedLabel } from "@/lib/freshness";
 import type { InventoryRow } from "./types";
 
@@ -23,6 +25,7 @@ import type { InventoryRow } from "./types";
 export function BranchResultSection({
   rows,
   now,
+  nights,
 }: {
   rows: InventoryRow[];
   /**
@@ -30,6 +33,11 @@ export function BranchResultSection({
    * 부르면 임계값 경계의 행들이 서로 다른 등급을 받고, 리렌더마다 값이 흔들린다.
    */
   now: number;
+  /**
+   * 조회한 숙박 일수. `now`와 같은 이유로 호출부가 정한다 — 행은 자기 요금이 몇 박치인지
+   * 모르고(총액만 갖는다), 그 답은 조회 조건에 있다.
+   */
+  nights: number;
 }) {
   const head = rows[0];
 
@@ -108,6 +116,25 @@ export function BranchResultSection({
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 {row.roomType}
               </span>
+              {row.price && showsPrice(tone) && (
+                // `shrink-0`이 필수다. 이 줄은 2xl에서 2컬럼이 되어 폭이 절반이고
+                // 리솜 객실명은 길다("레스트리 S30 타워 클린 케어룸") — 좁아질 때
+                // 줄어들어야 하는 쪽은 요금이 아니라 이름이다.
+                <span
+                  className="shrink-0 text-xs font-mono tabular-nums"
+                  title={`${PRICE_KIND_LABEL[row.price.kind]} · ${nights}박 합계`}
+                >
+                  {formatKrw(row.price.amount)}
+                  {nights > 1 && (
+                    // "평균"을 빼면 안 된다 — 요금은 밤마다 다르고(주중·주말) 이
+                    // 값은 그 숙박의 어느 밤 값도 아니다.
+                    <span className="hidden font-normal text-muted-foreground sm:inline">
+                      {" · 1박 평균 "}
+                      {formatKrw(perNightAverage(row.price.amount, nights))}
+                    </span>
+                  )}
+                </span>
+              )}
               <span
                 className={cn(
                   "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium",

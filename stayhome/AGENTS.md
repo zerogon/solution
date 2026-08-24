@@ -353,11 +353,60 @@ GET  {apiBase}/roomReservation/calendarRooms    잔여 객실 (날짜별 달력)
   (`RoomReservationView`가 달력 엔트리를 통째로 복사해 `coYmd`만 다시 계산해 보낸다).
   즉 행 하나에 콜 하나이고, 실측 0.2~1.8초다. 3지점 × 객실유형 11종 × 46일이면
   **1,500콜**이라 30초 패스 예산에 들어갈 여지가 없다.
+  · 그래서 요금은 **사용자가 "최신화"로 지목한 (지점, 날짜)에만** 붙인다 — 아래 절.
 - 📌 **문서 정정**: `debug-resom.ts` 머리말이 번들에서 봤다고 적어둔 `room/price/list`는
   **패키지 예약**(`Wt = "/package"`)의 요금이다. 회원 객실 예약(`ct = "/roomReservation"`)의
   요금 콜은 이름이 아예 다르다(`stockPrice`). 접근자 이름은 양쪽 다 `selectRoomPrice`라
   번들만 보고 고르면 **패키지 요금을 회원 객실 재고 옆에 붙이게 되고, 응답 어디에도
   그렇다고 적혀 있지 않다.**
+
+### 요금 수집은 "최신화" 경로에만 있다 (2026-08-24 구현)
+
+정기 수집은 요금을 **한 번도 묻지 않는다.** 요금이 붙는 것은 조회 화면에서 지점 하나를
+고르고 최신화를 눌렀을 때뿐이고, 그때만 감당이 되는 이유는 그 순간이 구조적으로
+**지점 1곳 × 윈도우 1개**이기 때문이다(`refreshTarget`은 `sel.property`가 있을 때만
+대상을 준다). 실측: 그 날짜의 예약 가능한 행이 3~7개라 콜도 그만큼이다.
+
+- **게이트가 둘이다.** `refresh/route.ts`가 `branch`의 유무로 `SearchParams.withPrices`를
+  세우고(관리 화면 버튼은 본문 없이 호출하고 스케줄러는 날짜만 보내므로 이 하나가 세
+  경로를 정확히 가른다), `search.ts`가 `withPrices && branches.length === 1`을 다시 본다.
+  어긋났을 때의 증상이 항상 **"요금이 안 나옴"(안전)**이고 **"예산 초과"(위험)**가 될 수 없다.
+- **예산은 상수가 아니라 `ctx.deadlineAt`에서 유도한다.** `run.ts`가 `searchAvailability`
+  전체를 하나의 `withDeadline`으로 감싸므로, 넘기면 잃는 것은 요금이 아니라 **이미 모은
+  그 지점 45일치 행 전부와 SUCCESS 판정**이다. 한화·오크밸리의 `passBudgetMs`는 가용성을
+  가용성으로 지키니 추정이 허용되지만 여기는 가용성을 부가 정보로 걸게 되므로 안 된다.
+  콜당 타임아웃도 `timeouts.api`(30초)가 아니라 `timeouts.price`(5초)다 — 30초짜리 한 콜이
+  예산 전체를 무효화한다.
+- **요금을 붙이지 않는 조건**(전부 조용히 null, 절대 throw 없음):
+  `isPossible !== true` / `totalRmAmt`가 0 이하 / `rmAmtList`가 요청한 숙박과 불일치
+  (길이·첫 날짜·합계 3중 검증) / **`totalCmpnyRmAmt !== 0`**. 마지막 것이 중요하다 —
+  회사지원금이 붙는 순간 `totalRmAmt`는 직원이 낼 금액이 아니고(사이트는 "임직원 결제
+  금액 = 객실요금 − 지원금"을 따로 그린다) 우리는 지원금을 저장하지 않으므로 화면이
+  자기가 틀렸다는 걸 알 방법이 없다. 관측 계정은 0이라 이 가지는 지금 무동작이다.
+- **`available`인데 `isPossible:false`인 행 수를 로그로 낸다.** 리솜 가용성은 밤별 상태를
+  우리가 AND 한 추론이고 `isPossible`은 사이트가 그 숙박 전체에 대해 직접 답한 값이라,
+  이 프로젝트가 그 추론을 대조할 수 있는 **첫 기회**다(2박 버그가 두 번 났던 저장소다).
+- **요금은 행보다 낡을 수 없다.** upsert가 한 행의 모든 컬럼을 한 문장으로 쓰고
+  `DO UPDATE SET`에 `price`가 있으므로 **요금의 나이 = `synced_at`**이다. 그래서 요금
+  없이 도는 다음 크롤이 요금을 null로 덮고, 지워지지 않은 낡은 행은 조회 화면의
+  `showsPrice(tone)`가 그리지 않는다. **`COALESCE`로 보존하면 안 된다** — 그 순간 요금이
+  행보다 늙을 수 있게 되고 신선도 축이 요금에 대해 거짓말을 시작한다.
+  · 파급: 한 콜이 45일을 답하므로 `(지점 X, D, N박)` 최신화 한 번이 `지점 X`의
+    `[D, D+45)` × `N박` 행의 요금을 전부 null로 만든다. **요금은 최신화의 산물이지
+    재고의 속성이 아니다 — 지워지는 것이 정의고 남아 있는 것이 버그다.**
+
+실사이트 검증(2026-08-24):
+
+```
+prices 스텝 (포레스트 리솜, 2주 뒤 체크인)
+  1박 3행 3.2초 · 2박 2행 2.9초 · 3박 1행 1.8초
+  같은 방: 177,000 → 354,000 → 531,000  (정확히 ×N — coYmd가 반영된다는 증거)
+run-crawl RESOM "포레스트 리솜"  → 506행 15.4초, pricedRows 7
+run-crawl RESOM (전 지점)        → 2,116행 13.7초, pricedRows 0, 그리고 앞의 요금 7건이 null로 지워짐
+run-crawl RESOM hot              → 60/60 윈도우 58스킵 4,186행 19.0초, pricedRows 0 (기존 실측과 동일)
+run-crawl LOTTE                  → 75행 17.7초 (공용 upsert 회귀 없음)
+DB 불변식 위반 0건 (price>0 · price_kind 동반 · available=false에 요금 없음)
+```
 
 ## 로컬 검증
 
@@ -371,7 +420,9 @@ npx tsx scripts/debug-resom.ts rows       # search+parse 단독 실행
 npx tsx scripts/debug-resom.ts span       # 한 콜이 덮는 범위 · nights 무영향 재확인
 npx tsx scripts/debug-resom.ts diff       # allCondos ↔ RESOM.branches 대조
 npx tsx scripts/debug-resom.ts keys       # 응답 키 전수 조사 + stockPrice (금액 조사)
-npx tsx scripts/run-crawl.ts RESOM        # run.ts 전체 경로
+npx tsx scripts/debug-resom.ts prices ["지점명"]  # 요금 부착 단독 (1·2·3박 총액 대조)
+npx tsx scripts/run-crawl.ts RESOM        # run.ts 전체 경로 (전 지점 → 요금 없음)
+npx tsx scripts/run-crawl.ts RESOM "포레스트 리솜"   # 지점 하나 → 요금까지 (최신화 버튼과 같은 경로)
 npx tsx scripts/run-crawl.ts RESOM hot    # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
 ```
 

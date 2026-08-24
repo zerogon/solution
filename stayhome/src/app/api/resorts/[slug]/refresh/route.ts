@@ -53,6 +53,12 @@ export async function POST(
       checkin: parseDate(parsed.data.checkin),
       checkout: parseDate(parsed.data.checkout),
       branch: parsed.data.branch,
+      // 요금은 "사람이 지점 하나를 지목해 누르고 결과를 기다리는" 경우에만 붙인다.
+      // 그 조건과 `branch`의 유무가 같은 값에서 나온다 — 조회 화면의 최신화는
+      // 구조적으로 항상 단일 지점이고(`refreshTarget`), 관리 화면 버튼은 본문 없이,
+      // 스케줄러는 날짜만 보낸다. 클라이언트가 정하게 두지 않는 이유는 그러면
+      // "전 지점 + 요금"이라는, 예산에 들어가지 않는 요청을 만들 수 있기 때문이다.
+      withPrices: parsed.data.branch != null,
     };
   }
 

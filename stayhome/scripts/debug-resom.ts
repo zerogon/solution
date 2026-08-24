@@ -648,6 +648,9 @@ async function main() {
       page,
       credentials: { id: process.env.RESOM_ID ?? "", pw: process.env.RESOM_PW ?? "" },
       log: (msg: string, meta?: Record<string, unknown>) => console.log(msg, meta ?? ""),
+      // 조사 스크립트에는 Vercel 60초 예산이 없다. 크롤러가 선택적 작업을
+      // 포기하지 않도록 넉넉히 잡는다 — 여기서 재는 것은 시간이 아니라 동작이다.
+      deadlineAt: Date.now() + 10 * 60_000,
     };
     const rows = await performSearch(ctx, {
       checkin,
@@ -681,6 +684,9 @@ async function main() {
       page,
       credentials: { id: "", pw: "" },
       log: (m: string, meta?: Record<string, unknown>) => console.log(m, meta ?? ""),
+      // 조사 스크립트에는 Vercel 60초 예산이 없다. 크롤러가 선택적 작업을
+      // 포기하지 않도록 넉넉히 잡는다 — 여기서 재는 것은 시간이 아니라 동작이다.
+      deadlineAt: Date.now() + 10 * 60_000,
     };
     await page.goto(SITE.book, { waitUntil: "domcontentloaded", timeout: 30_000 });
     const today = parseDate(todayKstIso());
@@ -772,6 +778,9 @@ async function main() {
       page,
       credentials: { id: "", pw: "" },
       log: (m: string, meta?: Record<string, unknown>) => console.log(m, meta ?? ""),
+      // 조사 스크립트에는 Vercel 60초 예산이 없다. 크롤러가 선택적 작업을
+      // 포기하지 않도록 넉넉히 잡는다 — 여기서 재는 것은 시간이 아니라 동작이다.
+      deadlineAt: Date.now() + 10 * 60_000,
     };
     const calls = recordJson(page);
     await page.goto(SITE.book, { waitUntil: "domcontentloaded", timeout: 30_000 });
@@ -960,6 +969,83 @@ async function main() {
 
     console.log("\n=== JSON calls the booking site made (Q2, sibling sweep) ===");
     console.log(calls.length ? calls.map((c) => `  ${c.line}`).join("\n") : "  (none)");
+  } else if (step === "prices") {
+    // 요금 부착만 단독으로. `rows`/`span`이 있는 이유와 같다 — 요금 로직을 고칠 때마다
+    // 실계정에 로그인이 쌓이면 안 되고(반복 실패는 잠금 위험), 저장된 세션이면 충분하다.
+    //
+    // 이 스텝이 답하는 것은 "요금이 붙는가"가 아니라 **"붙은 요금이 우리가 물은 숙박의
+    // 것인가"**다. 그래서 박수를 바꿔가며 총액이 따라 움직이는지를 같이 본다 — 1박과
+    // 2박이 같은 값이면 `coYmd`가 반영되지 않은 것이고, 그건 에러 없이 조용히 틀린다.
+    await seedCrawlerCookie(page, context);
+    const { RESOM } = await import("../src/crawlers/resom/config");
+    const { fetchCalendar } = await import("../src/crawlers/resom/search");
+    const { parseCalendar } = await import("../src/crawlers/resom/parse");
+    const { attachPrices } = await import("../src/crawlers/resom/price");
+    const { fetchMember } = await import("../src/crawlers/resom/login");
+    const { todayKstIso, parseDate, addDaysUtc, toIsoDate } = await import("../src/lib/utils");
+
+    const ctx = {
+      resortId: "debug",
+      slug: "resom",
+      context,
+      page,
+      credentials: { id: "", pw: "" },
+      log: (m: string, meta?: Record<string, unknown>) => console.log(m, meta ?? ""),
+      deadlineAt: Date.now() + 10 * 60_000,
+    };
+    await page.goto(SITE.book, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    const auth = await readAuth(page);
+    const member = await fetchMember(ctx);
+    if (!member) throw new Error("auth/info gave no member — run `doLogin` first");
+
+    const branch = RESOM.branches.find((b) => b.value === urlArg) ?? RESOM.branches[0];
+    const condos = (await (
+      await page.request.get(`${SITE.book}/api/user/reservation/roomReservation/allCondos`, {
+        timeout: 30_000,
+        headers: authHeaders(auth),
+      })
+    ).json()) as Array<{ condoCd: string; roomTypeList: Array<{ rmTypeCd: string }> }>;
+    const codes =
+      condos.find((c) => c.condoCd === branch.condoCd)?.roomTypeList.map((r) => r.rmTypeCd) ?? [];
+    // 오늘이 아니라 2주 뒤: 임박한 날짜는 대부분 마감이라 요금을 물어볼 행이 없다.
+    const checkin = addDaysUtc(parseDate(todayKstIso()), 14);
+    console.log(`branch=${branch.value} checkin=${toIsoDate(checkin)} roomTypes=${codes.length}`);
+
+    for (const nights of [1, 2, 3]) {
+      const payload = await fetchCalendar(ctx, branch, codes, { checkin, nights });
+      const rows = parseCalendar(payload, branch, { nights });
+      const target = rows.filter(
+        (r) => r.available && r.stay && toIsoDate(r.stay.checkin) === toIsoDate(checkin),
+      );
+      const started = Date.now();
+      const priced = await attachPrices(ctx, {
+        payload,
+        rows,
+        branch,
+        checkin,
+        nights,
+        auth,
+        member,
+      });
+      console.log(
+        `\n${nights}박: 대상 ${target.length}행 → 요금 ${priced}행 (${Date.now() - started}ms)`,
+      );
+      for (const r of rows.filter((x) => x.price).slice(0, 8)) {
+        const total = r.price!.amount;
+        console.log(
+          `  ${r.roomType.padEnd(28)} ${String(total).padStart(9)}원  ` +
+            `1박평균 ${String(Math.round(total / nights)).padStart(9)}원  (${r.price!.kind})`,
+        );
+      }
+      // 요금이 하나도 안 붙은 것은 실패가 아닐 수 있다 — 그 날짜가 전부 마감이면 정상이다.
+      if (target.length > 0 && priced === 0) {
+        console.log("  ⚠ 예약 가능한 행이 있는데 요금이 하나도 붙지 않았다. 위 로그를 볼 것.");
+      }
+    }
+    console.log(
+      "\n판정: 박수를 늘렸을 때 총액이 대략 비례해 커져야 한다. 1박과 2박이 같으면 " +
+        "coYmd가 반영되지 않은 것이고, 46박짜리 큰 값이 나오면 엔트리의 coYmd를 그대로 보낸 것이다.",
+    );
   } else if (step === "diff") {
     // Drift watchdog: RESOM.branches is the runtime source of truth for
     // `branchName`, so the only way it can rot is silently. The symptom would

@@ -1417,6 +1417,9 @@ async function main() {
       page,
       credentials: { id: process.env.OAKVALLEY_ID ?? "", pw: process.env.OAKVALLEY_PW ?? "" },
       log: (msg: string, meta?: Record<string, unknown>) => console.log(msg, meta ?? ""),
+      // 조사 스크립트에는 Vercel 60초 예산이 없다. 크롤러가 선택적 작업을
+      // 포기하지 않도록 넉넉히 잡는다 — 여기서 재는 것은 시간이 아니라 동작이다.
+      deadlineAt: Date.now() + 10 * 60_000,
     };
     const rows = await performSearch(ctx, {
       checkin,

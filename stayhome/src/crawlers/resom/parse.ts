@@ -123,8 +123,12 @@ export function parseCalendar(
  * because it keeps the name unique: `roomType` is part of the inventory row's
  * unique key, so a future collision between two 동's identically-named types
  * would silently drop one of them at upsert.
+ *
+ * Exported because `price.ts` has to reach the same row from a raw calendar
+ * entry. Rebuilding the key there would let the two drift, and the symptom of
+ * a drifted key is not an error — it is prices silently attaching to nothing.
  */
-function roomTypeName(entry: CalendarEntry): string | null {
+export function roomTypeName(entry: CalendarEntry): string | null {
   const name = entry.rmTypeNm?.trim();
   if (!name) return null;
   const dong = entry.dongNm?.trim();

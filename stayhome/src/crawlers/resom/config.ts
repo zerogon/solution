@@ -121,12 +121,53 @@ export const RESOM = {
   /** Cached storage state lifetime (login skip window). */
   sessionTtlHours: 6,
 
+  /**
+   * 요금 조회(`roomReservation/stockPrice`)의 고정 파라미터.
+   *
+   * 둘 다 달력 응답에는 없는 필드이고, 빠지면 사이트가 400과 함께 이름을 한국어로
+   * 알려준다("대기예약여부는 필수값입니다" / "회원카드 대여여부는 필수값입니다").
+   * SPA는 사용자가 고른 것을 보내지만 우리는 **정가 회원 객실 요금 하나**만 수집한다 —
+   * 대기예약은 예약이 아니고(`isWait:"Y"`), 회원카드 대여는 다른 상품이다
+   * (`rentYn:"Y"`이면 응답이 `totalRentRmAmt` 쪽 값을 뜻하게 된다).
+   */
+  priceRequest: {
+    isWait: "N",
+    rentYn: "N",
+  },
+
+  /**
+   * 요금 조회에 쓸 수 있는 최대 시간.
+   *
+   * 진짜 한계는 이 상수가 아니라 `ctx.deadlineAt`이다(넘기면 재고 행까지 전부
+   * 버려진다). 이 값은 다른 판단을 담는다 — **여유가 있어도 사용자를 45초 기다리게
+   * 하지 않는다.** 둘 중 먼저 오는 쪽이 이긴다.
+   */
+  priceMaxMs: 12_000,
+
+  /**
+   * 한 번의 최신화에서 요금을 물어볼 객실 수의 상한.
+   *
+   * 절단 장치가 아니라 폭주 방지용이라 **닿지 않는 값**으로 둔다. 실측은 한 지점
+   * 한 날짜에 11종이었지만 그건 포레스트 하나의 값이고, `timeouts.api` 주석이 말하듯
+   * 지점에 따라 25종까지 간다. 여기에 실제로 걸리면 그건 예산 문제가 아니라 사이트가
+   * 변한 것이므로 로그를 보고 판단할 일이다.
+   */
+  priceMaxRooms: 40,
+
   /** Per-step deadlines (ms). Keep the total well under STEP_BUDGET_MS. */
   timeouts: {
     navigation: 20_000,
     login: 25_000,
     /** One calendarRooms call: 53 days × 25 room types measured well under this. */
     api: 30_000,
+    /**
+     * One stockPrice call. Measured 0.2~1.8s.
+     *
+     * Deliberately NOT `api`'s 30s: a single call allowed to run that long
+     * would blow the whole price budget by itself, and the thing that budget
+     * protects is the inventory rows already collected.
+     */
+    price: 5_000,
   },
 } as const;
 

@@ -41,7 +41,10 @@ async function main() {
 
   const result = await runResortCrawl(slug as ResortSlug, {
     triggeredBy: "MANUAL",
-    ...(branch ? { search: { ...defaultWindow(), branch } } : {}),
+    // 지점 인자가 있으면 요금까지 — `/api/resorts/[slug]/refresh`가 `branch` 유무로
+    // 판정하는 것과 **같은 규칙**이다. 두 곳이 갈리면 이 스크립트로 확인한 것이
+    // 실제 최신화 버튼이 하는 일과 달라진다.
+    ...(branch ? { search: { ...defaultWindow(), branch, withPrices: true } } : {}),
   });
   console.log("RESULT:", JSON.stringify(result, null, 2));
 }

@@ -104,6 +104,10 @@ async function checkOne(slug: ResortSlug, save: boolean): Promise<Outcome> {
       page,
       credentials,
       log: logger,
+      // 이 스크립트는 로그인만 묻는다. Vercel 예산이 없고 검색도 돌리지 않으므로
+      // 마감은 사실상 무한이다 — 크롤러가 이 값 때문에 무언가를 포기하면 그건
+      // 측정 대상("크롤러의 로그인이 되나")과 무관한 이유가 된다.
+      deadlineAt: Date.now() + 10 * 60_000,
     };
 
     stage = "login";

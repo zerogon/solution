@@ -40,6 +40,21 @@ export function toneOf(
   return row.closingSoon ? "closingSoon" : "available";
 }
 
+/**
+ * 이 등급의 행에 요금을 그려도 되는가.
+ *
+ * 장식이 아니라 **낡은 요금을 막는 실제 장치**다. 요금은 행과 같은 문장으로 쓰이므로
+ * 행보다 낡을 수 없지만, 행 자체는 낡을 수 있다 — 특히 3박 이상은 핫 윈도우 밖이라
+ * 정기 수집이 영원히 건드리지 않고, 그건 최신화 버튼이 존재하는 바로 그 경우다.
+ * 그때 배지는 "N일 전 확인"이라고 스스로 말하지만 **숫자에는 자기를 부인할 어휘가 없다.**
+ * 옆에 320,000원이 서 있으면 사람은 그걸 현재형으로 읽는다.
+ *
+ * `soldOut`에서도 그리지 않는다: 예약할 수 없는 방의 가격은 정보가 아니라 잡음이다.
+ */
+export function showsPrice(tone: AvailabilityTone): boolean {
+  return tone === "available" || tone === "closingSoon";
+}
+
 export const TONE_LABEL: Record<AvailabilityTone, string> = {
   available: "예약 가능",
   closingSoon: "마감임박",

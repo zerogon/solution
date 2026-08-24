@@ -180,6 +180,27 @@ model ResortInventory {
   available    Boolean
   closingSoon  Boolean  @default(false) @map("closing_soon")
   detailUrl    String?  @map("detail_url")
+
+  /// 이 행이 서술하는 숙박 **전체**의 요금(원). 1박당이 아니다 — 행이 이미
+  /// checkinDate/checkoutDate를 갖고 있으므로 단위를 말할 컬럼이 필요 없고,
+  /// 1박 환산은 화면이 나눈다("1박 평균": 주중·주말이 섞이면 어느 밤의 값도 아니다).
+  ///
+  /// 거의 항상 null이다. 요금은 사전 수집 대상이 아니라 사용자가 "최신화"를 눌러
+  /// 지목한 (지점, 날짜)에만 붙는다 — 리솜의 요금 API가 행 하나에 콜 하나라
+  /// 정기 크롤 예산에 들어갈 수 없기 때문이다. 자세한 근거는 AGENTS.md의 RESOM 절.
+  ///
+  /// Int4 상한 2,147,483,647원. 7박 스위트도 천만 원대라 여유가 크다.
+  price        Int?
+
+  /// `price`가 무엇인지. 숫자만으로는 회원가와 공시가를 구별할 수 없고, 구별하지
+  /// 못하면 두 리조트를 나란히 놓는 순간 비교가 거짓말이 된다(조사에서 롯데 값이
+  /// BAR 공시가임을 이미 측정했다). `price`와 **둘 다이거나 둘 다 아니다**.
+  ///
+  /// Prisma enum이 아니라 text인 이유: 값을 늘리는 것이 마이그레이션이 되고,
+  /// `run.ts`의 raw SQL에 `::"PriceKind"` 캐스트를 요구하게 된다. 어휘의 단일
+  /// 출처는 `src/lib/price.ts`의 TS 유니언이다.
+  priceKind    String?  @map("price_kind")
+
   syncedAt     DateTime @default(now()) @map("synced_at")
 
   resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)

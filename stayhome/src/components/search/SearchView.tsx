@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CalendarSearch, RefreshCw, Search, SearchX, TriangleAlert } from "lucide-react";
 
-import { addDaysIso, todayKstIso } from "@/lib/utils";
+import { addDaysIso, diffDaysIso, todayKstIso } from "@/lib/utils";
 import { toneOf } from "@/lib/availability-tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -157,7 +157,16 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
           return;
         }
         if (body.status === "SUCCESS") {
-          toast.success(`최신화 완료 (${elapsed}s · ${body.rowsUpserted ?? 0}건)`);
+          // 요금 건수는 0일 때 감춘다(다섯 중 리솜만 요금을 준다 — 나머지에서 "요금 0건"은
+          // 실패가 아니라 그냥 해당 없음이다). 반대로 0이 아닐 때는 반드시 보여준다:
+          // 요금 수집은 예산에 걸리면 조용히 일부만 붙이고 끝나는데, 그 절단이 숫자로
+          // 드러나지 않으면 "요금이 없는 방"과 "못 물어본 방"이 화면에서 똑같이 빈칸이다.
+          const priced = body.pricedRows ?? 0;
+          toast.success(
+            `최신화 완료 (${elapsed}s · ${body.rowsUpserted ?? 0}건` +
+              (priced > 0 ? ` · 요금 ${priced}건` : "") +
+              ")",
+          );
         } else {
           toast.error(
             `크롤링 실패 (${body.errorStage ?? "?"}): ${body.errorMessage ?? "원인 미상"}`,
@@ -328,6 +337,11 @@ function Results({
 
   const groups = groupByBranch(rows);
 
+  // 요금은 숙박 총액으로 저장되므로 1박 환산에 박수가 필요하다. 화면 상태(`nights`)가
+  // 아니라 **실제로 조회된 조건**에서 구한다 — 사용자가 박수를 바꾸고 아직 조회를
+  // 누르지 않았을 때 그 둘이 갈리고, 그러면 요금이 다른 숙박의 것으로 나뉜다.
+  const committedNights = diffDaysIso(committed.checkin, committed.checkout);
+
   // 지역을 좁히지 않은 상태에서 결과가 여러 지역에 걸쳐 있을 때만 구분선을 넣는다.
   // 행이 이미 region 우선으로 정렬돼 오므로 값이 바뀌는 지점만 보면 된다.
   const showRegionDividers =
@@ -353,7 +367,7 @@ function Results({
                 <span className="h-px flex-1 bg-border" aria-hidden />
               </h3>
             )}
-            <BranchResultSection rows={group} now={now} />
+            <BranchResultSection rows={group} now={now} nights={committedNights} />
           </Fragment>
         );
       })}

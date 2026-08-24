@@ -37,7 +37,7 @@ const INITIAL_WINDOW_ESTIMATE_MS = 8_000;
 
 /**
  * Rows per INSERT. Postgres caps a statement at 65535 bind parameters and each
- * row binds 12, so the hard ceiling is ~5400; 1000 keeps a wide margin while
+ * row binds 14, so the hard ceiling is ~4680; 1000 keeps a wide margin while
  * still costing only a handful of round trips. This only started to matter
  * when crawlers began reporting whole spans — a single SONO window is ~3900
  * rows (32 stores × ~23 days), where it used to be ~170.
@@ -68,6 +68,15 @@ export interface RunResult {
   windowsCompleted: number;
   /** `opts.windows.length` (or 1 for the single-window form). */
   windowsRequested: number;
+  /**
+   * 요금이 붙은 행 수. 거의 항상 0이다 — 요금은 사용자가 "최신화"로 지목한
+   * (지점, 날짜)에만 붙는다.
+   *
+   * 화면에 그대로 보여주기 위한 값이다. 요금 수집은 예산에 걸리면 조용히 일부만
+   * 붙이고 끝나는데, 그 절단이 숫자로 드러나지 않으면 "요금이 없는 방"과
+   * "시간이 모자라 못 물어본 방"이 화면에서 똑같이 빈칸으로 보인다.
+   */
+  pricedRows: number;
 }
 
 export interface RunOptions {
@@ -142,6 +151,7 @@ export async function runResortCrawl(
   let stage: CrawlStage = CrawlStage.VALIDATE;
   let errorMessage: string | undefined;
   let rowsUpserted = 0;
+  let pricedRows = 0;
   let windowsCompleted = 0;
   let status: CrawlStatus = CrawlStatus.FAILED;
   let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;
@@ -178,6 +188,10 @@ export async function runResortCrawl(
         memo: account.memo ?? undefined,
       },
       log: logger,
+      // 이 패스의 마감 시각. 선택적인 추가 작업(요금 조회 등)을 할지 말지 크롤러가
+      // 판단하려면 "몇 초 남았나"를 알아야 하는데, 로그인에 이미 얼마를 썼는지는
+      // 크롤러가 관측할 수 없다. 아래 `withDeadline("search", …)`가 같은 시계를 본다.
+      deadlineAt: deadline,
     };
 
     // Stage 1: validate session
@@ -241,6 +255,7 @@ export async function runResortCrawl(
 
       stage = CrawlStage.UPSERT;
       rowsUpserted += await upsertInventory(resort.id, resort.name, rows, window);
+      pricedRows += rows.filter((r) => r.price).length;
       windowsCompleted++;
 
       // Only after the rows are committed: a window is "covered" when its data
@@ -300,6 +315,7 @@ export async function runResortCrawl(
     durationMs,
     windowsCompleted,
     windowsRequested: windows.length,
+    pricedRows,
   };
 }
 
@@ -352,14 +368,27 @@ async function upsertInventory(
       return Prisma.sql`(
         ${randomUUID()}, ${resortId}, ${resortName}, ${row.branchName},
         ${row.roomType}, ${row.region}, ${checkin}::date, ${checkout}::date,
-        ${row.available}, ${row.closingSoon}, ${row.detailUrl ?? null}, ${now}
+        ${row.available}, ${row.closingSoon}, ${row.detailUrl ?? null},
+        ${row.price?.amount ?? null}, ${row.price?.kind ?? null}, ${now}
       )`;
     });
 
+    // `price`/`price_kind`가 세 곳(컬럼 목록·VALUES·DO UPDATE SET) 전부에 있어야 한다.
+    // DO UPDATE SET에서만 빠지면 첫 INSERT에는 요금이 붙고 그 뒤로는 `synced_at`만
+    // 갱신되면서 요금이 영원히 고정된다 — 즉 **행은 fresh인데 요금은 몇 주 전 것**이
+    // 되고, 신선도 축이 요금에 대해 거짓말을 시작한다. 이 파일은 raw SQL이라 타입 검사도
+    // 빌드도 그걸 못 잡고, 한 번만 돌려서는 드러나지 않는다(같은 크롤을 두 번 돌려야 한다).
+    //
+    // `COALESCE(EXCLUDED.price, resort_inventory.price)`로 옛 요금을 살리고 싶어지는
+    // 자리인데, 그러면 안 된다. 한 행의 모든 컬럼이 이 한 문장으로 함께 쓰이기 때문에
+    // 지금은 **요금의 나이 = `synced_at`**이 항상 성립하고, 조회 화면의 신선도 판정이
+    // 요금에도 그대로 적용된다. COALESCE는 그 등식을 깨서 요금이 행보다 늙을 수 있게
+    // 만든다 — 요금이 없어지는 것은 이 기능의 정의이고, 남아 있는 것이 버그다.
     await prisma.$executeRaw`
       INSERT INTO resort_inventory (
         id, resort_id, resort_name, branch_name, room_type, region,
-        checkin_date, checkout_date, available, closing_soon, detail_url, synced_at
+        checkin_date, checkout_date, available, closing_soon, detail_url,
+        price, price_kind, synced_at
       )
       VALUES ${Prisma.join(values)}
       ON CONFLICT (resort_id, branch_name, room_type, checkin_date, checkout_date)
@@ -369,6 +398,8 @@ async function upsertInventory(
         available    = EXCLUDED.available,
         closing_soon = EXCLUDED.closing_soon,
         detail_url   = EXCLUDED.detail_url,
+        price        = EXCLUDED.price,
+        price_kind   = EXCLUDED.price_kind,
         synced_at    = EXCLUDED.synced_at
     `;
   }

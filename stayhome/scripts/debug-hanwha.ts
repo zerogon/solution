@@ -462,6 +462,9 @@ async function main() {
       page,
       credentials: { id: creds.id, pw: creds.pw, memo: creds.memo },
       log: (msg: string, meta?: Record<string, unknown>) => console.log(msg, meta ?? ""),
+      // 조사 스크립트에는 Vercel 60초 예산이 없다. 크롤러가 선택적 작업을
+      // 포기하지 않도록 넉넉히 잡는다 — 여기서 재는 것은 시간이 아니라 동작이다.
+      deadlineAt: Date.now() + 10 * 60_000,
     };
     await sessionCheck(page, "before");
     await performLogin(ctx);
@@ -824,6 +827,9 @@ async function main() {
       page,
       credentials: { id: "", pw: "" },
       log: (msg: string, meta?: Record<string, unknown>) => console.log(msg, meta ?? ""),
+      // 조사 스크립트에는 Vercel 60초 예산이 없다. 크롤러가 선택적 작업을
+      // 포기하지 않도록 넉넉히 잡는다 — 여기서 재는 것은 시간이 아니라 동작이다.
+      deadlineAt: Date.now() + 10 * 60_000,
     };
     const nights = Number(process.env.NIGHTS ?? 1);
     const rows = await performSearch(ctx, {
