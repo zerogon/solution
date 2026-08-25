@@ -613,6 +613,14 @@ POST booking…/rst/cmn/getCmnCode.mvc                         공통코드(상�
   뷰가 나온다. 예약 호스트 자기 페이지를 한 번 열어야 그 앱의 세션이 선다.
   `search.ts`의 `bootSession`이 `msi/0010`을 열고 `sCustNo`를 읽는다 —
   **`CUST_NO`는 계정마다 다르므로 config에 박지 않는다**(소노의 `memNo`와 같은 이유).
+  · **그래서 `validateSession` 통과가 크롤 가능을 뜻하지 않는다.** `checkLoggedIn`은
+    `www` 호스트의 `sessionCheck.do`를 보는데, 세션을 잃는 쪽은 `booking` 호스트다.
+    호스트가 둘이고 검사는 하나뿐이라 생기는 구조적 간극이고, 오크밸리도 같은 모양이다.
+  · `bootSession`이 던지는 것은 평범한 `Error`가 아니라 **`SessionLostError`**
+    (`_shared/errors.ts`)여야 한다. `run.ts`는 이 예외를 보고 캐시된 storageState를
+    버린다 — stage로만 판정하던 시절에는 이 실패가 `SEARCH`라 세션이 그대로 남았고,
+    다음 시도가 `validateSession`을 통과해 로그인을 건너뛰고 **똑같이 실패**했다.
+    2026-08-25 09:05:10과 09:05:45의 2연속 `SESSION_LOST`가 정확히 그것이다.
 - **`RSRV_CLDR_CL_CD`가 회원 뷰를 여는 유일한 축이다.** 설악 45일 실측:
   `01`(회원) → 예약가능 422 / 대기예약 223 / 예약마감 45,
   `02`(일반) → 회원우선 408 / 예약마감 268 / 예약가능 14. 631칸이 달라진다.
@@ -743,6 +751,14 @@ npx tsx scripts/run-crawl.ts HANWHA hot    # 핫 윈도우 60개 — 윈도우 �
 핵심 코드(`run.ts`, `_shared/*`)는 물론 **Inngest 함수·조회 UI·`/api/inventory`도 무수정**이다.
 `crawl-resort`는 slug를 인자로 받는 단일 함수이고(리조트별 함수가 아니다),
 `scheduled-refresh`가 `listCrawlableResorts()`(= `active` ∩ 등록된 크롤러)로 팬아웃한다.
+
+**세션이 죽은 것을 알아챘을 때는 `SessionLostError`(`_shared/errors.ts`)를 던질 것.**
+평범한 `Error`를 던지면 `run.ts`가 그것을 검색 실패로 읽어 **캐시된 storageState를
+그대로 남기고**, 다음 시도가 `validateSession`을 통과해 로그인을 건너뛰고 같은 실패를
+반복한다. 다섯 크롤러 전부 그 자리가 있다 — 토큰이 없거나(리솜), 회원번호를 못 받거나
+(소노), 로그인 화면으로 튕기거나(오크밸리), 재고 호스트가 우리를 모르는(한화) 순간이다.
+**로그인 호스트와 재고 호스트가 다르면 이건 선택이 아니다**: `validateSession`이 보는
+호스트와 세션을 잃는 호스트가 달라서, 검증 통과가 크롤 가능을 뜻하지 않는다.
 
 추가 후 확인 — 지점 문자열이 카탈로그와 실제 수집 결과 사이에서 어긋나지 않았는지:
 

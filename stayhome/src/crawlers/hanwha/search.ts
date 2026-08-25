@@ -4,6 +4,7 @@ import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { HANWHA, type HanwhaBranch } from "./config";
 import { formatDateCompact } from "./format";
 import { buildRows, collectNights, type CalendarPayload, type NightMap } from "./parse";
+import { SessionLostError } from "../_shared/errors";
 
 /** One property's calendar plus the span it actually covers. */
 interface BranchCalendar {
@@ -284,7 +285,7 @@ async function bootSession(ctx: CrawlerContext): Promise<HanwhaSession> {
   if (!custNo) {
     // Returning zero rows here would be recorded as SUCCESS and read as a
     // resort with nothing available, so this has to throw.
-    throw new Error(`SESSION_LOST: 예약 호스트가 회원을 인식하지 못함. url=${page.url()}`);
+    throw new SessionLostError(`예약 호스트가 회원을 인식하지 못함. url=${page.url()}`);
   }
 
   // Don't log the number itself — it identifies the corporate account.

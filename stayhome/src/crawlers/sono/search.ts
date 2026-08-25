@@ -4,6 +4,7 @@ import { SONO, type SonoBranch } from "./config";
 import { formatDateCompact } from "./format";
 import { fetchMemberNo } from "./login";
 import { parseRoomList, type RoomListPayload } from "./parse";
+import { SessionLostError } from "../_shared/errors";
 
 /**
  * Query availability via the member-reservation JSON API.
@@ -44,7 +45,7 @@ export async function performSearch(
   // Every room-list request needs the member number, and it is per-account —
   // fetch it once per window rather than pinning it in config.
   const memNo = await fetchMemberNo(ctx);
-  if (!memNo) throw new Error("SESSION_LOST: userinfo returned no member number");
+  if (!memNo) throw new SessionLostError("userinfo returned no member number");
 
   const out: InventoryRow[] = [];
   for (let i = 0; i < branches.length; i += SONO.batchSize) {

@@ -5,6 +5,7 @@ import { formatDateCompact } from "./format";
 import { authHeaders, fetchMember, readAuth } from "./login";
 import { attachPrices } from "./price";
 import { parseCalendar, type CalendarPayload } from "./parse";
+import { SessionLostError } from "../_shared/errors";
 
 /** `GET {apiBase}/roomReservation/allCondos` — the room-type catalog. */
 interface AllCondosResponse {
@@ -129,7 +130,7 @@ export async function performSearch(
 /** condoCd → its room-type codes, as `calendarRooms` requires them. */
 async function fetchRoomTypes(ctx: CrawlerContext): Promise<Map<string, string[]>> {
   const auth = await readAuth(ctx);
-  if (!auth) throw new Error("SESSION_LOST: 저장된 토큰이 없음");
+  if (!auth) throw new SessionLostError("저장된 토큰이 없음");
 
   const res = await ctx.page.request.get(`${RESOM.apiBase}/roomReservation/allCondos`, {
     timeout: RESOM.timeouts.api,
@@ -163,9 +164,9 @@ export async function fetchCalendar(
   opts: { checkin: Date; nights: number },
 ): Promise<CalendarPayload> {
   const auth = await readAuth(ctx);
-  if (!auth) throw new Error("SESSION_LOST: 저장된 토큰이 없음");
+  if (!auth) throw new SessionLostError("저장된 토큰이 없음");
   const member = await fetchMember(ctx);
-  if (!member) throw new Error("SESSION_LOST: auth/info가 회원번호를 주지 않음");
+  if (!member) throw new SessionLostError("auth/info가 회원번호를 주지 않음");
 
   const query = new URLSearchParams({
     memNo: member.memNo,

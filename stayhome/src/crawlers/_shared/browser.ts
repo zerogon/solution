@@ -2,6 +2,7 @@ import { readdir, readFile, rm, stat, statfs } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium, type Browser, type BrowserContext } from "playwright-core";
+import { withRetry } from "./retry";
 import type { StorageStateJSON } from "./session-store";
 
 /**
@@ -52,11 +53,16 @@ export async function launchBrowser(
     // Production / Vercel: always headless (no display available)
     const chromiumMin = (await import("@sparticuz/chromium-min")).default;
     const executablePath = await chromiumMin.executablePath(packUrl);
-    return chromium.launch({
-      args: await packArgs(log),
-      executablePath,
-      headless: true,
-    });
+    const args = await packArgs(log);
+    return withRetry(
+      "chromium.launch",
+      () => chromium.launch({ args, executablePath, headless: true }),
+      {
+        attempts: ETXTBSY_ATTEMPTS,
+        initialDelayMs: ETXTBSY_DELAY_MS,
+        shouldRetry: isTextFileBusy,
+      },
+    );
   }
   // Local dev: respect CRAWLER_HEADLESS env so we can watch the browser
   // while debugging selectors. Default is headless to match production.
@@ -70,6 +76,35 @@ export async function launchBrowser(
   }
   return chromium.launch({ headless });
 }
+
+/**
+ * "Text file busy": we tried to exec a binary another process still has open
+ * for writing.
+ *
+ * The writer is `@sparticuz/chromium-min` inflating `/tmp/chromium`, and the
+ * other process is a sibling invocation doing the same thing on the same warm
+ * instance. It is transient by construction — it ends when that write ends —
+ * and it is the one launch failure worth retrying.
+ *
+ * Nothing else is retried here, deliberately. A launch that failed because the
+ * container is out of resources would only be asked to try again on an even
+ * emptier `/tmp`, and the second failure would arrive later and read the same.
+ */
+function isTextFileBusy(e: unknown): boolean {
+  return e instanceof Error && e.message.includes("ETXTBSY");
+}
+
+/**
+ * Three tries a second apart. The inflation this waits on is measured in
+ * seconds, and the whole retry budget has to fit inside a 50s pass that still
+ * has a login and some windows ahead of it.
+ *
+ * `withRetry` rewraps the cause into its own message, so an exhausted retry
+ * lands in `crawl_logs` as `chromium.launch failed after 3 attempts: …ETXTBSY`
+ * — which is the more useful sentence anyway: it says we already tried.
+ */
+const ETXTBSY_ATTEMPTS = 3;
+const ETXTBSY_DELAY_MS = 1_000;
 
 /**
  * Flags `@sparticuz/chromium-min` sets that we may choose not to inherit.

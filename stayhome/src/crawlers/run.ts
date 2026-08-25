@@ -11,6 +11,7 @@ import {
   clearStorageState,
 } from "./_shared/session-store";
 import { withDeadline, DeadlineExceeded } from "./_shared/timeout";
+import { SessionLostError } from "./_shared/errors";
 import { parseDate, todayKstIso, addDaysUtc, toIsoDate } from "@/lib/utils";
 import { loadCrawler } from "./registry";
 import type { CrawlerContext, InventoryRow, SearchParams } from "./types";
@@ -155,6 +156,12 @@ export async function runResortCrawl(
   let windowsCompleted = 0;
   let status: CrawlStatus = CrawlStatus.FAILED;
   let browser: Awaited<ReturnType<typeof launchBrowser>> | null = null;
+  /**
+   * Whether we got far enough for the cached session to be implicated in a
+   * failure. False until a browser context actually stands up with the stored
+   * state applied — see the discard rule in the catch below.
+   */
+  let sessionUsable = false;
 
   try {
     browser = await launchBrowser(logger);
@@ -164,6 +171,8 @@ export async function runResortCrawl(
     const initialState = cached && !cached.expired ? cached.storageState : null;
     const context = await newContextFromState(browser, initialState);
     const page = await context.newPage();
+    // From here on a failure can be about the session; before it, it cannot.
+    sessionUsable = true;
 
     const ctx: CrawlerContext = {
       resortId: resort.id,
@@ -279,8 +288,28 @@ export async function runResortCrawl(
     errorMessage = msg;
     if (e instanceof DeadlineExceeded) status = CrawlStatus.FAILED;
 
-    // If login failed, clear cached state so next run forces fresh login.
-    if (stage === CrawlStage.LOGIN || stage === CrawlStage.VALIDATE) {
+    // Discard the cached session when this failure says something about it —
+    // asked as a question about the cause, not about the stage.
+    //
+    // The stage alone gets it wrong twice, in opposite directions:
+    //
+    //   Too eager. `stage` starts at VALIDATE and the browser launches after
+    //   that, so a launch that never happened — `spawn ETXTBSY` when sibling
+    //   invocations race to inflate /tmp/chromium — threw away a session it had
+    //   not even opened. Hence `sessionUsable`.
+    //
+    //   Too shy. `SessionLostError` is raised in SEARCH, so the dead session
+    //   stayed cached, the next attempt's `validateSession` passed it, login was
+    //   skipped, and the identical failure came back. That is the 09:05 pair on
+    //   2026-08-25 — and it is structural for crawlers whose login host and
+    //   booking host are different machines: passing validation there does not
+    //   mean the session can crawl.
+    const sessionImplicated =
+      sessionUsable &&
+      (stage === CrawlStage.LOGIN ||
+        stage === CrawlStage.VALIDATE ||
+        e instanceof SessionLostError);
+    if (sessionImplicated) {
       await clearStorageState(resort.id).catch(() => undefined);
     }
     logger("crawl failed", { stage, error: msg });

@@ -3,6 +3,7 @@ import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { OAKVALLEY } from "./config";
 import { monthScopeKey, monthsCovering } from "./format";
 import { buildRows, collectNights, type CalendarPayload, type NightMap } from "./parse";
+import { SessionLostError } from "../_shared/errors";
 
 /** One harvested form field. `id` and `name` differ on this page — see below. */
 interface Field {
@@ -190,7 +191,7 @@ async function bootCondo(ctx: CrawlerContext): Promise<CondoSession> {
   if (!fields || fields.length === 0) {
     // Landing anywhere but the condo page means the JSP session is gone (the
     // app bounces to login), not that the calendar is empty.
-    throw new Error(`SESSION_LOST: 콘도 예약 화면을 열지 못함. url=${page.url()}`);
+    throw new SessionLostError(`콘도 예약 화면을 열지 못함. url=${page.url()}`);
   }
 
   const session: CondoSession = { fields, calendars: new Map() };
