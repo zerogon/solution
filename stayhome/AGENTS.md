@@ -230,18 +230,47 @@ POST {apiBase}/memberReservation/room/list/pc     잔여 객실
   "소노벨 A 비발디파크", room/list는 "소노벨 비발디파크 A"라고 부른다 — 파서가
   응답의 `storeNm`을 읽으면 그 순간 카탈로그와 어긋난다.
 
-### 요금은 없다 (금액 조사, 2026-08-24)
+### 요금은 없다 — 재고 응답에도, 그 **다음 화면**에도 (금액 조사 2026-08-24 · Q2 보강 08-25)
 
-`rmTypeList`의 한 엔트리는 키 **15개**이고 그중 돈은 하나도 없다 — 240엔트리 전수:
-`ciYmd errorId errorMsg levelYn pyeongCd resortTypeCd resortTypeNm rmTypeCd roomTypeCd
-roomTypeNm rsvRmCnt rsvStatusCd rsvStatusNm storeCd viewCd`. 지점 객체(`body[]`)도
-`storeCd storeNm outsYn` 셋뿐이라 "지점 최저가" 같은 것도 없다.
+**Q1 — 우리가 읽는 응답.** `rmTypeList`의 한 엔트리는 키 **15개**이고 그중 돈은 하나도
+없다 — 240엔트리 전수: `ciYmd errorId errorMsg levelYn pyeongCd resortTypeCd resortTypeNm
+rmTypeCd roomTypeCd roomTypeNm rsvRmCnt rsvStatusCd rsvStatusNm storeCd viewCd`.
+지점 객체(`body[]`)도 `storeCd storeNm outsYn` 셋뿐이라 "지점 최저가" 같은 것도 없다.
+
+**Q2 — 그 화면이 부르는 다른 콜** (`flow` 스텝, 2026-08-25). 08-24 시점에 이 절은
+Q1만 근거로 "요금은 없다"고 적고 있었다. 그건 **재고 응답에 없다**는 뜻이었지 사이트에
+없다는 뜻이 아니었고, 리솜이 정확히 그 자리에서 뒤집혔다(달력의 `rmAmt`는 전부 `"0"`,
+진짜 회원가는 객실 클릭 때 부르는 `stockPrice`에 있었다). 그래서 예약 흐름을 실제로
+몰아 **객실 선택 단계까지** 걸으며 JSON 전량을 본문까지 기록했다. 결론은 유지된다.
+
+- **`POST memberReservation/room/detail`**이 소노판 `stockPrice`다 — 객실 선택 홉에서
+  딱 한 번 불린다. 엔트리당 키가 15개에서 **34개로 늘지만 요금은 없다.** 늘어난 것은
+  `dongNm bedNm cookNm penaltyYn petYn waitSeq partialWaitDays partialAvailableDays
+  ciOverStnd groupRoomNameNm` 같은 재고·속성 필드다. 돈 이름을 가진 유일한 필드
+  `outsTotAmt`는 **16엔트리 전부 null**이다(`outsItemCd`·`outsRmTpCd`도 같이 null —
+  외부 위탁 상품 자리이고, 이 계정엔 해당이 없다).
+- 같은 홉의 나머지도 전부 무(無): `reserveRoomLinkUrlMulti`(객실 소개 페이지 링크),
+  `penalty/room/list`·`penalty/room/prdtSeq`(위약 판정), `store/name`·`store/info`,
+  `holiday/list`, `room/filter`, `room/reserve/pre`, `room/reserve/session/check`.
+- ⚠️ **스캐너가 고장 난 게 아니다.** 같은 실행에서 `ebiz/reserve/sales/NEW_AND_HOT/list`와
+  `.../PACKAGE/list`의 `amt`를 **정상적으로 잡아냈다**(`"\ 104,000 ~"`, `originalAmt`
+  `"218,000"`). 그건 홈 화면의 **패키지 판매 상품**이지 회원 객실 예약이 아니다 —
+  리솜의 `room/price/list`(패키지)와 정확히 같은 함정이고, 이름만 보고 집으면
+  **다른 상품의 요금을 회원 객실 재고 옆에 붙이게 된다.**
+- **비용은 문제가 아니었다.** `room/detail` 요청은 `{"storeCdList":["29"], ciYmd, coYmd,
+  nights, rmCnt, adultCnt, childCnt}` 하나로 그 지점 **13개 객실유형 전체**를 860ms에
+  답한다. 리솜처럼 행마다 한 콜이 아니라 `room/list/pc`와 같은 배치형이다 — 즉 여기에
+  요금이 있었다면 거의 공짜였다. 없어서 못 가져오는 것이지 비싸서 안 가져오는 게 아니다.
+- 📌 **경계**: 이 조사는 **객실 선택까지**다. 그 다음(실제 예약·결제 확정)은 몰지 않았다 —
+  법인 실계정에 예약을 만들게 된다. 화면의 "★ 스마트요금 적용 객실입니다"라는 안내가
+  가리키는 값이 그 뒤에 있을 수 있고, 있다 해도 **거기는 수집 대상이 아니다.**
 
 그리고 이 리조트는 **요금이 나왔더라도 행에 붙일 수 없었다.** `parse.ts:60-66`이
 평형·뷰 변형을 한 행으로 접는데, 실측에서 150개 (날짜, 객실유형) 그룹 중 **90개가
 2개 이상의 변형을 접고 있고** `rsvRmCnt`는 그중 83개에서 서로 다르다(최대 차이 34).
 즉 접힌 행에 "그 방의 값"이라는 건 존재하지 않는다 — 요금을 붙이려면 최저가로 접고
-행이 스스로 "부터"라고 말해야 한다.
+행이 스스로 "부터"라고 말해야 한다. `room/detail`도 `roomTypeNm > viewList > rmTypeList`
+3단으로 **변형 단위**라 이 문제를 그대로 물려받는다.
 
 ## 로컬 검증
 
@@ -256,7 +285,22 @@ npx tsx scripts/debug-sono.ts rows ["지점명"]   # search+parse 단독 실행
 npx tsx scripts/debug-sono.ts span             # 한 콜이 덮는 범위 · nights 무영향 재확인
 npx tsx scripts/debug-sono.ts diff       # 사이트 지점 목록 ↔ SONO.branches 대조
 npx tsx scripts/debug-sono.ts keys ["지점명"]   # 응답 키 전수 조사 (금액 조사, 잘림 없음)
+npx tsx scripts/debug-sono.ts flow ["지점명"]   # 금액 조사 Q2 — 예약 흐름을 객실 선택까지
+SONO_FLOW_MANUAL=1 NET_WAIT_MS=180000 npx tsx scripts/debug-sono.ts flow   # 손으로 몰기
 ```
+
+**`flow` 스텝이 존재하는 이유**: `keys`는 *우리가 읽는 응답*의 키를 전수 조사한다.
+그건 "이 응답에 요금이 없다"까지만 답하고, 리솜은 정확히 그 너머에서 뒤집혔다.
+`flow`는 홈 위젯부터 객실 선택까지 홉을 걸으며 **이름 필터 없이** JSON을 본문까지
+기록하고, 응답마다 **이름과 값을 둘 다** 보는 스캐너를 돌린다 — 이름만 보면 `amt1`
+같은 필드를 놓치고, 값만 보면 리솜 `rmAmt`(전부 `"0"`)처럼 이름은 맞고 값이 없는
+경우에 속는다. 오크밸리 `probe`·한화 `cal`과 같은 계보의 질문이다:
+**"성공한 응답이 옳은 응답은 아니다" → "우리가 읽는 필드가 응답의 전부는 아니다" →
+"우리가 읽는 응답이 그 화면의 전부는 아니다."**
+
+주의 둘 — ① 달력에서 **예약 가능한 날짜**를 고를 것. 마감된 날은 누를 것이 없어
+"콜이 없다"로 보인다. ② 자동 클릭이 실패하면 그것은 "요금 콜이 없다"의 증거가
+**아니다**. 셀렉터를 못 찾은 것과 구별되지 않으므로 `SONO_FLOW_MANUAL=1`로 다시 볼 것.
 
 `doLogin`이 세션을 파일로 남기고 나머지 스텝이 재사용한다 — 스텝마다 로그인하면
 사이트 레이트리밋에 걸린다.
