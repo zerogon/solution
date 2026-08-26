@@ -53,6 +53,26 @@ export function BranchResultSection({
     return d !== 0 ? d : a.roomType.localeCompare(b.roomType, "ko");
   });
 
+  // 이 섹션이 실제로 그리는 요금의 **종류**.
+  //
+  // 헤더에 한 번만 놓는다. 행마다 반복하면 좁은 화면에서 객실명을 잡아먹고
+  // ("레스트리 S30 타워 클린 케어룸"), 무엇보다 **한 지점은 곧 한 리조트라 그
+  // 섹션의 종류는 하나**다 — 반복은 정보가 아니라 소음이다.
+  //
+  // 그래도 집합으로 구하는 이유는, 그 "하나"가 이 컴포넌트가 보장할 수 있는 것이
+  // 아니라 크롤러들의 현재 사실이기 때문이다. 언젠가 한 크롤러가 회원가와 공시가를
+  // 함께 발행하면 여기가 조용히 틀리는 대신 둘 다 보여준다.
+  //
+  // `showsPrice`를 같이 보는 것이 중요하다 — 낡거나 마감된 행의 요금은 그려지지
+  // 않으므로, 그것만 있는 섹션에 라벨이 뜨면 없는 숫자를 설명하게 된다.
+  const priceKinds = [
+    ...new Set(
+      rows
+        .filter((r) => r.price && showsPrice(tones.get(r.id)!))
+        .map((r) => r.price!.kind),
+    ),
+  ];
+
   // 지점 안에서 갱신 시각이 섞일 수 있으므로 가장 오래된 것을 대표로 보여준다.
   // 이 값 하나로는 "어느 행이 낡았는지"를 말할 수 없어서 — 실제로 오늘 갱신된 16행과
   // 13일 된 3행이 이 헤더 아래 나란히 있었다 — 낡은 행 수를 함께 낸다. 행 단위 판정은
@@ -90,6 +110,12 @@ export function BranchResultSection({
               <span className="font-mono tabular-nums text-slate-600">
                 확인 필요 {unverifiedCount}
               </span>
+            </>
+          )}
+          {priceKinds.length > 0 && (
+            <>
+              <span aria-hidden>·</span>
+              <span>{priceKinds.map((k) => PRICE_KIND_LABEL[k]).join(" · ")}</span>
             </>
           )}
           <span aria-hidden>·</span>

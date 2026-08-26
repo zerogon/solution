@@ -15,6 +15,11 @@ export async function performSearch(
   const { log } = ctx;
   const checkinDt = formatDateCompact(params.checkin);
   const checkoutDt = formatDateCompact(params.checkout);
+  // 요금이 총액이 되려면 박수가 필요하다. 롯데는 행에 `stay`를 붙이지 않으므로
+  // (요청한 윈도우 = 그 행의 숙박) 이 값이 그대로 그 행의 밤 수다.
+  const nights = Math.round(
+    (params.checkout.getTime() - params.checkin.getTime()) / 86_400_000,
+  );
 
   const branches = params.branch
     ? LOTTE.branches.filter((b) => b.value === params.branch)
@@ -23,7 +28,7 @@ export async function performSearch(
   const out: InventoryRow[] = [];
   for (const branch of branches) {
     try {
-      const rows = await searchOneBranch(ctx, branch, checkinDt, checkoutDt);
+      const rows = await searchOneBranch(ctx, branch, checkinDt, checkoutDt, nights);
       log("[lotte] branch done", { branch: branch.label, rows: rows.length });
       out.push(...rows);
     } catch (e) {
@@ -43,6 +48,7 @@ async function searchOneBranch(
   branch: LotteBranch,
   checkinDt: string,
   checkoutDt: string,
+  nights: number,
 ): Promise<InventoryRow[]> {
   const { page, log } = ctx;
 
@@ -74,5 +80,5 @@ async function searchOneBranch(
       rsltMsg: payload.rsltMsg,
     });
   }
-  return parseRoomList(payload, branch, { checkinDt, checkoutDt });
+  return parseRoomList(payload, branch, { checkinDt, checkoutDt, nights });
 }

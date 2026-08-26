@@ -19,16 +19,37 @@
  * 요금(`O12`)과 회원카드 대여 요금(`O20`)을 동시에 주고, 어느 쪽을 받을지는
  * 우리가 보내는 `rentYn`이 정한다. 슬러그 → 종류 맵은 리조트가 하나일 때도 이미 틀린다.
  */
-export type PriceKind = "member" | "public";
+export type PriceKind = "member" | "public" | "memberTable";
 
-/** 화면에 쓰는 이름. 지금은 `title`에만 쓴다 — 리조트가 하나뿐인 동안 배지는 소음이다. */
+/**
+ * 어휘가 답하는 것은 두 가지이고, 둘 다 필요하다.
+ *
+ * **어느 요금 트랙인가** — 회원가냐 공시가냐. 위의 이유 그대로다.
+ *
+ * **어떻게 알았는가** — 사이트가 그 숙박에 대해 견적한 값이냐, 사이트가 공표한
+ * 요금표를 우리가 조인해 계산한 값이냐. 두 번째가 `memberTable`이다.
+ * 같은 "회원가"라도 신뢰 등급이 다르다: 견적은 그 방·그 날짜에 대한 사이트의 답이고,
+ * 계산은 **표가 우리가 읽은 그대로일 때만** 맞는다. 표는 개정되고, 개정은 우리에게
+ * 통보되지 않는다. 숫자만 보면 둘은 구별되지 않으므로 어휘가 구별해야 한다.
+ *
+ * 이 목록에 값을 더하는 것은 마이그레이션이 아니다 — `price_kind`는 Prisma enum이
+ * 아니라 text다(`schema.prisma`의 그 필드 주석 참조). 대신 **여기가 유일한 출처**이므로
+ * `isPriceKind`와 `PRICE_KIND_LABEL`을 같이 늘려야 한다. 셋이 어긋나면 증상은 에러가
+ * 아니라 `/api/inventory`가 그 요금을 조용히 null로 떨어뜨리는 것이다.
+ *
+ * **이 라벨은 눈에 보이게 그린다.** 예전에는 `title` 속성에만 있었고 근거는 "리조트가
+ * 하나뿐인 동안 배지는 소음이다"였다. 그 전제가 2026-08-26에 깨졌다 — 롯데 공시가가
+ * 붙으면서 한 화면에 서로 다른 트랙의 숫자가 나란히 서게 됐다. 그리고 `title`은
+ * **모바일에 존재하지 않는다**: 이 도구는 PWA이고 담당자는 폰에서 본다.
+ */
 export const PRICE_KIND_LABEL: Record<PriceKind, string> = {
   member: "회원가",
   public: "공시가",
+  memberTable: "회원가·요금표",
 };
 
 export function isPriceKind(v: unknown): v is PriceKind {
-  return v === "member" || v === "public";
+  return v === "member" || v === "public" || v === "memberTable";
 }
 
 /** `252000` → `"252,000원"`. */
