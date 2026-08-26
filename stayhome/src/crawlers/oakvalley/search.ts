@@ -5,6 +5,12 @@ import { monthScopeKey, monthsCovering } from "./format";
 import { buildRows, collectNights, type CalendarPayload, type NightMap } from "./parse";
 import { SessionLostError } from "../_shared/errors";
 
+/**
+ * 마지막 지점을 끝낸 뒤 행을 조립해 반환하기까지 남겨두는 몫. `ctx.deadlineAt`은
+ * `run.ts`가 검색을 자르는 시각이지 이 함수가 값을 돌려줘야 하는 시각이 아니다.
+ */
+const RETURN_RESERVE_MS = 2_000;
+
 /** One harvested form field. `id` and `name` differ on this page — see below. */
 interface Field {
   name: string;
@@ -54,6 +60,23 @@ export async function performSearch(
   const session = await bootCondo(ctx);
   const months = monthsCovering(params.checkin, OAKVALLEY.calendarMonths);
 
+  // 이 패스에 실제로 남은 시간. 상수(`passBudgetMs`)로 추정하면 두 시계가
+  // 어긋난다 — 내부는 30초까지 달릴 권한이 있다고 믿는데, `run.ts`는 검색 전체를
+  // `withDeadline`으로 감싸고 그 한계는 콜드 로그인 패스에서 20초대까지 내려간다.
+  // 잘리면 `DeadlineExceeded`가 나고, 이 루프가 부분 반환으로 지키려던 **행 전부와
+  // SUCCESS 판정이 함께 버려진다.** 정확한 값은 이미 `ctx.deadlineAt`으로 들어와
+  // 있다(`resom/price.ts`가 쓰는 그 시계다). 상수는 이제 상한으로만 남는다.
+  const budgetMs = Math.min(
+    OAKVALLEY.passBudgetMs,
+    ctx.deadlineAt - startedAt - RETURN_RESERVE_MS,
+  );
+  if (budgetMs <= 0) {
+    log("[oakvalley] no budget left for this window, returning empty", {
+      deadlineInMs: ctx.deadlineAt - startedAt,
+    });
+    return [];
+  }
+
   const out: InventoryRow[] = [];
   const failures: string[] = [];
   let slowestUnitMs = 0;
@@ -66,7 +89,7 @@ export async function performSearch(
     // function in one deadline, so throwing here would discard every row already
     // collected for the other branch.
     const elapsed = Date.now() - startedAt;
-    if (elapsed + slowestUnitMs > OAKVALLEY.passBudgetMs) {
+    if (elapsed + slowestUnitMs > budgetMs) {
       log("[oakvalley] budget exhausted, returning partial", {
         done: out.length,
         stoppedBefore: branch.value,

@@ -19,6 +19,42 @@ interface SessionCheckResponse {
  * site can leave us in, so `resultCode === 0` is the only accepted answer.
  */
 export async function checkLoggedIn(ctx: CrawlerContext): Promise<boolean> {
+  const { log } = ctx;
+  // 두 번까지. 재시도는 **전송이 실패했을 때만**이고, `resultCode`를 실제로 받은
+  // 경우는 첫 답이 최종이다 — 아래 `askSessionCheck`가 그 구분을 반환한다.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const answer = await askSessionCheck(ctx);
+    if (answer !== "unheard") return answer;
+    if (attempt === 0) {
+      log("[hanwha] sessionCheck 응답을 듣지 못함 — 1회 재시도");
+      await new Promise((r) => setTimeout(r, 1_000));
+    }
+  }
+  // 두 번 다 못 들었으면 세션을 신뢰할 수 없다. 여기서 true를 반환하면
+  // 화면1만 통과한 상태로 크롤에 들어가고, 그때 사이트는 에러가 아니라
+  // **익명 달력**을 준다 — 조용히 틀린 재고가 발행된다.
+  return false;
+}
+
+/**
+ * 한 번 물어보고, 사이트가 **답했는지**까지 함께 반환한다.
+ *
+ * 종전에는 셋이 전부 `false`로 접혔다: ① `resultCode !== 0`(사이트가 답했고
+ * 로그인 아님) ② 502/503 ③ 타임아웃·`ERR_INSUFFICIENT_RESOURCES`·브라우저 사망.
+ * ②③은 세션에 대해 **아무 말도 하지 않은 것**인데, 이 크롤러에서 "만료"의 값은
+ * 2화면 콜드 로그인이다.
+ *
+ * 2026-08-26 09:03이 그 값을 치른 자리다 — 70초 전에 저장한 세션이 false를 받아
+ * 풀 로그인으로 갔고, 그 로그인이 `#id` 25초 타임아웃으로 죽었다. 같은 세션을
+ * 다시 만든 09:05:13분은 이후 90초 넘게 세 패스를 버텼으므로, 70초에 죽는
+ * 세션이 아니었다. 그 false는 만료가 아니라 굶주린 브라우저였다.
+ *
+ * 절대 rethrow하지 않는다: `run.ts`가 `validateSession`을 deadline으로 감싸고,
+ * 여기서 새어 나간 예외는 로그인을 시도조차 못 하게 만든다.
+ */
+async function askSessionCheck(
+  ctx: CrawlerContext,
+): Promise<boolean | "unheard"> {
   const { page, log } = ctx;
   try {
     const res = await page.request.post(HANWHA.sessionCheckUrl, {
@@ -27,18 +63,17 @@ export async function checkLoggedIn(ctx: CrawlerContext): Promise<boolean> {
     });
     if (!res.ok()) {
       log("[hanwha] sessionCheck not ok", { status: res.status() });
-      return false;
+      return "unheard";
     }
     const body = (await res.json()) as SessionCheckResponse;
     log("[hanwha] sessionCheck", { resultCode: body.resultCode ?? null });
+    // `-1`은 화면1만 통과한 상태다. 사이트가 답한 값이므로 재시도 대상이 아니다.
     return body.resultCode === 0;
   } catch (e) {
-    // Never rethrow: run.ts wraps validateSession in a deadline, and an escaping
-    // error would abort the crawl before login is even attempted.
     log("[hanwha] session validation failed", {
       error: e instanceof Error ? e.message : String(e),
     });
-    return false;
+    return "unheard";
   }
 }
 
@@ -73,7 +108,35 @@ export async function performLogin(ctx: CrawlerContext): Promise<void> {
   });
 
   const idInput = page.locator(HANWHA.login.idSelector);
-  await idInput.waitFor({ state: "visible", timeout: HANWHA.timeouts.navigation });
+  const formShown = await idInput
+    .waitFor({ state: "visible", timeout: HANWHA.timeouts.navigation })
+    .then(() => true)
+    .catch(() => false);
+
+  if (!formShown) {
+    // 폼이 없다는 것이 곧 실패는 아니다 — **이미 로그인돼 있으면** 사이트가
+    // 로그인 화면을 그리지 않는다. 그러면 `#id`는 영원히 나타나지 않고, 25초를
+    // 기다린 끝에 나오는 것은 자격증명 오류와 구별되지 않는 타임아웃이다.
+    //
+    // 2026-08-25 09:02:47과 08-26 09:03:04의 프로덕션 실패가 정확히 이 모양이다.
+    // 두 경우 다 `checkLoggedIn`이 (사이트의 답이 아니라 전송 실패로) false를
+    // 냈고, `run.ts`는 그것을 만료로 읽어 로그인을 시켰고, 멀쩡한 세션 위에서
+    // 로그인 화면을 기다리다 죽었다. 즉 이 크롤러는 **자기가 이미 통과한 상태를
+    // 실패로 신고**하고 있었다.
+    //
+    // 예약 호스트를 잃어 `run.ts`가 재로그인을 요청하는 경우도 같은 자리로 온다.
+    // 거기서 필요한 것은 `www` 재인증이 아니라 `bootSession`의 재시도이고,
+    // 그건 이 함수가 반환한 **뒤에** 일어난다.
+    if (await checkLoggedIn(ctx)) {
+      log("[hanwha] 로그인 폼이 없다 — 이미 인증된 세션이다 (로그인 생략)");
+      return;
+    }
+    await dumpLoginFailure(ctx, "no-form");
+    throw new Error(
+      `LOGIN_FAILED: 로그인 폼이 뜨지 않았고 세션도 없다 (대기열 또는 차단). url=${page.url()}`,
+    );
+  }
+
   await idInput.fill(credentials.id);
   await page.locator(HANWHA.login.pwSelector).first().fill(credentials.pw);
 

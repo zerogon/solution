@@ -149,10 +149,12 @@ export const HANWHA = {
   closingSoonThreshold: 2,
 
   /**
-   * The crawler's own soft budget, deliberately under run.ts's 50s pass budget:
-   * browser launch and login come out of the same clock, and a search that
-   * overruns is killed by `withDeadline` with its rows discarded. Breaking out
-   * early returns what we have instead.
+   * 이 크롤러가 한 윈도우에 쓰는 시간의 **상한**.
+   *
+   * 실제 예산은 `search.ts`가 `ctx.deadlineAt`에서 유도한다 — 이 상수 하나로
+   * 추정하던 시절에는 `run.ts`의 `withDeadline`이 더 일찍 잘라서, 부분 반환으로
+   * 지키려던 행 전부가 `DeadlineExceeded`와 함께 버려질 수 있었다(콜드 로그인
+   * 패스의 남은 시간은 20초대까지 내려간다). 이제 둘 중 **작은 쪽**을 쓴다.
    */
   passBudgetMs: 30_000,
 
@@ -161,6 +163,15 @@ export const HANWHA = {
     login: 30_000,
     /** One 45-day call at the largest property measured ~4.7s. */
     api: 25_000,
+    /**
+     * `validateSession`이 예약 호스트를 부팅해 볼 때만 쓰는 짧은 한계.
+     *
+     * `navigation`(25초)을 그대로 쓰면, 예약 호스트가 넷퍼넬 대기열에 걸렸을 때
+     * 증상이 에러가 아니라 **응답 없음**이라 검증 하나가 패스 예산의 절반을
+     * 먹는다. 검증이 실패하면 어차피 로그인으로 가고, 로그인도 이 호스트를
+     * 다시 세운다 — 여기서 오래 기다려서 얻는 것이 없다.
+     */
+    validateBoot: 10_000,
   },
 
   /**

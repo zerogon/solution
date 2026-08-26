@@ -67,6 +67,34 @@ export const scheduledRefresh = inngest.createFunction(
     });
     if (purged > 0) logger.info(`purged ${purged} inventory rows for past dates`);
 
-    return { dispatched: slugs.length, slugs, purged };
+    // 응답 없이 죽은 인보케이션이 남긴 로그를 닫는다.
+    //
+    // `runResortCrawl`은 `crawl_logs` 행을 RUNNING으로 열고 마지막에 닫는데,
+    // Vercel이 `maxDuration`(60초)에 인보케이션을 죽이면 **`finally`조차 돌지
+    // 않는다** — 그 행은 영원히 RUNNING으로 남아, 실패했다는 사실도 실패했다는
+    // 사실조차 남기지 못한다. 예방은 `run.ts`의 예산 산술이고, 이건 그것이
+    // 원리적으로 못 막는 나머지를 치우는 자리다.
+    //
+    // 여기에 두는 이유 둘: 크롤 경로에 Neon 왕복을 한 번도 더하지 않는다(패스
+    // 하나당 ~200ms × 하루 12회), 그리고 정리가 실패해도 그날 수집이 안 도는
+    // 일이 없도록 팬아웃 **뒤**라는 기존 판단을 그대로 따른다.
+    //
+    // 컷오프가 1시간인 이유: 이 스텝이 도는 순간 방금 팬아웃한 크롤들이 **실제로
+    // RUNNING**이다. 5분 같은 값은 살아 있는 런을 실패로 표시한다. 한 패스는
+    // 60초를 넘을 수 없으므로 1시간은 "확실히 죽었다" 쪽에 한참 여유가 있다.
+    const reaped = await step.run("reap-orphaned-logs", async () => {
+      return prisma.$executeRaw`
+        UPDATE crawl_logs
+           SET status = 'FAILED',
+               finished_at = now(),
+               error_message = coalesce(error_message, '')
+                 || '[killed] 인보케이션이 로그를 닫지 못했다 (maxDuration 초과 추정)'
+         WHERE status = 'RUNNING'
+           AND started_at < now() - interval '1 hour'
+      `;
+    });
+    if (reaped > 0) logger.warn(`reaped ${reaped} crawl_logs rows stuck at RUNNING`);
+
+    return { dispatched: slugs.length, slugs, purged, reaped };
   },
 );

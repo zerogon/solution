@@ -419,11 +419,23 @@ export async function newContextFromState(
  * this does not promise one: it stops *waiting*, says so, and lets the run
  * finish writing its log. The leftover is then somebody's problem — which is
  * what `sweepStaleProfiles` is for on the next launch.
+ *
+ * 다만 그 "somebody"는 다음 launch가 아닐 수 있다. 포기된 크로미움은 살아서
+ * 자기 `--user-data-dir`를 `/proc`에 계속 이름 대고, `sweepStaleProfiles`는
+ * 사용 중인 프로필을 **올바르게** 건너뛴다 — 즉 포기 한 번이 `/tmp` 한 조각을
+ * 그 인스턴스가 죽을 때까지 고정한다. 그래서 이 대기는 짧아야 한다.
  */
+/**
+ * 닫히기를 기다리는 한계. 정상 종료는 1초 미만이고, 이 값이 곧 `run.ts`의
+ * `TEARDOWN_RESERVE_MS`를 지배한다 — 예산(50초) 위에 얹히는 시간이라
+ * 10초였을 때 소노 패스가 59.3초로 60초 벽에 1초를 남겼다(2026-08-26).
+ */
+export const CLOSE_TIMEOUT_MS = 5_000;
+
 export async function closeBrowser(
   browser: Browser,
   log: (msg: string, meta?: Record<string, unknown>) => void = () => {},
-  timeoutMs = 10_000,
+  timeoutMs = CLOSE_TIMEOUT_MS,
 ): Promise<void> {
   const closed = await Promise.race([
     browser.close().then(() => true),

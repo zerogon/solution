@@ -29,12 +29,20 @@ async function main() {
       checkin: parseDate(w.checkin),
       checkout: parseDate(w.checkout),
     }));
+    // 기본 300초는 "한 번에 다 돌아본다"는 조사용 값이다. 프로덕션의 예산 산술
+    // (검색/쓰기 분리 예약, teardown 여유)은 그 아래에서는 한 번도 실행되지
+    // 않으므로, 그걸 보려면 실제 값으로 돌려야 한다:
+    //
+    //   CRAWL_BUDGET_MS=50000 npx tsx scripts/run-crawl.ts SONO hot
+    //
+    // 그때 확인할 것은 행 수가 아니라 **패스별 `durationMs`가 58초를 넘지 않는가**다.
+    const budgetMs = Number(process.env.CRAWL_BUDGET_MS) || 300_000;
     const result = await runResortCrawl(slug as ResortSlug, {
       triggeredBy: "MANUAL",
       windows,
-      budgetMs: 300_000,
+      budgetMs,
     });
-    console.log(`windows requested: ${windows.length}`);
+    console.log(`windows requested: ${windows.length} (budgetMs=${budgetMs})`);
     console.log("RESULT:", JSON.stringify(result, null, 2));
     return;
   }

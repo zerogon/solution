@@ -142,10 +142,12 @@ export const OAKVALLEY = {
   calendarMonths: 2,
 
   /**
-   * Soft budget for one `searchAvailability` call, below `run.ts`'s 50s pass
-   * budget because browser launch and login come out of the same clock. This
-   * crawler navigates during search, so it must return partial rows on the way
-   * out rather than let `withDeadline` discard the whole window.
+   * 이 크롤러가 한 윈도우에 쓰는 시간의 **상한**.
+   *
+   * 실제 예산은 `search.ts`가 `ctx.deadlineAt`에서 유도한다 — 이 상수 하나로
+   * 추정하던 시절에는 `run.ts`의 `withDeadline`이 더 일찍 잘라서, 부분 반환으로
+   * 지키려던 행 전부가 `DeadlineExceeded`와 함께 버려질 수 있었다(콜드 로그인
+   * 패스의 남은 시간은 20초대까지 내려간다). 이제 둘 중 **작은 쪽**을 쓴다.
    */
   passBudgetMs: 30_000,
 

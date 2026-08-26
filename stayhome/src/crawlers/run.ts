@@ -27,14 +27,51 @@ const STEP_BUDGET_MS = 55_000; // leave 5s headroom under Vercel's 60s cap
 const DEFAULT_BUDGET_MS = 50_000;
 
 /**
- * How long to assume the *next* window will take before any window has been
- * measured, and thus how much budget must remain to start one. A measured
- * window (4 branch API calls + one batched upsert) runs ~2.5s against the live
- * site; this leaves room for a bad one without idling away a third of the pass.
- * The search itself is separately capped at the remaining budget, so an
- * underestimate cannot actually overrun the invocation — it only wastes a step.
+ * How long to assume the *next* search will take before any has been measured,
+ * and thus how much budget must remain to start one. A measured window (4 branch
+ * API calls) runs ~2.5s against the live site; this leaves room for a bad one
+ * without idling away a third of the pass.
  */
-const INITIAL_WINDOW_ESTIMATE_MS = 8_000;
+const INITIAL_SEARCH_ESTIMATE_MS = 5_000;
+
+/**
+ * How long to assume the *write* half of a window takes before one has been
+ * measured. Separate from the search estimate, and that separation is the
+ * point — see the reserve arithmetic in the window loop.
+ *
+ * A SONO call is ~3,900 rows, which is 4 `UPSERT_CHUNK_ROWS` statements plus a
+ * `removeVanishedRows` pass, and the function runs in `icn1` while Neon is in
+ * `us-east-1`, so every one of those round trips costs ~200ms before the
+ * database does any work at all.
+ */
+const INITIAL_UPSERT_ESTIMATE_MS = 4_000;
+
+/**
+ * Wall clock the pass must leave unspent after its last window, because work
+ * remains that no deadline covers: `closeBrowser` waits up to
+ * `CLOSE_TIMEOUT_MS` for a browser that may never close, `reclaimTmp` sweeps,
+ * and then `crawlLog.update` makes one more icn1→us-east-1 round trip before
+ * the Inngest step can answer.
+ *
+ * `DEFAULT_BUDGET_MS + this` must stay under the route's `maxDuration` (60s).
+ * 2026-08-26에 소노 패스가 **59.3초**였다 — 마지막 윈도우가 예산을 정확히 다
+ * 쓰고 teardown이 그 위에 얹혔다. 60초를 넘으면 Vercel이 인보케이션을 죽이고,
+ * 그때는 `finally`도 돌지 않아 `crawl_logs` 행이 `RUNNING`으로 남는다.
+ */
+const TEARDOWN_RESERVE_MS = 8_000;
+
+/** Every route that runs a crawl declares this. Vercel kills the invocation at it. */
+const MAX_DURATION_MS = 60_000;
+
+// A silent overrun here is the worst failure this file can produce: the kill
+// happens mid-`upsertInventory`, `finally` does not run, and the CrawlLog row
+// stays RUNNING forever with no error to read. Fail at import instead — the
+// same shape as `crypto.ts` validating its key length.
+if (DEFAULT_BUDGET_MS + TEARDOWN_RESERVE_MS > MAX_DURATION_MS) {
+  throw new Error(
+    `crawl budget over maxDuration: ${DEFAULT_BUDGET_MS} + ${TEARDOWN_RESERVE_MS} > ${MAX_DURATION_MS}`,
+  );
+}
 
 /**
  * Rows per INSERT. Postgres caps a statement at 65535 bind parameters and each
@@ -197,9 +234,15 @@ export async function runResortCrawl(
         memo: account.memo ?? undefined,
       },
       log: logger,
-      // 이 패스의 마감 시각. 선택적인 추가 작업(요금 조회 등)을 할지 말지 크롤러가
+      // 이 검색이 잘리는 시각. 선택적인 추가 작업(요금 조회 등)을 할지 말지 크롤러가
       // 판단하려면 "몇 초 남았나"를 알아야 하는데, 로그인에 이미 얼마를 썼는지는
-      // 크롤러가 관측할 수 없다. 아래 `withDeadline("search", …)`가 같은 시계를 본다.
+      // 크롤러가 관측할 수 없다.
+      //
+      // **패스의 끝이 아니라 검색의 끝이다.** 아래 루프가 윈도우마다 이 값을 그
+      // 윈도우의 `withDeadline("search", …)`와 **같은 시각**으로 다시 쓴다. 둘이
+      // 갈리면 크롤러는 자기가 가진 줄 아는 시간을 다 쓰고, 그 초과분은 부분 반환이
+      // 아니라 `DeadlineExceeded` — 즉 이미 모은 행 전부의 소실로 나타난다.
+      // 여기 값은 첫 대입 전까지의 자리표시자다.
       deadlineAt: deadline,
     };
 
@@ -226,7 +269,15 @@ export async function runResortCrawl(
     // Stages 3+4, once per window, all on the one authenticated session.
     // A window is only counted as completed after its rows are upserted, so a
     // budget cut or a throw resumes exactly where this left off.
-    let windowEstimateMs = INITIAL_WINDOW_ESTIMATE_MS;
+    // Search and write are estimated separately, and that separation is load
+    // bearing. Together they answer "may we start another window?"; apart they
+    // also answer "how much of what is left may the *search* have?" — which is
+    // the question the single combined estimate could not ask, and the reason
+    // a SONO pass reached 59.3s against a 60s wall on 2026-08-26: the search
+    // was allowed to spend the entire remaining budget, and then ~12,000 rows
+    // of writes went on top of it with nothing bounding them.
+    let searchEstimateMs = INITIAL_SEARCH_ESTIMATE_MS;
+    let upsertEstimateMs = INITIAL_UPSERT_ESTIMATE_MS;
     // Stays already filed by an earlier window in THIS pass. A crawler that
     // reports `row.stay` answers for dates it wasn't asked about (SONO returns
     // ~23 days per call), and searching those windows again would re-fetch
@@ -234,6 +285,9 @@ export async function runResortCrawl(
     // this, so nothing is skipped for them.
     const covered = new Set<string>();
     let windowsSkipped = 0;
+    // A lost session costs one login, not one browser — but only if we spend it
+    // here. See `recoverSession` below.
+    let sessionRecoveries = 0;
     for (const window of windows) {
       // Checked ahead of the budget: a covered window costs nothing, and
       // stopping short of one would make the scheduler re-crawl it next pass
@@ -245,22 +299,87 @@ export async function runResortCrawl(
       }
 
       const remaining = deadline - Date.now();
-      if (remaining < windowEstimateMs) {
+      if (remaining < searchEstimateMs + upsertEstimateMs) {
         logger("budget exhausted, deferring remaining windows", {
           done: windowsCompleted,
           left: windows.length - windowsCompleted,
           remainingMs: remaining,
+          searchEstimateMs,
+          upsertEstimateMs,
         });
         break;
       }
       const windowStart = Date.now();
 
       stage = CrawlStage.SEARCH;
-      const rows: InventoryRow[] = await withDeadline(
-        "search",
-        Math.min(STEP_BUDGET_MS, remaining),
-        () => crawler.searchAvailability(ctx, window),
-      );
+      // The write half is reserved out of the search's allowance rather than
+      // hoped for afterwards. The gate above guarantees this stays positive:
+      // `withDeadline` with a non-positive budget rejects immediately, and that
+      // rejection would discard every row this pass has already collected.
+      const searchAllowance = Math.min(STEP_BUDGET_MS, remaining - upsertEstimateMs);
+      // 크롤러가 보는 시계 = 우리가 자르는 시계. `CrawlerContext.deadlineAt`의
+      // 계약이 그것이고, 예약을 도입한 뒤로는 명시적으로 맞춰줘야 한다.
+      ctx.deadlineAt = Date.now() + searchAllowance;
+      let rows: InventoryRow[];
+      try {
+        rows = await withDeadline("search", searchAllowance, () =>
+          crawler.searchAvailability(ctx, window),
+        );
+      } catch (e) {
+        // A dead session needs a login. It does not need a new browser — and
+        // yet that is what letting this throw would buy, because the pass dies,
+        // Inngest retries it, and the retry launches chromium again on a `/tmp`
+        // that is drier than the one this pass started on. 2026-08-26 09:07은
+        // 정확히 그 청구서였다: SESSION_LOST 하나가 브라우저 두 벌을 더 태우고
+        // 둘 다 기동 2.8초 만에 죽어 함수가 최종 FAILED로 끝났다.
+        //
+        // The context and the page are still alive right here, so recovery is
+        // a login and nothing more.
+        if (!(e instanceof SessionLostError)) throw e;
+        // Once per pass. A second loss is not a transient — hammering it is the
+        // same mistake as retrying a launch that failed for want of resources.
+        if (sessionRecoveries >= 1) {
+          logger("session lost again after recovery, giving up on this pass");
+          throw e;
+        }
+        const leftForRecovery = deadline - Date.now();
+        // Recovery must never cost the rows already committed. Out of budget
+        // means stop cleanly: the pass ends SUCCESS with what it has and the
+        // untouched windows carry to the next one, which starts by logging in
+        // anyway (the session is cleared below either way).
+        if (leftForRecovery < STEP_BUDGET_MS / 2) {
+          logger("session lost with no budget to recover, deferring", {
+            done: windowsCompleted,
+            leftForRecoveryMs: leftForRecovery,
+          });
+          await clearStorageState(resort.id).catch(() => undefined);
+          break;
+        }
+        sessionRecoveries++;
+        logger("session lost mid-pass, logging in again", { window: toIsoDate(window.checkin) });
+        await clearStorageState(resort.id).catch(() => undefined);
+        stage = CrawlStage.LOGIN;
+        await withDeadline("login", Math.min(STEP_BUDGET_MS, leftForRecovery), () =>
+          crawler.login(ctx),
+        );
+        await saveStorageState(
+          resort.id,
+          context,
+          DEFAULT_SESSION_TTL_HOURS * 3600 * 1000,
+        );
+        stage = CrawlStage.SEARCH;
+        // One retry of the same window. Anything that fails now is not the
+        // session's doing and propagates as it always did.
+        const retryAllowance = Math.max(
+          1_000,
+          Math.min(STEP_BUDGET_MS, deadline - Date.now() - upsertEstimateMs),
+        );
+        ctx.deadlineAt = Date.now() + retryAllowance;
+        rows = await withDeadline("search", retryAllowance, () =>
+          crawler.searchAvailability(ctx, window),
+        );
+      }
+      const searchEndedAt = Date.now();
 
       stage = CrawlStage.UPSERT;
       rowsUpserted += await upsertInventory(resort.id, resort.name, rows, window);
@@ -273,9 +392,10 @@ export async function runResortCrawl(
         if (row.stay) covered.add(stayKey(row.stay.checkin, row.stay.checkout));
       }
 
-      // Track the slowest window seen rather than the mean: the budget check
+      // Track the slowest seen rather than the mean, on both halves: the gate
       // must survive the next window being as bad as the worst so far.
-      windowEstimateMs = Math.max(windowEstimateMs, Date.now() - windowStart);
+      searchEstimateMs = Math.max(searchEstimateMs, searchEndedAt - windowStart);
+      upsertEstimateMs = Math.max(upsertEstimateMs, Date.now() - searchEndedAt);
     }
     status = CrawlStatus.SUCCESS;
     logger("crawl complete", {
