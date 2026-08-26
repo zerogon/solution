@@ -815,6 +815,134 @@ async function main() {
         console.log(`  ${k}: ${spread}/${multi.length} groups disagree, widest gap ${widest}`);
       }
     }
+  } else if (step === "axes") {
+    // 계보의 네 번째 질문 — **"응답에 있는 값이 행에 붙일 수 있는 키는 아니다."**
+    // (`cal` "성공한 응답이 옳은 응답은 아니다" → `keys` "우리가 읽는 필드가 응답의
+    //  전부는 아니다" → 소노 `flow` "우리가 읽는 응답이 그 화면의 전부는 아니다".)
+    //
+    // 계기는 오크밸리다. 거기서는 공표된 요금표와 시즌 달력이 공개 API로 통째 나왔고,
+    // 재고 행에 조인해 요금이 붙었다. 한화는 그보다 유리해 **보인다** — 사이트가
+    // 달력 응답에 `SESN_CD`/`SESN_NM`을 직접 실어 주므로 시즌 달력이 아예 필요 없다.
+    //
+    // 그런데 저장소에 기록된 `SESN_NM`은 **예시 한 개**("가을 비수기 준주말")뿐이고
+    // `SESN_CD`는 하나도 없다. 08-24 `keys`가 알파벳을 찍었는데 아무도 적지 않았다.
+    // 그래서 이 스텝의 완료 조건은 "돌았다"가 아니라 **"값이 AGENTS.md에 적혔다"**이다.
+    const { HANWHA } = await import("../src/crawlers/hanwha/config");
+    const gw = recordGateway(page);
+    // 예약 호스트는 세션을 자동으로 물려받지 않는다 — 자기 페이지를 한 번 열어야
+    // `sCustNo`가 선다(`search.ts`의 `bootSession`과 같은 이유).
+    await page.goto(SITE.entrance, { waitUntil: "domcontentloaded", timeout: 40_000 });
+    await bookingIdentity(page, "axes");
+    const custNoAx = await readCustNo(page);
+    if (!custNoAx) {
+      console.log("예약 호스트가 회원을 인식하지 못함 — doLogin 먼저");
+      await browser.close();
+      return;
+    }
+
+    const fromAx = ymd(todayKst());
+    const toAx = ymd(plusDays(todayKst(), 45));
+    const probe = HANWHA.branches.slice(0, 3);
+
+    // ── Q1. 시즌 축의 알파벳 ────────────────────────────────────────────────
+    console.log("=== Q1. SESN_* / PP_DSCNT_RT 의 실제 알파벳 (45일 × 3지점) ===");
+    const all: Record<string, unknown>[] = [];
+    for (const b of probe) {
+      const { rows } = await calendar(page, custNoAx, b, fromAx, toAx);
+      all.push(...rows.map((x) => ({ ...x, __branch: b.value })));
+      console.log(`  ${b.value}: ${rows.length}행`);
+    }
+    for (const k of ["SESN_CD", "SESN_NM", "PP_DSCNT_RT", "USER_CALC_GRAD_CD", "RSRV_LOC_DIV_CD"]) {
+      const vals = [...new Set(all.map((r) => String(r[k] ?? "")))];
+      console.log(`  ${k.padEnd(18)} ${vals.length}종 ${JSON.stringify(vals.slice(0, 20))}`);
+    }
+    // SESN_CD ↔ SESN_NM 이 1:1인가. 아니면 코드가 이름보다 거칠거나 그 반대다.
+    const cdToNm = new Map<string, Set<string>>();
+    for (const r of all) {
+      const cd = String(r.SESN_CD ?? "");
+      (cdToNm.get(cd) ?? cdToNm.set(cd, new Set()).get(cd)!).add(String(r.SESN_NM ?? ""));
+    }
+    console.log("\n  SESN_CD → SESN_NM:");
+    for (const [cd, nms] of [...cdToNm].sort()) console.log(`    ${cd}: ${JSON.stringify([...nms])}`);
+
+    // ── Q2. 시즌이 날짜별인가, (날짜, 객실유형)별인가 ────────────────────────
+    //
+    // 기존 `keys`의 Q6 대조는 `numericKeys`만 본다(`asNumber`가 null이면 제외). 즉
+    // 문자열인 `SESN_NM`을 **구조적으로 검사할 수 없다.** 여기서 그 구멍을 메운다.
+    console.log("\n=== Q2. 시즌이 (날짜) 단위인가 (날짜, 객실유형) 단위인가 ===");
+    for (const key of ["SESN_CD", "SESN_NM"]) {
+      const byDate = new Map<string, Set<string>>();
+      for (const r of all) {
+        const d = `${r.__branch}|${r.SESN_DATE}`;
+        (byDate.get(d) ?? byDate.set(d, new Set()).get(d)!).add(String(r[key] ?? ""));
+      }
+      const split = [...byDate].filter(([, v]) => v.size > 1);
+      console.log(
+        `  ${key}: ${split.length === 0 ? "날짜 하나에 값 하나 — **날짜 단위**" : `${split.length}개 날짜에서 객실유형마다 다름 — **(날짜,객실유형) 단위**`}`,
+      );
+      for (const [d, v] of split.slice(0, 5)) console.log(`    ${d}: ${JSON.stringify([...v])}`);
+    }
+    // 그리고 요일과의 관계. "준주말" 같은 이름이 요일에서 유도되는지 본다.
+    console.log("\n  SESN_NM ↔ 요일:");
+    const dows = ["일", "월", "화", "수", "목", "금", "토"];
+    const nmByDow = new Map<string, Set<string>>();
+    for (const r of all) {
+      const d = String(r.SESN_DATE ?? "");
+      if (d.length !== 8) continue;
+      const dow = dows[new Date(`${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6)}T00:00:00Z`).getUTCDay()];
+      (nmByDow.get(dow) ?? nmByDow.set(dow, new Set()).get(dow)!).add(String(r.SESN_NM ?? ""));
+    }
+    for (const dow of dows) {
+      const v = nmByDow.get(dow);
+      if (v) console.log(`    ${dow}: ${JSON.stringify([...v])}`);
+    }
+
+    // ── Q3. 공개 요금표의 열 이름과 대응하는가 ──────────────────────────────
+    // ⚠️ `bp_cd`는 `BRCH_CD`/`LOC_CD`와 **다른 코드 체계**다. 실측: `bp_cd=0100`은
+    // 890바이트 빈 페이지, `bp_cd=1101`은 요금표가 든 90KB 페이지다. 즉 요금표를
+    // 지점에 잇는 것부터가 별도의 매핑 작업이고, 그 매핑이 없으면 이 표는 우리 행에
+    // 붙지 않는다. 여기서는 형태만 보므로 알려진 값 하나로 훑는다.
+    console.log("\n=== Q3. 공개 객실 페이지의 요금표 (bp_cd 코드 체계) ===");
+    const bpCds = (process.env.HANWHA_BP_CD ?? "1101").split(",");
+    for (const bp of bpCds) {
+      const b = { value: `bp_cd=${bp}`, brchCd: bp };
+      const url = `${HANWHA.baseUrl}/irsweb/resort3/resort/rs_room.do?bp_cd=${bp}`;
+      try {
+        // `page.request`로는 빈손이다(관측: `<table>` 0개) — 이 페이지는 표를
+        // 클라이언트에서 그린다. 그래서 실제로 렌더된 DOM을 본다.
+        await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+        await page.waitForTimeout(3_000);
+        const html = await page.content();
+        const tables = [...html.matchAll(/<table[\s\S]*?<\/table>/gi)].map((m) => m[0]);
+        console.log(`  ${b.value} (bp_cd=${b.brchCd}) tables=${tables.length}`);
+        for (const [ti, tab] of tables.entries()) {
+          const rows = [...tab.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)].map((r) =>
+            [...r[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((c) =>
+              c[1].replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim(),
+            ),
+          );
+          const money = rows.filter((r) => r.some((c) => /^[\d,]{4,}$/.test(c)));
+          if (!money.length) continue;
+          console.log(`    table#${ti} rows=${rows.length} (금액 있는 줄 ${money.length})`);
+          for (const r of rows.slice(0, 6)) console.log(`      ${JSON.stringify(r)}`);
+        }
+      } catch (e) {
+        console.log(`  ${b.value}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    console.log(
+      "\n  ↑ 이 열 이름들이 위 SESN_NM 알파벳과 대응하는가를 **눈으로** 판정할 것.\n" +
+        "    대응하지 않으면 요금표는 우리 행에 붙지 않고, 한화는 여기서 멈춘다.",
+    );
+
+    // ── Q4/Q5. 게이트웨이가 이 조사 중에 부른 서비스 ────────────────────────
+    console.log("\n=== Q5. 이 스텝이 지나며 본 게이트웨이 호출 ===");
+    for (const c of gw) console.log(`  ${c.intf}  search=${JSON.stringify(c.search)?.slice(0, 200)}`);
+    console.log(
+      "\n  주의: 기존 `keys`가 센 것은 **잔여객실조회 화면이 쏜** INTF_ID뿐이다.\n" +
+        "  요금 전용 화면은 다른 화면이고 아무도 걸어보지 않았다 — 있다면 다른 URL이\n" +
+        "  아니라 다른 INTF_ID로 나타난다(모든 예약 질문이 doExecute.mvc 하나를 지난다).",
+    );
   } else if (step === "rows") {
     // Exercise hanwha/search.ts + parse.ts standalone.
     const { performSearch } = await import("../src/crawlers/hanwha/search");
