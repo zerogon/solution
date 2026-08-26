@@ -58,6 +58,28 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *   memberships do different 회원권 see different calendars?
  *   rows        run oakvalley/search.ts standalone (only after it exists)
  *   diff        compare the site's village/room-type lists against OAKVALLEY config
+ *   axes        요금표를 행에 붙일 수 있는가 — 조인 키의 실측  ← 아래
+ *
+ * **`axes`가 존재하는 이유** (2026-08-26). 이 파일의 계보는 질문이 한 칸씩 넓어진
+ * 기록이다: `cal`/`probe`가 "성공한 응답이 옳은 응답은 아니다", `keys`가 "우리가 읽는
+ * 필드가 응답의 전부는 아니다". `axes`는 네 번째 질문이다 —
+ * **"응답에 있는 값이 행에 붙일 수 있는 키는 아니다."**
+ *
+ * 계기는 `keys`가 "요금 없음"으로 닫아둔 문을 다른 쪽에서 연 것이다:
+ * `GET api.oakvalley.co.kr/api/v1/village`(무인증)의 각 빌리지에 `roomPriceTable`이
+ * 있고, 회원 요금표(기명/무기명/회원대여가 × 비수기/성수기/스페셜데이 × 주중/금/토)와
+ * **시즌 달력 자체**(날짜 범위 + "토요일 요금 적용 일자" 예외 목록)가 HTML로 들어 있다.
+ * 이 파일 머리말이 그 엔드포인트를 "재고가 없다"고만 적어둔 것은 사실이었고,
+ * **요금은 아무도 묻지 않았다.**
+ *
+ * 그래서 남은 것은 수집이 아니라 조인이고, 조인을 막을 수 있는 것 셋을 여기서 잰다:
+ *   1. 우리 `roomType`은 `OAKVALLEY.roomTypes[RM_RMTYPE]` = `"31평"`인데 요금표에는
+ *      `31평 (일반)`과 `31평 (노블)`이 따로 있고 **주중 기명가가 77,000 대 92,000**이다.
+ *      사이트가 그 둘을 구별하는가, 아니면 한 예약 단위로 접는가.
+ *   2. 기명 / 무기명 / 회원대여가 중 이 계정이 어느 열인가. 셋의 차이가 20~25%다.
+ *   3. 시즌 달력이 힐스 빌리지의 블롭에만 있다 — 밸리에도 적용된다는 근거가 표 안에 있는가.
+ *
+ * 1이나 2가 답해지지 않으면 요금을 붙이지 않는다. 틀린 금액은 빈칸보다 나쁘다.
  *
  * Credentials: `OAKVALLEY_ID`/`OAKVALLEY_PW` env if set, otherwise the primary
  * ResortAccount from the DB — the same one `run.ts` uses, so the survey
@@ -842,6 +864,60 @@ function envelopeKeys(label: string, payload: unknown, path = "", depth = 0) {
   }
 }
 
+/** 공개 요금표 한 줄. `roomPriceTable`의 `<tr>` 하나를 셀 문자열 배열로 편 것. */
+interface RateRow {
+  cells: string[];
+}
+
+/**
+ * `roomPriceTable`(HTML)을 셀 격자로 편다.
+ *
+ * 파서를 쓰지 않고 정규식으로 여는 이유는 이것이 **조사 스텝**이기 때문이다 — 여기서
+ * 알고 싶은 것은 값이 아니라 *형태*이고, 형태를 모르는 채로 스키마를 씌우면 모르는
+ * 것이 조용히 사라진다. 실제 수집기가 생긴다면 그때는 형태를 알고 시작한다.
+ *
+ * `rowspan`/`colspan`은 **펴지 않는다.** 이 표는 객실타입·요금구분이 rowspan으로 묶여
+ * 있어서, 편 격자와 안 편 격자가 다르다는 사실 자체가 이 스텝의 관측 대상이다.
+ */
+function parseRateTable(html: string): RateRow[] {
+  const rows: RateRow[] = [];
+  for (const m of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)) {
+    const cells = [...m[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((c) =>
+      c[1]
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/\s+/g, " ")
+        .trim(),
+    );
+    if (cells.length) rows.push({ cells });
+  }
+  return rows;
+}
+
+/** 공개 빌리지 API. 무인증이라 세션도 서명도 필요 없다. */
+async function fetchVillages(page: Page): Promise<
+  Array<{ title: string | null; villageType: string | null; priceTable: string }>
+> {
+  const res = await page.request.get("https://api.oakvalley.co.kr/api/v1/village", {
+    headers: { Accept: "application/json" },
+    timeout: 20_000,
+  });
+  if (!res.ok()) throw new Error(`village API HTTP ${res.status()}`);
+  const body = (await res.json()) as {
+    data?: Array<{
+      introduceTitle?: string | null;
+      oakValleyVillageType?: string | null;
+      roomPriceTable?: string | null;
+    }>;
+  };
+  return (body.data ?? []).map((v) => ({
+    title: v.introduceTitle ?? null,
+    villageType: v.oakValleyVillageType ?? null,
+    priceTable: v.roomPriceTable ?? "",
+  }));
+}
+
 async function main() {
   const step = process.argv[2] ?? "main";
   const urlArg = process.argv[3];
@@ -1443,6 +1519,135 @@ async function main() {
     console.log(
       `available=${rows.filter((r) => r.available).length} closingSoon=${rows.filter((r) => r.closingSoon).length} (closingSoon is deliberately always 0)`,
     );
+  } else if (step === "axes") {
+    // 조인 키의 실측. 순서가 곧 판정 순서다 — 앞이 부정이면 뒤는 볼 필요가 없다.
+
+    // ── Q1. 공개 요금표: 형태부터 본다 (로그인 불필요) ─────────────────────
+    console.log("=== Q1. 공개 요금표 (api/v1/village · 무인증) ===");
+    const villages = await fetchVillages(page);
+    const rateTypes = new Map<string, string[]>(); // village → 객실타입 문자열
+    for (const v of villages) {
+      const rows = parseRateTable(v.priceTable);
+      console.log(
+        `\n[${v.title ?? "(제목 없음)"} · ${v.villageType}] html=${v.priceTable.length}B rows=${rows.length}` +
+          ` 시즌달력=${v.priceTable.includes("객실 상세 일정")} 토요일예외=${v.priceTable.includes("토요일 요금 적용")}`,
+      );
+      if (!rows.length) {
+        console.log("  (요금표 없음)");
+        continue;
+      }
+      // 헤더 두 줄과 그 아래 본문. 어디까지가 헤더인지도 관측 대상이라 앞 3줄을 그대로 낸다.
+      for (const r of rows.slice(0, 3)) console.log(`  header? ${JSON.stringify(r.cells)}`);
+      // 객실타입 후보 = 요금구분(기명/무기명/회원대여가/정상가)도 금액도 아닌 셀.
+      const FARE = /^(기명|무기명|회원대여가?|정상가)$/;
+      const MONEY = /^[\d,]+$/;
+      const types = [
+        ...new Set(
+          rows
+            .flatMap((r) => r.cells)
+            .filter((c) => c && !FARE.test(c) && !MONEY.test(c) && c.length <= 24)
+            .filter((c) => /평|룸|빌라|타워/.test(c)),
+        ),
+      ];
+      rateTypes.set(v.title ?? "?", types);
+      console.log(`  객실타입 후보(${types.length}): ${JSON.stringify(types)}`);
+    }
+
+    // ── Q2. 우리 행의 객실유형 축: 사이트가 일반/노블을 구별하는가 ──────────
+    console.log("\n=== Q2. 달력 엔티티의 객실유형 축 (일반/노블을 가르는 필드가 있는가) ===");
+    const { OAKVALLEY } = await import("../src/crawlers/oakvalley/config");
+    const pnsAxes = recordJson(page);
+    await gotoCondo(page);
+    await sessionCheck(page, "pre-axes");
+    const axForm = await harvestCalForm(page);
+    const { year: axYear, month: axMonth } = thisMonth();
+
+    const ROOM_KEYS = [
+      "RM_RMTYPE",
+      "RM_REF1",
+      "RMTYPE_DESC",
+      "ROOM_TYPE_CODE",
+      "ROOM_TYPE_NAME",
+      "SEC_DIV",
+      "RM_COMPLEX",
+    ] as const;
+
+    for (const b of OAKVALLEY.branches) {
+      const r = await calViaPost(page, axForm, {
+        complexCd: b.complexCd,
+        year: axYear,
+        month: axMonth,
+        baksu: 1,
+        membership: axForm.memberships[0],
+      });
+      let ents: Array<Record<string, unknown>> = [];
+      try {
+        ents = (JSON.parse(r.text) as { entitys?: Array<Record<string, unknown>> }).entitys ?? [];
+      } catch {
+        console.log(`  ${b.value}: 응답이 JSON이 아니다 — ${r.text.slice(0, 200)}`);
+        continue;
+      }
+      console.log(`\n[${b.value} · complexCd=${b.complexCd}] entitys=${ents.length}`);
+      for (const k of ROOM_KEYS) {
+        const vals = [...new Set(ents.map((e) => String(e[k] ?? "")).filter(Boolean))];
+        console.log(`  ${k.padEnd(15)} ${vals.length}종 ${JSON.stringify(vals.slice(0, 12))}`);
+      }
+      // 결정적 질문: RM_RMTYPE 하나가 여러 이름/설명을 갖는가.
+      // 갖는다면 사이트는 두 방을 **한 예약 단위로 접고 있고**, 요금은 하나가 아니라
+      // 범위다. 안 갖는다면 그 필드가 곧 요금표 행을 고르는 키다.
+      const byCode = new Map<string, Set<string>>();
+      for (const e of ents) {
+        const code = String(e.RM_RMTYPE ?? "");
+        const label = `${e.RMTYPE_DESC ?? ""}|${e.ROOM_TYPE_NAME ?? ""}|${e.SEC_DIV ?? ""}`;
+        if (!code) continue;
+        (byCode.get(code) ?? byCode.set(code, new Set()).get(code)!).add(label);
+      }
+      const split = [...byCode].filter(([, set]) => set.size > 1);
+      console.log(
+        `  RM_RMTYPE → (DESC|NAME|SEC_DIV) 1:1 인가: ${split.length === 0 ? "예" : `아니오 — ${split.length}개 코드가 갈린다`}`,
+      );
+      for (const [code, set] of split) console.log(`    ${code}: ${JSON.stringify([...set])}`);
+
+      // 그리고 우리 라벨이 요금표의 어느 줄에 붙는가.
+      //
+      // 접두사 매칭만으로는 부족하다. 밸리의 `NA`/`SE`는 우리 라벨이 "48평"·"52평"인데
+      // 요금표는 "빌라 N 48평형"·"빌라 S 52평형"이라 접두사가 어긋나고, 그 대응을
+      // 이어주는 것은 **평형이 아니라 동**(`SEC_DIV` = "N동"·"S동")이다. 그래서
+      // 평(숫자)과 동 문자를 각각 뽑아 둘 다로 좁힌다 — 이 스텝이 재려는 것이 정확히
+      // "무엇이 조인 키인가"이므로, 매처가 순진하면 못 붙는 것과 안 찾아본 것이 섞인다.
+      const village = b.value.includes("힐스") ? "힐스 빌리지" : "밸리 빌리지";
+      const candidates = rateTypes.get(village) ?? [];
+      const dongOf = (code: string) => {
+        const set = [...new Set(ents.filter((e) => e.RM_RMTYPE === code).map((e) => String(e.SEC_DIV ?? "")))];
+        return set.length === 1 ? set[0].replace(/동$/, "") : null;
+      };
+      console.log(`  요금표(${village}) 대조:`);
+      for (const [code, label] of Object.entries(OAKVALLEY.roomTypes)) {
+        if (!byCode.has(code)) continue;
+        const pyeong = String(label).match(/\d+/)?.[0];
+        const dong = dongOf(code);
+        // 1차: 평수가 같은 줄. 2차: 그중 동 문자를 포함하는 줄(있으면).
+        const byPyeong = candidates.filter((c) => pyeong && c.includes(pyeong));
+        const narrowed =
+          dong && byPyeong.filter((c) => c.includes(dong)).length
+            ? byPyeong.filter((c) => c.includes(dong))
+            : byPyeong;
+        console.log(
+          `    ${code} → "${label}" (${dong ? dong + "동" : "동 미상"}) : ${narrowed.length}줄 ${JSON.stringify(narrowed)}` +
+            (narrowed.length === 1 ? "" : narrowed.length === 0 ? "   ← 못 붙는다" : "   ← 모호하다"),
+        );
+      }
+    }
+
+    // ── Q3. 요금구분: 이 계정은 기명인가 무기명인가 ────────────────────────
+    console.log("\n=== Q3. 회원권 — 요금표의 어느 열을 써야 하는가 ===");
+    printMemberships(axForm.memberships);
+    console.log(
+      "  위 필드 중 기명/무기명을 말하는 것이 있는지 눈으로 판정할 것.\n" +
+        "  없다면 요금표의 열을 우리가 고를 수 없고, 그때는 요금을 붙이지 않는다.",
+    );
+    console.log("\n=== 이 스텝이 지나며 본 JSON 호출 ===");
+    for (const c of pnsAxes) console.log(`  ${c.line}`);
   } else if (step === "diff") {
     // Drift watchdog: OAKVALLEY.branches is the runtime source of truth for
     // `branchName`, so the only way it can rot is silently. The symptom would
