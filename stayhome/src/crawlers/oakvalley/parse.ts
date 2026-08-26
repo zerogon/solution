@@ -1,6 +1,7 @@
 import { addDaysUtc, parseDate, toIsoDate } from "@/lib/utils";
 import type { InventoryRow } from "../types";
 import { OAKVALLEY, type OakvalleyBranch } from "./config";
+import { stayRate, type RateBook } from "./rates";
 import { dayOfMonthToDate } from "./format";
 
 /** One row of `entitys[]`. `CD_DATE` is a day-of-month, not a date. */
@@ -88,12 +89,20 @@ export function buildRows(
   nights: NightMap,
   branch: OakvalleyBranch,
   request: { nights: number },
+  /**
+   * 공표된 회원 요금표. 없으면(못 읽었거나 형태가 바뀌었으면) 요금 없이 행만 만든다 —
+   * 요금은 부가 정보이고, 그것 때문에 재고를 잃으면 안 된다.
+   */
+  rates?: RateBook | null,
 ): InventoryRow[] {
   const stayNights = Math.max(1, request.nights);
   const out: InventoryRow[] = [];
 
   for (const [code, byDate] of nights) {
     const roomType = OAKVALLEY.roomTypes[code] ?? code;
+    // 요금표의 줄 이름은 평형 라벨과 **다른 지도**로 찾는다(`config.rateRows` 주석).
+    // 여기 없는 코드(밸리 AP·BU)는 요금표에 줄이 둘이라 고를 수 없으므로 그냥 없다.
+    const rateRow = OAKVALLEY.rateRows[code];
     for (const iso of byDate.keys()) {
       const checkin = parseDate(iso);
       let available = true;
@@ -124,6 +133,15 @@ export function buildRows(
         closingSoon: false,
         detailUrl: OAKVALLEY.bookingUrl,
         stay: { checkin, checkout: addDaysUtc(checkin, stayNights) },
+        // 예약할 수 없는 방의 가격은 정보가 아니라 잡음이다(`showsPrice`와 같은 판단).
+        // `kind`가 `memberTable`인 것이 중요하다 — 이 숫자는 사이트가 이 숙박에 대해
+        // 견적한 값이 아니라 공표된 표로 우리가 계산한 값이다.
+        ...(available && rates && rateRow
+          ? (() => {
+              const amount = stayRate(rates, branch.value, rateRow, checkin, stayNights);
+              return amount == null ? {} : { price: { amount, kind: "memberTable" as const } };
+            })()
+          : {}),
       });
     }
   }
