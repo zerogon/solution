@@ -24,6 +24,23 @@ lotteresort.com은 2026-07에 LOTTE HOTELS & RESORTS(lottehotel.com)로 통합�
   (산정호수는 통합 시 라인업 제외. bizCd 출처: CMS 카탈로그
   `resort.lottehotel.com/cms/common/hotel-catalogs/ko_catalogs.json`의 `anotherBookingUrl`)
 
+### 지점 4곳은 한 번에 묻는다 (2026-08-27)
+
+`searchAvailability`가 지점을 순차로 돌던 것을 `mapPool`(`_shared/pool.ts`)로 바꿨다.
+`LOTTE.branchPool`은 지점 수와 같은 4 — 독립적인 JSON GET 넷이고, 이 엔드포인트 앞에는
+한화의 넷퍼넬 같은 문지기가 없다(로그인 앞에는 있다. 위 절 참조).
+
+롯데는 행에 `stay`를 붙이지 않아 **윈도우 하나에 지점 수만큼 콜**을 그대로 낸다. 그래서
+이 병렬화가 곧 패스 수다 — 실측 1패스에 14윈도우 → **27윈도우**. 60개 핫 윈도우가
+5패스에서 ~2패스가 되고, 패스 하나는 워밍 인스턴스에 브라우저 한 벌이다.
+
+- **한 지점 실패를 삼키는 규칙은 그대로다.** `removeVanishedRows`가 "0행 그룹은 안
+  건드린다"로 안전한 것은 실패한 지점이 조용히 0행이 되기 때문이다. 삼킴을 없애면
+  크롤 실패가 매진으로 발행된다.
+- **다만 `전부` 실패하면 던진다**(2026-08-27 추가). 0행 SUCCESS는 "그날 전 객실 매진"과
+  글자 하나 다르지 않고, 이제 백스톱까지 재고를 근거로 판정하므로 그 거짓 성공이
+  "고칠 필요 없음"으로까지 읽힌다.
+
 ### 로그인은 폼 하나가 아니라 네 홉이고, 앞에 문지기가 둘 있다
 
 `scripts/debug-page.ts doLogin`으로 성공한 로그인을 그대로 녹화한 결과(2026-08-09):
@@ -840,6 +857,39 @@ POST booking…/rst/cmn/getCmnCode.mvc                         공통코드(상�
 `ctx.deadlineAt`은 **패스의 끝이 아니라 그 검색이 잘리는 시각**이고 윈도우마다
 갱신된다. 리솜 요금 수집이 쓰는 그 시계와 같은 것이다.
 
+## 지점은 4곳씩 동시에 묻는다 (2026-08-27)
+
+지점이 16곳이고 콜 하나가 ~2초라, 순차로 돌면 **첫 윈도우 하나가 ~32초**로 패스 예산을
+통째로 먹었다. 그래서 콜드 패스마다 아래의 "좁히기"가 발동해 120행만 남기고 브라우저
+한 벌을 다 썼다 — 2026-08-27 09:02와 09:04가 그것이다. 그 두 패스는 거의 아무것도
+수집하지 않으면서 워밍 인스턴스의 `/tmp`만 축냈다.
+
+이제 `mapPool`(`_shared/pool.ts`)로 `HANWHA.branchPool`(4)씩 나간다. 실측:
+**60/60 윈도우 · 13,104행 · 30.7초 · 단 1패스**(종전 6패스). 첫 윈도우가 더 이상 잘리지
+않으므로 아래 절의 좁히기는 이제 예외 경로다 — **없앤 것이 아니라 덜 일어나게 한 것이고,
+그 처리는 한 줄도 바뀌지 않았다.**
+
+바꾸면서 지킨 것 넷:
+
+- **예산 게이트는 배치 사이로 옮기고 척도를 `slowestBatchMs`로 바꾼다.** 지점 하나의
+  소요를 척도로 쓰면서 넷을 동시에 던지면 벽시계를 4배 과소평가하고, 넘겼을 때 잃는 것은
+  이 윈도우가 아니라 **패스가 모은 행 전부**다(`run.ts`가 검색 전체를 하나의
+  `withDeadline`으로 감싼다).
+- **콜 타임아웃은 `timeouts.api`(25초)가 아니라 남은 예산에서 유도한다.** 순차 루프에서는
+  게이트가 다음 지점 앞에서 멈춰 세웠지만 배치에는 "다음"이 없다 — 이미 넷이 날아가 있고
+  배치는 가장 느린 하나가 끝나야 끝난다. 낙오자 하나가 부분 반환을 `DeadlineExceeded`로
+  바꾼다.
+- **`attempted`는 실제로 디스패치한 지점 수.** "전부 실패는 매진이 아니다" 판정이 여기
+  걸려 있고, 예산 break로 시도조차 못 한 지점은 실패가 아니다.
+- **전부 실패했고 그 실패가 전부 `SessionLostError`면 그 타입을 보존해 던진다.** 평범한
+  `Error`는 `run.ts`에게 검색 실패로 읽혀 **죽은 storageState가 캐시에 남고**, 다음 시도가
+  `validateSession`을 통과해 로그인을 건너뛰고 같은 실패가 돌아온다. 그리고 지점 전부가
+  한꺼번에 죽는 것은 예약 호스트가 세션을 잃었을 때의 전형적인 모양이다 — 병렬화가 그
+  모양을 더 자주 만든다(배치가 통째로 같은 이유로 죽는다).
+
+순서 의존성은 없다. `session.calendars`는 `locCd`로 키잉되고 지점은 한 패스에 한 번씩만
+나오므로 경합이 없으며, `out`은 `mapPool`이 입력 순서를 보존한다.
+
 ## 예산이 끊긴 윈도우는 `stay`를 지우는 게 아니라 **좁힌다**
 
 지점이 16곳이라 **첫 윈도우는 예산(30초)에 걸리는 것이 정상**이다. 실측: 13지점
@@ -959,6 +1009,16 @@ npx tsx scripts/run-crawl.ts HANWHA hot    # 핫 윈도우 60개 — 윈도우 �
 CRAWL_BUDGET_MS=50000 npx tsx scripts/run-crawl.ts HANWHA hot   # 프로덕션 예산으로
 ```
 
+**병렬화 이후 볼 것**: `[hanwha] window done`의 `truncated`가 첫 윈도우에서 `false`이고
+`[hanwha] partial window narrowed…`가 **안 나오는가**. 나온다면 좁혀진 행이 요청 숙박만
+남았는지 확인할 것 — 그 경로는 없어진 게 아니라 예외가 됐을 뿐이다. 그리고 뭉갬 검사:
+
+```sql
+SELECT checkin_date, count(*) FROM resort_inventory
+ WHERE resort_name LIKE '한화%' GROUP BY 1 ORDER BY 1;
+-- 체크인 날짜 46개에 고르게 분포해야 한다. 한 날짜만 뚱뚱하면 `stay`가 뭉개진 것이다.
+```
+
 `doLogin`만 실계정을 쓰고 나머지는 `/tmp/hanwha-debug-state.json`을 재사용한다.
 
 **`CRAWL_BUDGET_MS`가 필요한 이유**: `run-crawl.ts`의 `hot` 경로는 기본 300초를 쓴다.
@@ -993,6 +1053,17 @@ CRAWL_BUDGET_MS=50000 npx tsx scripts/run-crawl.ts HANWHA hot   # 프로덕션 �
 핵심 코드(`run.ts`, `_shared/*`)는 물론 **Inngest 함수·조회 UI·`/api/inventory`도 무수정**이다.
 `crawl-resort`는 slug를 인자로 받는 단일 함수이고(리조트별 함수가 아니다),
 `scheduled-refresh`가 `listCrawlableResorts()`(= `active` ∩ 등록된 크롤러)로 팬아웃한다.
+
+**지점이 여럿이면 순차로 돌지 말 것.** 패스 하나가 브라우저 하나이고, 브라우저는
+이 프로젝트에서 가장 먼저 바닥나는 자원이다(`CLAUDE.md`의 "배포" 절). `_shared/pool.ts`의
+`mapPool`은 절대 reject하지 않고 결과를 **입력 순서대로** 주므로, "한 지점 실패가 나머지를
+죽이면 안 된다"는 이 저장소의 규칙을 그대로 지킬 수 있다. 다만 예산 게이트가 있는
+크롤러라면 게이트를 **배치 사이**로 옮기고 척도를 배치 단위로 바꿔야 하고, 콜 타임아웃은
+상수가 아니라 **남은 예산**에서 유도해야 한다 — 상세는 위 HANWHA 절.
+
+**`/tmp` 고갈은 `TmpExhaustedError`이고 크롤러가 던질 일은 없다.** `_shared/browser.ts`가
+launch 전에 판정한다. 크롤러가 알아야 할 것은 하나뿐 — 이 예외는 세션과 무관하므로
+`run.ts`가 저장된 storageState를 버리지 않는다.
 
 **세션이 죽은 것을 알아챘을 때는 `SessionLostError`(`_shared/errors.ts`)를 던질 것.**
 평범한 `Error`를 던지면 `run.ts`가 그것을 검색 실패로 읽어 **캐시된 storageState를
