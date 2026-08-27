@@ -5,6 +5,7 @@ import { HANWHA, type HanwhaBranch } from "./config";
 import { formatDateCompact } from "./format";
 import { buildRows, collectNights, type CalendarPayload, type NightMap } from "./parse";
 import { SessionLostError } from "../_shared/errors";
+import { chunk, mapPool } from "../_shared/pool";
 
 /**
  * 마지막 지점을 끝낸 뒤 행을 조립해 반환하기까지 남겨두는 몫. `ctx.deadlineAt`은
@@ -77,53 +78,85 @@ export async function performSearch(
 
   const out: InventoryRow[] = [];
   const failures: string[] = [];
-  let slowestUnitMs = 0;
+  let slowestBatchMs = 0;
   let attempted = 0;
   let truncated = false;
   let fetched = 0;
   let cached = 0;
+  let sessionLosses = 0;
 
-  for (const branch of branches) {
-    // Budget checked between properties and against the SLOWEST one seen, the
-    // same rule run.ts applies to its window loop. Breaking out with partial
-    // rows is the point: run.ts wraps this whole function in one deadline, so
-    // throwing here would discard everything already collected.
+  // Properties go out in batches rather than one at a time. With sixteen of
+  // them at roughly two seconds each, the serial loop spent ~32s on its first
+  // window — over this pass's budget — so every cold pass truncated to a single
+  // narrowed window worth ~120 rows and burned a whole browser launch doing it.
+  // Batching removes the truncation instead of coping with it.
+  //
+  // The budget gate moves with it: it now sits between BATCHES and measures the
+  // slowest batch, not the slowest property. Keeping a per-property yardstick
+  // while dispatching four at once would under-count the wall clock by ~4× —
+  // and over-running here does not cost this window, it costs everything the
+  // pass has collected, because run.ts wraps the whole search in one deadline
+  // and a `DeadlineExceeded` discards the lot.
+  for (const group of chunk(branches, HANWHA.branchPool)) {
     const elapsed = Date.now() - startedAt;
-    if (elapsed + slowestUnitMs > budgetMs) {
+    if (elapsed + slowestBatchMs > budgetMs) {
       truncated = true;
       log("[hanwha] budget exhausted, returning partial", {
         done: out.length,
-        stoppedBefore: branch.value,
+        stoppedBefore: group[0].value,
         remaining: branches.length - attempted,
         elapsedMs: elapsed,
       });
       break;
     }
-    const unitStart = Date.now();
-    attempted++;
+    const batchStart = Date.now();
+    // Counted as attempted only once dispatched — a budget break leaves
+    // properties untried, and untried is not failed (see the all-failed test
+    // below, which is measured against this number).
+    attempted += group.length;
 
-    try {
-      const calendar = await calendarFor(ctx, session, branch, params.checkin, nights);
-      if (calendar.hit) cached++;
+    // Serially, a slow call could only ever overrun by its own length and the
+    // gate above caught it before the next one started. In a batch there is no
+    // "next one" to stop at: four are already in flight, and the batch is not
+    // done until the slowest is. So the per-call timeout has to be the time
+    // actually left, not the site-shaped 25s ceiling — a single straggler on
+    // that ceiling would turn a partial return into a `DeadlineExceeded` and
+    // take the whole pass's rows with it.
+    const callTimeoutMs = Math.max(
+      1_000,
+      Math.min(HANWHA.timeouts.api, budgetMs - (Date.now() - startedAt)),
+    );
+
+    // `mapPool` never rejects; it reports per item. One property failing must
+    // not cost the others, and that rule has to survive the move to concurrency.
+    const settled = await mapPool(group, group.length, (branch) =>
+      calendarFor(ctx, session, branch, params.checkin, nights, callTimeoutMs),
+    );
+
+    settled.forEach((r, i) => {
+      const branch = group[i];
+      if (!r.ok) {
+        failures.push(branch.value);
+        if (r.error instanceof SessionLostError) sessionLosses++;
+        log("[hanwha] branch failed", {
+          branch: branch.value,
+          error: r.error instanceof Error ? r.error.message : String(r.error),
+        });
+        return;
+      }
+      if (r.value.hit) cached++;
       else fetched++;
-      const rows = buildRows(calendar.nights, branch, { nights });
+      const rows = buildRows(r.value.nights, branch, { nights });
       out.push(...rows);
       log("[hanwha] branch done", {
         branch: branch.value,
         rows: rows.length,
         nights,
-        source: calendar.hit ? "cache" : "fetch",
+        source: r.value.hit ? "cache" : "fetch",
       });
-    } catch (e) {
-      // One property failing must not cost the others.
-      failures.push(branch.value);
-      log("[hanwha] branch failed", {
-        branch: branch.value,
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
+    });
 
-    slowestUnitMs = Math.max(slowestUnitMs, Date.now() - unitStart);
+    slowestBatchMs = Math.max(slowestBatchMs, Date.now() - batchStart);
   }
 
   // All-failed must not read as "no availability": run.ts would record SUCCESS
@@ -131,7 +164,19 @@ export async function performSearch(
   // against what was attempted, not the branch list — a budget break leaves
   // properties untried, and untried is not failed.
   if (attempted > 0 && failures.length === attempted) {
-    throw new Error(`SEARCH_FAILED: 모든 지점 조회 실패 (${failures.join(", ")})`);
+    // 어느 예외를 던지는지가 다음 패스를 정한다. 평범한 `Error`는 `run.ts`에게
+    // 검색 실패로 읽혀 **죽은 storageState가 캐시에 그대로 남고**, 다음 시도의
+    // `validateSession`이 그걸 통과시켜 로그인을 건너뛰고 같은 실패가 돌아온다
+    // (`_shared/errors.ts`가 존재하는 이유 그대로다).
+    //
+    // 그리고 지점 전부가 한꺼번에 실패하는 것은 예약 호스트가 세션을 잃었을 때의
+    // **전형적인 모양**이다 — 지점 16곳이 각자 사정으로 동시에 죽는 일은 드물다.
+    // 그래서 실패가 전부 `SessionLostError`였다면 그 타입을 보존해서 던진다.
+    // 하나라도 다른 이유였다면 세션 문제라고 단정하지 않는다.
+    const detail = `모든 지점 조회 실패 (${failures.join(", ")})`;
+    throw sessionLosses === failures.length
+      ? new SessionLostError(detail)
+      : new Error(`SEARCH_FAILED: ${detail}`);
   }
 
   log("[hanwha] window done", {
@@ -195,6 +240,7 @@ async function calendarFor(
   branch: HanwhaBranch,
   checkin: Date,
   nights: number,
+  timeoutMs: number = HANWHA.timeouts.api,
 ): Promise<{ nights: NightMap; hit: boolean }> {
   const firstNight = toIsoDate(checkin);
   const lastNight = toIsoDate(addDaysUtc(checkin, Math.max(1, nights) - 1));
@@ -205,7 +251,7 @@ async function calendarFor(
   }
 
   const to = addDaysUtc(checkin, HANWHA.calendarSpanDays);
-  const payload = await fetchCalendar(ctx, session.custNo, branch, checkin, to);
+  const payload = await fetchCalendar(ctx, session.custNo, branch, checkin, to, timeoutMs);
 
   const map: NightMap = new Map();
   const { entities, dropped } = collectNights(payload, map);
@@ -241,6 +287,7 @@ export async function fetchCalendar(
   branch: HanwhaBranch,
   from: Date,
   to: Date,
+  timeoutMs: number = HANWHA.timeouts.api,
 ): Promise<CalendarPayload> {
   const ds = {
     ds_search: [
@@ -257,7 +304,7 @@ export async function fetchCalendar(
   };
 
   const res = await ctx.page.request.post(HANWHA.calendarUrl, {
-    timeout: HANWHA.timeouts.api,
+    timeout: timeoutMs,
     headers: { Referer: HANWHA.bookingUrl },
     // The gateway takes a urlencoded `ds` field, not a JSON body.
     form: { ds: JSON.stringify(ds) },

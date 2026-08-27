@@ -110,6 +110,18 @@ export const LOTTE = {
   /** Cached storage state lifetime (login skip window). */
   sessionTtlHours: 6,
 
+  /**
+   * How many branches to query at once.
+   *
+   * Four, which is every branch — the whole list goes out in one round trip's
+   * worth of wall clock. That is defensible here and nowhere else in this repo:
+   * the calls are independent JSON GETs, there are only four of them, and the
+   * site showed no rate limiting or queue in front of this endpoint (unlike
+   * HANWHA, which sits behind NetFunnel and is deliberately given a smaller
+   * pool than its branch count).
+   */
+  branchPool: 4,
+
   /** Per-step deadlines (ms). Keep total well under STEP_BUDGET_MS in run.ts. */
   timeouts: {
     navigation: 20_000,
