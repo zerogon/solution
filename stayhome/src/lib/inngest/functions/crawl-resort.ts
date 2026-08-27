@@ -1,3 +1,4 @@
+import { NonRetriableError } from "inngest";
 import { runResortCrawl } from "@/crawlers/run";
 import { CrawlStatus } from "@/generated/prisma/enums";
 import { parseDate } from "@/lib/utils";
@@ -37,13 +38,19 @@ export const crawlResort = inngest.createFunction(
     // 구간은 3연속 성공이었다. 그리고 한화가 09:05~09:08을 혼자 쓴 그 시각에는
     // 나머지 넷이 이미 끝나 있었다 — 막을 머리가 애초에 없었다.
     //
-    // 1이 청소 기구를 살려내기도 한다: `sweepStaleProfiles`는 `/proc`을 물어
-    // **살아 있는** 프로필을 올바르게 건너뛰므로, 동시 크롤이 있는 한 회수할
-    // 것이 구조적으로 0이다. 직렬화해야 매 launch 전 sweep이 직전 크롤의 잔해를
-    // 실제로 회수한다.
+    // 08-26에는 두 번째 근거가 있었다 — "1이 청소 기구를 살려낸다":
+    // `sweepStaleProfiles`는 `/proc`을 물어 살아 있는 프로필을 올바르게 건너뛰므로
+    // 동시 크롤이 있는 한 회수할 것이 구조적으로 0이라는 것이었다.
+    // **그 근거는 이제 약해졌고, 그렇다고 적어 둔다.** 2026-08-27 이후
+    // `reapOrphanBrowsers`는 프로세스 **나이**로 판정한다(90초 > `maxDuration` 60초).
+    // 그 판정은 동시 크롤이 있어도 옳으므로 청소는 더 이상 직렬화를 요구하지 않는다.
     //
-    // 대가는 하루 1회 배치의 벽시계뿐이다(2레인 ~6.5분 → 1레인 ~11분).
-    // 그건 대가가 아니다 — 신선도 임계는 26시간이다(`src/lib/freshness.ts`).
+    // 남은 근거는 위의 산술 하나뿐이고, 그것 하나로 충분하다. 청소는 **잔해**를
+    // 회수하지 살아 있는 브라우저를 줄여주지 않는다.
+    //
+    // 대가는 하루 1회 배치의 벽시계뿐이다. 2026-08-27 실측 ~11분이었고,
+    // 지점 호출 병렬화(한화·롯데)로 패스가 줄어 ~5분대가 기대된다.
+    // 신선도 임계가 26시간이므로 그건 대가가 아니다(`src/lib/freshness.ts`).
     //
     // ⚠️ Inngest는 이 배열을 **최대 2칸**까지만 받는다(`inngest/types.js`의
     // `.max(2)`). 세 번째 제약(예: 무거운 리조트 전용 레인)은 불가능하고,
@@ -92,9 +99,20 @@ export const crawlResort = inngest.createFunction(
           // Throw so Inngest retries this pass. runResortCrawl swallows its own
           // errors into a FAILED result (it has a CrawlLog row to close first),
           // so without this the step would look successful.
-          throw new Error(
-            `${slug} pass ${pass} failed at ${res.errorStage}: ${res.errorMessage}`,
-          );
+          const detail = `${slug} pass ${pass} failed at ${res.errorStage}: ${res.errorMessage}`;
+          // 예외: `/tmp` 고갈은 재시도의 대상이 아니다. 재시도는 **같은 워밍
+          // 인스턴스**로 돌아가고(Inngest는 인스턴스 어피니티를 제어할 수단을 주지
+          // 않는다) 거기서 브라우저를 한 번 더 띄우려 하다 더 마른 디스크를 만든다.
+          // 게다가 전역 동시성이 1이라 그 재시도가 **유일한 레인을 붙잡는다** —
+          // 2026-08-27 09:05~09:07에 한화의 실패가 2분간 레인을 쥐고 있는 동안
+          // 소노와 리솜은 큐에서 기다리다 그날 수집을 통째로 잃었다.
+          //
+          // 그리고 이 시점의 고갈은 이미 회수할 것을 다 회수한 뒤의 고갈이다
+          // (`launchBrowser`가 `reclaimTmp` **다음에** 잰다). 이 프로세스 안에서
+          // 더 해볼 것이 남아 있지 않다는 뜻이므로, 세 번 죽는 대신 한 번 죽는다.
+          throw res.errorCode === "TMP_EXHAUSTED"
+            ? new NonRetriableError(detail)
+            : new Error(detail);
         }
         return res;
       });

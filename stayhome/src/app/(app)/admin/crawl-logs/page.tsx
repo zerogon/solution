@@ -114,7 +114,17 @@ export default async function CrawlLogsPage() {
                       )}
                     </div>
                     {l.errorMessage && (
-                      <p className="text-xs text-destructive">
+                      // 성공한 행에도 이 칸이 채워질 수 있다 — `run.ts`가 자원
+                      // 상태(`[res] tmp …`)를 여기에 남기기 때문이다. 색은
+                      // 그래서 내용이 아니라 **판정**을 따라간다. 무조건 빨강이면
+                      // 성공한 크롤이 매번 실패처럼 보인다.
+                      <p
+                        className={
+                          l.status === CrawlStatus.FAILED
+                            ? "text-xs text-destructive"
+                            : "text-xs text-muted-foreground"
+                        }
+                      >
                         {l.errorStage ? `[${l.errorStage}] ` : ""}
                         {l.errorMessage}
                       </p>

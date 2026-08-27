@@ -4,14 +4,20 @@ import { Prisma } from "@/generated/prisma/client";
 import { decrypt } from "@/lib/crypto";
 import { CrawlStatus, CrawlStage } from "@/generated/prisma/enums";
 import type { ResortSlug } from "@/generated/prisma/enums";
-import { closeBrowser, launchBrowser, newContextFromState } from "./_shared/browser";
+import {
+  closeBrowser,
+  launchBrowser,
+  newContextFromState,
+  resourceSnapshot,
+  TMP_LOW_MB,
+} from "./_shared/browser";
 import {
   loadStorageState,
   saveStorageState,
   clearStorageState,
 } from "./_shared/session-store";
 import { withDeadline, DeadlineExceeded } from "./_shared/timeout";
-import { SessionLostError } from "./_shared/errors";
+import { SessionLostError, TmpExhaustedError } from "./_shared/errors";
 import { parseDate, todayKstIso, addDaysUtc, toIsoDate } from "@/lib/utils";
 import { loadCrawler } from "./registry";
 import type { CrawlerContext, InventoryRow, SearchParams } from "./types";
@@ -96,6 +102,12 @@ export interface RunResult {
   rowsUpserted: number;
   errorMessage?: string;
   errorStage?: CrawlStage;
+  /**
+   * 왜 실패했는지를 **호출자가 분기할 수 있는 형태**로. 메시지는 사람이 읽는
+   * 것이고 이건 스케줄러가 읽는 것이다 — 지금은 `crawl-resort`가 이 값으로
+   * "재시도해도 소용없다"를 판정한다(`TMP_EXHAUSTED`).
+   */
+  errorCode?: "TMP_EXHAUSTED";
   durationMs: number;
   /**
    * Windows fully searched *and* upserted in this call, counted from the front
@@ -188,6 +200,7 @@ export async function runResortCrawl(
 
   let stage: CrawlStage = CrawlStage.VALIDATE;
   let errorMessage: string | undefined;
+  let errorCode: RunResult["errorCode"];
   let rowsUpserted = 0;
   let pricedRows = 0;
   let windowsCompleted = 0;
@@ -199,6 +212,15 @@ export async function runResortCrawl(
    * state applied — see the discard rule in the catch below.
    */
   let sessionUsable = false;
+
+  // What the container looked like on arrival and on departure. Measured here
+  // rather than inside `launchBrowser` so the pair brackets the whole pass:
+  // the delta between them *is* the ratchet, and a pass that never got to
+  // launch still reports the state that stopped it.
+  const resourcesBefore = await resourceSnapshot();
+  let resourcesAfter: Record<string, number> = resourcesBefore;
+  let closeAbandoned = false;
+  let closeReaped = false;
 
   try {
     browser = await launchBrowser(logger);
@@ -407,6 +429,7 @@ export async function runResortCrawl(
     const msg = e instanceof Error ? e.message : String(e);
     errorMessage = msg;
     if (e instanceof DeadlineExceeded) status = CrawlStatus.FAILED;
+    if (e instanceof TmpExhaustedError) errorCode = "TMP_EXHAUSTED";
 
     // Discard the cached session when this failure says something about it —
     // asked as a question about the cause, not about the stage.
@@ -424,6 +447,12 @@ export async function runResortCrawl(
     //   2026-08-25 — and it is structural for crawlers whose login host and
     //   booking host are different machines: passing validation there does not
     //   mean the session can crawl.
+    //
+    // `TmpExhaustedError` is on the other side of this line and stays there:
+    // it is thrown before a browser exists, so `sessionUsable` is still false
+    // and the stored state survives untouched. That is deliberate — the session
+    // is fine, the disk is not, and discarding it would make the next attempt
+    // pay for a cold login on top of a full `/tmp`.
     const sessionImplicated =
       sessionUsable &&
       (stage === CrawlStage.LOGIN ||
@@ -434,11 +463,24 @@ export async function runResortCrawl(
     }
     logger("crawl failed", { stage, error: msg });
   } finally {
-    if (browser) await closeBrowser(browser, logger);
+    if (browser) {
+      const teardown = await closeBrowser(browser, logger);
+      closeAbandoned = teardown.abandoned;
+      closeReaped = teardown.reaped;
+    }
+    resourcesAfter = await resourceSnapshot();
   }
 
   const finishedAt = new Date();
   const durationMs = finishedAt.getTime() - startedAt.getTime();
+
+  const resourceNote = buildResourceNote({
+    before: resourcesBefore,
+    after: resourcesAfter,
+    abandoned: closeAbandoned,
+    reaped: closeReaped,
+    failed: status !== CrawlStatus.SUCCESS,
+  });
 
   await prisma.crawlLog.update({
     where: { id: log.id },
@@ -446,7 +488,11 @@ export async function runResortCrawl(
       status,
       finishedAt,
       durationMs,
-      errorMessage,
+      // The note rides in `errorMessage` because that is the column an operator
+      // actually reads, and because adding one would mean a schema change plus
+      // a Neon migration for a field only failures care about. `errorStage`
+      // still keys off the real error, so a note-only row stays stageless.
+      errorMessage: [errorMessage, resourceNote].filter(Boolean).join(" | ") || null,
       errorStage: errorMessage ? stage : null,
       // Recorded even on FAILED: a multi-window run can die on window 7 with
       // six windows' worth of rows already committed, and reporting null there
@@ -461,11 +507,54 @@ export async function runResortCrawl(
     rowsUpserted,
     errorMessage,
     errorStage: errorMessage ? stage : undefined,
+    errorCode,
     durationMs,
     windowsCompleted,
     windowsRequested: windows.length,
     pricedRows,
   };
+}
+
+/**
+ * A one-line account of what this pass did to the container, or null when there
+ * is nothing worth saying.
+ *
+ * This exists because the evidence for the failure it describes does not
+ * survive. `launchBrowser` already logs the `/tmp` breakdown when space runs
+ * low — it did so at 09:05 on 2026-08-27 — but Vercel Hobby keeps no runtime
+ * log history, so twelve hours later the one artefact that named the cause was
+ * gone and `crawl_logs` said only `net::ERR_INSUFFICIENT_RESOURCES`. The DB is
+ * the only place a note outlives the incident.
+ *
+ * Written on every failure, since that is where an operator looks. Written on
+ * success only when the container is already tight or a browser had to be
+ * abandoned: the ratchet shows up in successful rows *before* it starts failing
+ * them, and that early warning is the whole value — but stamping every healthy
+ * row would turn the error column into a metrics column and cost it the
+ * property that makes it readable, which is being empty when nothing is wrong.
+ */
+function buildResourceNote(args: {
+  before: Record<string, number>;
+  after: Record<string, number>;
+  abandoned: boolean;
+  reaped: boolean;
+  failed: boolean;
+}): string | null {
+  const { before, after, abandoned, reaped, failed } = args;
+  const tight = (after.tmpFreeMb ?? Number.POSITIVE_INFINITY) < TMP_LOW_MB;
+  if (!failed && !tight && !abandoned) return null;
+
+  const parts = [`tmp ${fmtMb(before.tmpFreeMb)}→${fmtMb(after.tmpFreeMb)}MB`];
+  if (after.tmpTotalMb !== undefined) parts.push(`of ${after.tmpTotalMb}MB`);
+  parts.push(`rss ${fmtMb(before.rssMb)}→${fmtMb(after.rssMb)}MB`);
+  if (abandoned) parts.push(reaped ? "closeAbandoned=reaped" : "closeAbandoned=leaked");
+  // `[res]` so the note is greppable across `crawl_logs.error_message`, where
+  // it shares the column with messages from five different sites.
+  return `[res] ${parts.join(", ")}`;
+}
+
+function fmtMb(v: number | undefined): string {
+  return v === undefined ? "?" : String(v);
 }
 
 /** Stable identity for a stay, in the app's `YYYY-MM-DD` convention. */
