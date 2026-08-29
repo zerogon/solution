@@ -81,7 +81,7 @@ if (DEFAULT_BUDGET_MS + TEARDOWN_RESERVE_MS > MAX_DURATION_MS) {
 
 /**
  * Rows per INSERT. Postgres caps a statement at 65535 bind parameters and each
- * row binds 14, so the hard ceiling is ~4680; 1000 keeps a wide margin while
+ * row binds 16, so the hard ceiling is ~4095; 1000 keeps a wide margin while
  * still costing only a handful of round trips. This only started to matter
  * when crawlers began reporting whole spans — a single SONO window is ~3900
  * rows (32 stores × ~23 days), where it used to be ~170.
@@ -607,11 +607,13 @@ async function upsertInventory(
         ${randomUUID()}, ${resortId}, ${resortName}, ${row.branchName},
         ${row.roomType}, ${row.region}, ${checkin}::date, ${checkout}::date,
         ${row.available}, ${row.closingSoon}, ${row.detailUrl ?? null},
-        ${row.price?.amount ?? null}, ${row.price?.kind ?? null}, ${now}
+        ${row.price?.amount ?? null}, ${row.price?.kind ?? null},
+        ${row.occupancy?.standard ?? null}, ${row.occupancy?.max ?? null}, ${now}
       )`;
     });
 
-    // `price`/`price_kind`가 세 곳(컬럼 목록·VALUES·DO UPDATE SET) 전부에 있어야 한다.
+    // `price`/`price_kind`와 `std_capacity`/`max_capacity`가 세 곳(컬럼 목록·VALUES·
+    // DO UPDATE SET) 전부에 있어야 한다.
     // DO UPDATE SET에서만 빠지면 첫 INSERT에는 요금이 붙고 그 뒤로는 `synced_at`만
     // 갱신되면서 요금이 영원히 고정된다 — 즉 **행은 fresh인데 요금은 몇 주 전 것**이
     // 되고, 신선도 축이 요금에 대해 거짓말을 시작한다. 이 파일은 raw SQL이라 타입 검사도
@@ -626,7 +628,7 @@ async function upsertInventory(
       INSERT INTO resort_inventory (
         id, resort_id, resort_name, branch_name, room_type, region,
         checkin_date, checkout_date, available, closing_soon, detail_url,
-        price, price_kind, synced_at
+        price, price_kind, std_capacity, max_capacity, synced_at
       )
       VALUES ${Prisma.join(values)}
       ON CONFLICT (resort_id, branch_name, room_type, checkin_date, checkout_date)
@@ -638,6 +640,8 @@ async function upsertInventory(
         detail_url   = EXCLUDED.detail_url,
         price        = EXCLUDED.price,
         price_kind   = EXCLUDED.price_kind,
+        std_capacity = EXCLUDED.std_capacity,
+        max_capacity = EXCLUDED.max_capacity,
         synced_at    = EXCLUDED.synced_at
     `;
   }

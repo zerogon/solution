@@ -203,6 +203,17 @@ model ResortInventory {
   /// 출처는 `src/lib/price.ts`의 TS 유니언이다.
   priceKind    String?  @map("price_kind")
 
+  /// 기준인원 / 최대인원(명). **둘 다이거나 둘 다 아니다.**
+  ///
+  /// 다섯 리조트 중 **롯데만 채워진다**(2026-08-28 조사) — 나머지 넷은 재고 응답의
+  /// 키를 전수로 세어봐도 정원 필드가 없다. 롯데는 이미 받고 있는 `roomList` 안에
+  /// 있어 추가 호출이 0이고, 그래서 정기 수집에서 붙는다(`price`와 같은 자리).
+  ///
+  /// `price`와 달리 **매진 행에도 채워진다.** 정원은 가용성의 함수가 아니라 방의
+  /// 속성이고, 사이트도 그렇게 답한다(속초 매진 8행 전부 값이 있었다).
+  stdCapacity  Int?     @map("std_capacity")
+  maxCapacity  Int?     @map("max_capacity")
+
   syncedAt     DateTime @default(now()) @map("synced_at")
 
   resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)

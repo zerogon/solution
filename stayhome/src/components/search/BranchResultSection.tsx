@@ -142,6 +142,19 @@ export function BranchResultSection({
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 {row.roomType}
               </span>
+              {row.occupancy && (
+                // **`showsPrice`에 해당하는 게이트가 없는 것이 의도다.** 요금을
+                // 가리는 이유(`availability-tone.ts`)는 "값이 시간에 따라 변하는데
+                // 숫자에는 자기를 부인할 어휘가 없다"인데, 정원은 변하지 않는다.
+                // 매진된 방도 6인용이면 6인용이고, 담당자가 다른 날짜를 찾을지
+                // 판단할 때 여전히 필요한 정보다.
+                <span
+                  className="shrink-0 text-xs font-mono tabular-nums text-muted-foreground"
+                  title={occupancyTitle(row.occupancy)}
+                >
+                  {occupancyLabel(row.occupancy)}
+                </span>
+              )}
               {row.price && showsPrice(tone) && (
                 // `shrink-0`이 필수다. 이 줄은 2xl에서 2컬럼이 되어 폭이 절반이고
                 // 리솜 객실명은 길다("레스트리 S30 타워 클린 케어룸") — 좁아질 때
@@ -195,4 +208,30 @@ export function BranchResultSection({
       </ul>
     </section>
   );
+}
+
+/**
+ * `기준 4 · 최대 6` / 두 값이 같으면 `4인`.
+ *
+ * 같을 때 "기준 4 · 최대 4"라고 쓰지 않는 이유는 그것이 두 번 말하는 것이기 때문이고,
+ * 다를 때 최대를 생략하지 않는 이유는 **그 차이가 이 정보의 값 전부**이기 때문이다 —
+ * 롯데 실측 71객실 중 36개가 기준≠최대다(속초 콘도 스위트 4/6, 제주 115평형 9/11).
+ *
+ * 좁은 화면에서는 요금이 "1박 평균"을 숨기는 것과 같은 패턴으로 최대만 접는다.
+ * 기준인원은 언제나 보인다 — 하나만 남긴다면 그쪽이다.
+ */
+function occupancyLabel(o: { standard: number; max: number }) {
+  if (o.standard === o.max) return `${o.standard}인`;
+  return (
+    <>
+      {`기준 ${o.standard}`}
+      <span className="hidden font-normal sm:inline">{` · 최대 ${o.max}`}</span>
+    </>
+  );
+}
+
+function occupancyTitle(o: { standard: number; max: number }) {
+  return o.standard === o.max
+    ? `기준인원 ${o.standard}명`
+    : `기준인원 ${o.standard}명 · 최대인원 ${o.max}명`;
 }

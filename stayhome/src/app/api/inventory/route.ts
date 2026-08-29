@@ -67,6 +67,8 @@ export async function GET(req: Request) {
       detailUrl: true,
       price: true,
       priceKind: true,
+      stdCapacity: true,
+      maxCapacity: true,
       syncedAt: true,
       resort: { select: { slug: true } },
     },
@@ -79,12 +81,21 @@ export async function GET(req: Request) {
   // 아니다"라는 규약을 갖는데, 두 필드로 나란히 두면 클라이언트가 한쪽만 있는 상태를
   // 표현할 수 있게 되고 그건 라벨 없는 숫자를 그리는 길이다. DB는 컬럼 두 개로
   // 저장하지만 화면이 받는 것은 하나의 값이거나 null이다.
-  const rows = found.map(({ resort: r, price, priceKind, ...row }) => ({
-    ...row,
-    resortSlug: r.slug,
-    price:
-      price != null && isPriceKind(priceKind) ? { amount: price, kind: priceKind } : null,
-  }));
+  // 인원도 같은 이유로 접는다 — `stdCapacity`만 있고 `maxCapacity`가 없는 상태를
+  // 클라이언트가 표현할 수 있게 되면 "기준 4"만 그리게 되고, 최대 6인인 방을 6인
+  // 가족을 찾던 담당자가 후보에서 뺀다.
+  const rows = found.map(
+    ({ resort: r, price, priceKind, stdCapacity, maxCapacity, ...row }) => ({
+      ...row,
+      resortSlug: r.slug,
+      price:
+        price != null && isPriceKind(priceKind) ? { amount: price, kind: priceKind } : null,
+      occupancy:
+        stdCapacity != null && maxCapacity != null
+          ? { standard: stdCapacity, max: maxCapacity }
+          : null,
+    }),
+  );
 
   return NextResponse.json({ rows });
 }

@@ -26,6 +26,16 @@ export interface InventoryRow {
    * 숫자를 그릴 수 있게 된다.
    */
   price: { amount: number; kind: PriceKind } | null;
+  /**
+   * 이 객실의 기준인원 / 최대인원(명).
+   *
+   * **빈칸은 에러가 아니다** — 다섯 리조트 중 롯데만 정원을 응답에 실어 준다
+   * (2026-08-28 조사; 나머지 넷은 재고 응답의 키를 전수로 세어봐도 없다).
+   *
+   * `price`와 달리 **매진된 행에도 붙는다.** 정원은 시간이 지나도 방이 팔려도
+   * 변하지 않으므로, 요금처럼 신선도·가용성으로 가릴 이유가 없다.
+   */
+  occupancy: { standard: number; max: number } | null;
   syncedAt: string;
 }
 
