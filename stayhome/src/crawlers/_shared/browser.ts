@@ -40,6 +40,8 @@ export async function launchBrowser(
   }
   // Reclaiming only matters where a container is reused; locally `/tmp` is the
   // machine's and the sweep would be doing somebody else's housekeeping.
+  // 결과는 버린다 — 이 자리의 회수는 바로 아래 스냅샷에 이미 반영돼 있고, 노트로
+  // 남길 값어치가 있는 것은 자기가 만든 잔해를 치우는 teardown 쪽이다.
   if (packUrl) await reclaimTmp(log);
 
   // Measured for both modes, so `scripts/run-crawl.ts` exercises the same gate
@@ -60,7 +62,8 @@ export async function launchBrowser(
         ? before.tmpTotalMb - before.tmpFreeMb
         : undefined;
     const { entries, unaccountedMb } = await tmpBreakdown(usedMb);
-    log("[browser] /tmp is low — what is holding it", { entries, unaccountedMb });
+    const core = await coreDumpPolicy();
+    log("[browser] /tmp is low — what is holding it", { entries, unaccountedMb, ...core });
     // Below the floor, "succeeds and then dies" is no longer a risk but the
     // outcome. Refuse here, where the message can still say what is true.
     if (freeMb < floorMb) {
@@ -69,7 +72,11 @@ export async function launchBrowser(
           before.tmpTotalMb ?? "?"
         }MB, 하한 ${floorMb}MB, rss ${before.rssMb}MB${
           unaccountedMb === null ? "" : `, 목록에 없는 ${unaccountedMb}MB`
-        }). 붙잡고 있는 것: ${entries.join(", ") || "(알 수 없음)"}`,
+        }). 붙잡고 있는 것: ${entries.join(", ") || "(알 수 없음)"}${
+          core.corePattern === undefined
+            ? ""
+            : `, core_pattern ${core.corePattern} (limit ${core.coreLimit ?? "?"})`
+        }`,
       );
     }
   }
@@ -287,6 +294,11 @@ const EXTRA_ARGS = [
  * ordering rule this list does not). Deleting the binary mid-sweep would take
  * out every crawl on the instance, and the symptom would be a launch failure
  * blamed on the pack URL.
+ *
+ * ⚠️ 이 목록은 잔해 **전체**가 아니라 두 부류다 — 커널이 판정하는 `playwright_`와
+ * 시계가 판정하는 나머지. 어느 판정자에도 답할 수 없는 세 번째 부류(코어 덤프)는
+ * {@link CORE_DUMP_NAME}에 따로 산다. 거기에 접두사를 하나 더 얹어 해결하려 하면
+ * 이 주석이 거짓이 되고, 그 방식이 조용히 실패하는 이유는 바로 아래에 적혀 있다.
  */
 const TMP_DEBRIS_PREFIXES = [
   "playwright_",
@@ -295,6 +307,46 @@ const TMP_DEBRIS_PREFIXES = [
   ".com.google.Chrome.",
   "chromium-crashpad",
 ];
+
+/**
+ * 커널이 남긴 코어 덤프. **나이를 묻지 않고 지운다.**
+ *
+ * 2026-08-29 09:00 팬아웃이 이것으로 무너졌다. 동시성 1이라 다섯 리조트가 워밍
+ * 인스턴스 하나에서 직렬로 돌았고, 세 번째 teardown 뒤 `/tmp`에 `core.chromium.18`
+ * 298MB와 `core.chromium.109` 100MB가 남아 오크밸리·리솜·소노가 전부
+ * `TMP_EXHAUSTED`로 거절됐다. 결정적인 것은 진단이 말한 **`목록에 없는 0MB`**였다 —
+ * 살아 있는 프로세스가 unlink된 fd로 붙잡고 있는 게 아니라, 이름이 멀쩡히 있는
+ * 파일이 그냥 거기 있었다. 어떤 sweep도 그 이름을 몰랐을 뿐이다.
+ *
+ * **왜 생기나**: {@link PACK_ARG_GROUPS}의 `isolation`이 실는 `--single-process`
+ * `--no-zygote`로 뜬 크로미움은 끝날 때 자주 segfault한다. 패스 자체는 SUCCESS였고
+ * `browser.close()`도 정상 resolve했으니 이건 죽는 순간의 사고다. 커널은
+ * `core_pattern`(`core.%e.%p`)대로 덤프를 쓰고 크기는 그 프로세스의 RSS —
+ * 298MB·100MB가 그 시각 teardown 로그의 rss 346MB·410MB와 그대로 맞는다. SIGKILL은
+ * 코어를 남기지 않으므로 `reapAbandoned`/`reapOrphanBrowsers`는 범인이 아니다.
+ * **평범하게 잘 닫힌 브라우저가 남기는 잔해다.**
+ *
+ * **여기에 나이 기준을 붙이면 이 sweep은 하는 일이 없다.** 덤프는 teardown 그 순간에
+ * 생기고, 그걸 지울 수 있는 유일한 호출도 같은 teardown의 {@link reclaimTmp}다.
+ * {@link STALE_PROFILE_MS}(90초)를 걸면 방금 생긴 덤프는 언제나 건너뛰어지고, 90초가
+ * 지나기 전에 다음 패스가 launch 전 측정에서 거절된다 — 08-29의 간격이 43초·33초였다.
+ * 근거를 따로 만들 필요도 없다: 코어 덤프는 **이미 죽은 프로세스의 시체 사진**이라,
+ * 잔해 중 유일하게 "아직 쓰는 중인 주인"이 존재할 수 없는 종류다. `playwright_*`가
+ * 커널에게 묻고 나머지가 시계에게 묻는다면, 이건 물을 상대가 아예 없다.
+ *
+ * 옆 크롤의 브라우저가 지금 죽는 중이라 커널이 쓰고 있는 파일이면? 지워도 된다.
+ * POSIX unlink는 그 쓰기를 방해하지 않는다 — 커널은 열린 inode에 계속 쓰고 공간은
+ * 쓰기가 끝나면 반납된다. 잃는 건 그 순간 회수했다고 믿은 숫자뿐이고(그만큼은 잠시
+ * `unaccountedMb`로 간다), 얻는 건 인스턴스가 죽을 때까지 고정될 300MB가 **쓰기가
+ * 끝나는 순간까지만** 잡히는 것이다. 어차피 이 덤프를 읽는 사람은 없다 — Vercel
+ * Hobby에서 파일을 꺼낼 방법도 없다.
+ *
+ * ⚠️ 이름 규칙이 좁은 것도 의도다. 끝이 pid(숫자)여야 하고 `stat`이 파일이어야 한다
+ * (판정은 {@link sweepStaleProfiles}에 있다). `/tmp/core` 디렉터리나 `core.notes.txt`
+ * 같은 것은 걸리지 않고, `/tmp/chromium`·`/tmp/chromium-pack`은 이 이름과 애초에
+ * 무관하다 — 위 목록의 ⚠️와 같은 약속이다.
+ */
+const CORE_DUMP_NAME = /^core\.(?:.+\.)?\d+$/;
 
 /**
  * How old a leftover must be before age alone proves nobody is using it.
@@ -354,14 +406,21 @@ function tmpFloorMb(): number {
  */
 async function reclaimTmp(
   log: (msg: string, meta?: Record<string, unknown>) => void,
-): Promise<void> {
+): Promise<SweepResult> {
   await dropExtractedPack(log);
   // Before the profile sweep, not after: a browser that is still running holds
   // its profile in `/proc`, and the sweep will correctly refuse to touch it.
   // Ending the process is what makes the directory sweepable at all.
   await reapOrphanBrowsers(log);
-  await sweepStaleProfiles(log);
+  return sweepStaleProfiles(log);
 }
+
+/**
+ * 한 번의 회수가 무엇을 지웠는가. `cores`를 따로 세는 이유는 Hobby가 런타임 로그를
+ * 보관하지 않아서다 — 이 숫자가 `crawl_logs`까지 가야 08-29의 래칫이 끊겼다는 것을
+ * 반나절 뒤에도 읽을 수 있다(`run.ts`의 `buildResourceNote`).
+ */
+export type SweepResult = { removed: number; cores: number; coreMb: number };
 
 /**
  * How long a Chromium must have been running before nobody can still own it.
@@ -385,6 +444,12 @@ const ORPHAN_MIN_AGE_MS = 90 * 1000;
  * forever — correctly, because a process really is using it — and the space is
  * gone until the instance dies. That is the same permanent loss abandonment
  * causes, arriving by a route teardown cannot cover.
+ *
+ * ⚠️ 2026-08-29 정정: 그 "건너뜀"은 {@link profilesInUse}가 크로미움의 cmdline을 읽지
+ * 못해 **한 번도 일어나지 않았다.** 디렉터리는 오히려 지워지고 있었고(살아 있는
+ * 브라우저의 것까지), 실제로 인스턴스를 마르게 한 것은 그 프로세스의 RSS와 unlink된
+ * fd였다. 파싱은 고쳤으니 이제 이 문단은 사실이다 — 그리고 사실이 된 만큼 이 함수가
+ * 더 필요해졌다.
  *
  * Age is the only test, and it is deliberately the only test. A registry of
  * "our" pids would be per-route-bundle (Next compiles `/api/inngest` and
@@ -509,26 +574,54 @@ async function dropExtractedPack(
  * That matters because a concurrent crawl's profile is exactly as young as our
  * own, so an age test either spares both or deletes both. `/proc` is only
  * readable on Linux; anywhere else this falls back to {@link STALE_PROFILE_MS}.
+ *
+ * 판정자는 셋이고 {@link debrisPolicy}가 고른다. 세 번째(코어 덤프)는 나이도 커널도
+ * 묻지 않는데, 그 이유가 {@link CORE_DUMP_NAME}에 적혀 있다.
  */
+/**
+ * 잔해 하나를 누구에게 물어 판정하는가.
+ *
+ *   `kernel`        — `/proc`에게. `playwright_*`만이 `--user-data-dir`이고, 살아
+ *                     있는 프로세스가 그 경로를 이름 대고 있으면 우리 것이 아니다.
+ *   `unconditional` — 아무에게도. {@link CORE_DUMP_NAME} 참조 — 시체에는 주인이 없다.
+ *   `age`           — 시계에게. 이름을 대는 프로세스가 없어 `/proc`이 어느 쪽으로도
+ *                     보증해줄 수 없는 나머지.
+ *
+ * 세 판정자를 여기서 한 번에 이름 붙여 두면 sweep 루프에 분기별 주석이 필요 없다.
+ */
+function debrisPolicy(name: string): "kernel" | "unconditional" | "age" | null {
+  if (CORE_DUMP_NAME.test(name)) return "unconditional";
+  if (name.startsWith("playwright_")) return "kernel";
+  return TMP_DEBRIS_PREFIXES.some((p) => name.startsWith(p)) ? "age" : null;
+}
+
 async function sweepStaleProfiles(
   log: (msg: string, meta?: Record<string, unknown>) => void,
-): Promise<void> {
+): Promise<SweepResult> {
   const dir = tmpdir();
   const inUse = await profilesInUse();
   let removed = 0;
+  let cores = 0;
+  let coreBytes = 0;
   try {
     const entries = await readdir(dir);
     const cutoff = Date.now() - STALE_PROFILE_MS;
     for (const name of entries) {
-      if (!TMP_DEBRIS_PREFIXES.some((p) => name.startsWith(p))) continue;
+      const policy = debrisPolicy(name);
+      if (!policy) continue;
       const path = join(dir, name);
       try {
-        // Only `playwright_*` is a `--user-data-dir`. Everything else in
-        // TMP_DEBRIS_PREFIXES is named by no process, so `/proc` can never
-        // vouch for it either way — those stay on the age rule.
-        const askKernel = inUse !== null && name.startsWith("playwright_");
-        if (askKernel) {
+        // `/proc`을 못 읽으면 커널에게 물을 수가 없으니 시계로 내려간다(종전 동작
+        // 그대로). `unconditional`은 물을 상대가 없으므로 이 강등과 무관하다.
+        const judge = policy === "kernel" && inUse === null ? "age" : policy;
+        if (judge === "kernel") {
           if (inUse!.has(path)) continue;
+        } else if (judge === "unconditional") {
+          const info = await stat(path);
+          // 덤프는 파일이다. 이름만 닮은 디렉터리는 우리가 만든 것이 아니다.
+          if (!info.isFile()) continue;
+          coreBytes += info.size;
+          cores++;
         } else {
           const info = await stat(path);
           if (info.mtimeMs > cutoff) continue;
@@ -542,7 +635,16 @@ async function sweepStaleProfiles(
   } catch {
     // Sweeping is an optimization; never let it fail a crawl.
   }
-  if (removed > 0) log("[browser] swept stale profiles", { removed });
+  const coreMb = Math.round(coreBytes / 1024 / 1024);
+  // `removed`는 이제 코어 덤프도 센다 — 옛 로그와 새 로그를 나란히 읽는 사람이
+  // 여기서 오해한다. 코어는 따로도 세어 두는데, 그것이 08-29를 고쳤다는 증거다.
+  if (removed > 0) {
+    log("[browser] swept stale profiles", {
+      removed,
+      ...(cores > 0 ? { cores, coreMb } : {}),
+    });
+  }
+  return { removed, cores, coreMb };
 }
 
 /**
@@ -572,7 +674,22 @@ async function profilesInUse(): Promise<Map<string, number> | null> {
       } catch {
         continue; // the process exited between readdir and read
       }
-      for (const arg of argv.split("\0")) {
+      // NUL **과 공백 둘 다**로 자른다. `/proc/<pid>/cmdline`은 NUL 구분이 규약이고
+      // bash 같은 평범한 프로세스는 그렇게 나오지만, **크로미움은 자기 argv를 하나의
+      // 공백 연결 문자열로 덮어쓴다**(리눅스에서 프로세스 타이틀을 바꾸는 그 방식).
+      // 그러면 `split("\0")`의 원소는 실행 파일 경로로 시작하는 덩어리 하나뿐이라
+      // `startsWith("--user-data-dir=")`가 **영원히 거짓**이 된다.
+      //
+      // 2026-08-29에 실측으로 드러났다 — 살아 있는 브라우저의 프로필이 `/proc`에
+      // 멀쩡히 이름을 대고 있는데도 이 맵이 비어 있었다. 대가가 둘이고 둘 다 조용하다:
+      //   · `sweepStaleProfiles`가 **살아 있는 프로필을 지운다**(테스트에서 재현).
+      //     삭제된 디렉터리 위에서 크로미움은 열린 fd로 한동안 버티다 이상하게
+      //     망가지고, 증상은 사이트 탓처럼 읽힌다.
+      //   · `reapAbandoned`가 pid를 못 찾아 "혼자 끝났다"로 판정하고 **SIGKILL 없이**
+      //     `reaped: true`를 신고한다. 08-27이 만든 회수 장치가 무동작이면서 성공을
+      //     보고하고 있었다는 뜻이다.
+      // 프로필 경로에는 공백이 없으므로(`/tmp/playwright_*`) 공백으로 잘라도 안전하다.
+      for (const arg of argv.split(/[\0\s]+/)) {
         if (arg.startsWith(FLAG)) inUse.set(arg.slice(FLAG.length), Number(pid));
       }
     }
@@ -650,6 +767,44 @@ async function tmpBreakdown(
 }
 
 /**
+ * 이 커널이 코어 덤프를 어디에 얼마나 크게 쓰도록 돼 있는가.
+ *
+ * 08-29에 `/tmp`를 채운 것이 코어 덤프였고, {@link CORE_DUMP_NAME}의 sweep은 그것을
+ * 회수는 하지만 **애초에 안 생기게 하지는 못한다**. 막는 레버는 셋 다 우리 손 밖이다 —
+ * Node에는 `setrlimit` 바인딩이 없고, `core_pattern`은 `/proc/sys`라 샌드박스에서
+ * 쓸 수 없으며, `chromium.launch()`는 `cwd`를 노출하지 않아 상대 경로 패턴을 `/tmp`
+ * 밖으로 돌릴 수도 없다. 그래서 여기서는 **레버의 위치만 기록해 둔다**: 스윕만으로
+ * 부족하다는 것이 드러나면, 다음 수는 `PACK_ARG_GROUPS.isolation`을 떼는
+ * (이미 준비돼 있는) 측정된 실험이다.
+ *
+ * 자리가 low-`/tmp` 분기 안인 것도 의도다. 건강한 실행에는 비용이 0이고, 곤란한
+ * 실행에서는 이 두 값이 진단의 절반이다. 그리고 **Hobby에서 런타임 로그는 안 남고
+ * 에러 메시지는 남으므로** 값이 있으면 `TmpExhaustedError` 문장에도 실린다 —
+ * 08-29에 범인의 이름을 안 것도 정확히 그 비대칭 덕이었다.
+ *
+ * 어느 한 줄이라도 못 읽으면 조용히 비운다. 진단이 진단을 실패시켜서는 안 된다.
+ */
+async function coreDumpPolicy(): Promise<{ corePattern?: string; coreLimit?: string }> {
+  const out: { corePattern?: string; coreLimit?: string } = {};
+  try {
+    out.corePattern = (await readFile("/proc/sys/kernel/core_pattern", "utf8")).trim();
+  } catch {
+    // 리눅스가 아니거나 읽을 수 없다 — 그 자체가 이 진단이 무의미한 환경이라는 뜻이다.
+  }
+  try {
+    const line = (await readFile("/proc/self/limits", "utf8"))
+      .split("\n")
+      .find((l) => l.startsWith("Max core file size"));
+    // "Max core file size   0   unlimited   bytes" — 첫 숫자 칸이 soft limit이고,
+    // 그것이 0이면 커널은 덤프를 아예 쓰지 않는다(로컬 WSL이 그렇다).
+    if (line) out.coreLimit = line.slice("Max core file size".length).trim().split(/\s+/)[0];
+  } catch {
+    // 같은 이유로 조용히.
+  }
+  return out;
+}
+
+/**
  * What the container has left. Logged around launch and teardown so a leak
  * shows up as a delta instead of as a mysterious 350ms failure.
  */
@@ -697,6 +852,12 @@ export async function newContextFromState(
  * life. That is the ratchet that killed the 2026-08-27 09:00 sweep: seven
  * passes launched on one warm instance and the eighth had nowhere left to go.
  *
+ * ⚠️ 2026-08-29 정정: 08-27에는 저 건너뜀이 실제로 일어난다고 믿었지만
+ * {@link profilesInUse}가 빈 답을 내고 있었다 — 즉 그 시절의 `reaped: true`는
+ * **SIGKILL 없이** 나온 값이다(pid를 못 찾아 "혼자 끝났다"로 판정했다). 파싱을 고친
+ * 지금에야 아래 `reapAbandoned`가 08-27이 쓴 대로 동작한다. 래칫이 있었다는 결론은
+ * 그대로다 — 붙잡고 있던 것이 디렉터리가 아니라 프로세스였을 뿐이다.
+ *
  * So the abandonment is now followed by `reapAbandoned`, which finds the pid
  * through the profile path this launch recorded and SIGKILLs it. The wait stays
  * short — this is a second line, not a licence to wait longer.
@@ -712,7 +873,7 @@ export async function closeBrowser(
   browser: Browser,
   log: (msg: string, meta?: Record<string, unknown>) => void = () => {},
   timeoutMs = CLOSE_TIMEOUT_MS,
-): Promise<{ abandoned: boolean; reaped: boolean }> {
+): Promise<{ abandoned: boolean; reaped: boolean } & SweepResult> {
   const closed = await Promise.race([
     browser.close().then(() => true),
     new Promise<boolean>((resolve) => setTimeout(() => resolve(false), timeoutMs)),
@@ -726,9 +887,9 @@ export async function closeBrowser(
   // The invocation that made the mess is the only one that knows it is done.
   // Leaving it for the next crawl's pre-launch sweep does not work: by then the
   // debris is too young for any age cutoff that is safe under concurrency.
-  await reclaimTmp(log);
+  const swept = await reclaimTmp(log);
   log("[browser] resources after teardown", await resourceSnapshot());
-  return { abandoned: !closed, reaped };
+  return { abandoned: !closed, reaped, ...swept };
 }
 
 /** How long to wait for SIGKILL to be reflected in `/proc` before giving up. */

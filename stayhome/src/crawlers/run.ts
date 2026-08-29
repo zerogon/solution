@@ -221,6 +221,8 @@ export async function runResortCrawl(
   let resourcesAfter: Record<string, number> = resourcesBefore;
   let closeAbandoned = false;
   let closeReaped = false;
+  let coresSwept = 0;
+  let coreMb = 0;
 
   try {
     browser = await launchBrowser(logger);
@@ -467,6 +469,8 @@ export async function runResortCrawl(
       const teardown = await closeBrowser(browser, logger);
       closeAbandoned = teardown.abandoned;
       closeReaped = teardown.reaped;
+      coresSwept = teardown.cores;
+      coreMb = teardown.coreMb;
     }
     resourcesAfter = await resourceSnapshot();
   }
@@ -479,6 +483,8 @@ export async function runResortCrawl(
     after: resourcesAfter,
     abandoned: closeAbandoned,
     reaped: closeReaped,
+    coresSwept,
+    coreMb,
     failed: status !== CrawlStatus.SUCCESS,
   });
 
@@ -538,16 +544,23 @@ function buildResourceNote(args: {
   after: Record<string, number>;
   abandoned: boolean;
   reaped: boolean;
+  coresSwept: number;
+  coreMb: number;
   failed: boolean;
 }): string | null {
-  const { before, after, abandoned, reaped, failed } = args;
+  const { before, after, abandoned, reaped, coresSwept, coreMb, failed } = args;
   const tight = (after.tmpFreeMb ?? Number.POSITIVE_INFINITY) < TMP_LOW_MB;
-  if (!failed && !tight && !abandoned) return null;
+  // 코어 덤프를 회수했다는 사실은 그 자체로 말할 가치가 있다 — 건강해 보이는 행에
+  // 붙더라도 그렇다. 2026-08-29에 `/tmp`를 채운 것이 이것이었고, Hobby가 런타임
+  // 로그를 안 남기므로 **이 칸이 그 회수가 실제로 일어났다는 유일한 지속적 증거다.**
+  // 08-27의 판단과 같은 자리다: 래칫은 실패 이전에 성공 행에서 먼저 보인다.
+  if (!failed && !tight && !abandoned && coresSwept === 0) return null;
 
   const parts = [`tmp ${fmtMb(before.tmpFreeMb)}→${fmtMb(after.tmpFreeMb)}MB`];
   if (after.tmpTotalMb !== undefined) parts.push(`of ${after.tmpTotalMb}MB`);
   parts.push(`rss ${fmtMb(before.rssMb)}→${fmtMb(after.rssMb)}MB`);
   if (abandoned) parts.push(reaped ? "closeAbandoned=reaped" : "closeAbandoned=leaked");
+  if (coresSwept > 0) parts.push(`cores=${coresSwept}/${coreMb}MB`);
   // `[res]` so the note is greppable across `crawl_logs.error_message`, where
   // it shares the column with messages from five different sites.
   return `[res] ${parts.join(", ")}`;
