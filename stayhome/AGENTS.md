@@ -273,6 +273,31 @@ npx tsx scripts/set-exclusion.ts HANWHA "산정호수" --include
 - 크롤이 제외와 경주해 남은 행은 `scheduled-refresh`의 `purge-excluded-inventory`가
   걷는다. 그 숫자는 **평상시 0이어야 한다.**
 
+## 마감일 계산기 (영업일 D-10)
+
+사이드바 위젯의 계산·공휴일 파싱을 단독으로 확인한다. 테스트 러너가 없으므로 `golden`이
+사실상 이 기능의 회귀 테스트다 — **네트워크도 키도 없이 돌고**, 나머지 스텝도 전부 키가 없다.
+
+```bash
+npx tsx scripts/debug-holidays.ts golden          # 걷기 6 + 파서 10, 오프라인
+npx tsx scripts/debug-holidays.ts feed [2026]     # 라이브 피드 요약 + 정규화 결과
+npx tsx scripts/debug-holidays.ts diff            # 라이브 ↔ 인라인 픽스처, 차이 있으면 exit 1
+npx tsx scripts/debug-holidays.ts calc 2026-08-29 # 걸음을 한 줄씩
+```
+
+`calc`가 표를 찍는 이유는 오크밸리 `probe`·한화 `cal`과 같다: 답이 틀렸을 때 "틀렸다"가
+아니라 **어디서 갈렸는지**가 보여야 한다. 기준선은 `2026-08-29(토) → 2026-08-14(금)`
+(주말 4 · 8/17 `쉬는 날 광복절`)이고 단순 -10일 `08-19`와 5일 차이다.
+
+- **`diff`는 감시 장치다.** 공휴일 정책 뉴스가 보이거나 마감일이 이상하면 여기부터 돌린다.
+  구글이 `DESCRIPTION` 표기를 바꾸거나 새 임시공휴일을 넣으면 여기서 먼저 보인다 —
+  개수 바닥이 못 잡는 종류의 변화(라벨이 셋으로 갈라지는 경우)는 **이것 말고 잡을 것이 없다.**
+- **`feed`의 `DESCRIPTION 분포` 줄이 그 감시선이다.** `{공휴일, 기념일}` 말고 다른 이름이
+  보이면 그때가 손볼 때다.
+- 이 스크립트는 **프로덕션과 같은 파서**(`src/lib/holidays-ical.ts`)를 쓴다. 특일정보 시절엔
+  일부러 재사용하지 않았는데, 소스가 바뀌며 가장 위험한 코드가 걷기에서 파싱으로 옮겨가
+  그 판단이 뒤집혔다. 상세는 `CLAUDE.md`의 "마감일 계산기" 절.
+
 ## 날짜 규약
 
 "YYYY-MM-DD" 문자열 ↔ `parseDate()`(UTC 자정 Date)만 사용. Date를 로컬 API로

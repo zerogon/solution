@@ -6,6 +6,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AppSidebar } from "./AppSidebar";
 import { AccountMenu } from "./AccountMenu";
+import { DeadlineCalculator } from "./DeadlineCalculator";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { AppMark } from "@/components/app-mark";
 import { Button } from "@/components/ui/button";
@@ -108,6 +109,12 @@ export function AppShell({
         </div>
 
         <AppSidebar collapsed={collapsed} />
+
+        {/* 사이드바 전용 유틸리티 선반. 하단 탭바(NAV_ITEMS)에는 올리지 않는다 —
+            그 배열은 모바일과 공유라, 넣는 순간 탭바에 나타난다. */}
+        <div className="shrink-0 border-t border-sidebar-border p-2">
+          <DeadlineCalculator collapsed={collapsed} />
+        </div>
 
         <div className="shrink-0 border-t border-sidebar-border p-2">
           <AccountMenu
