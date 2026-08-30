@@ -1,4 +1,4 @@
-import { CalendarSearch, KeyRound, ScrollText, type LucideIcon } from "lucide-react";
+import { CalendarSearch, KeyRound, MapPin, ScrollText, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
@@ -16,6 +16,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "조회", icon: CalendarSearch },
   { href: "/admin/accounts", label: "계정", icon: KeyRound },
+  { href: "/admin/properties", label: "지점", icon: MapPin },
   { href: "/admin/crawl-logs", label: "로그", icon: ScrollText },
 ];
 

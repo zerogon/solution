@@ -1,4 +1,5 @@
 import { toIsoDate } from "@/lib/utils";
+import { selectBranches } from "../_shared/branches";
 import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { SONO, type SonoBranch } from "./config";
 import { formatDateCompact } from "./format";
@@ -34,11 +35,12 @@ export async function performSearch(
     (params.checkout.getTime() - params.checkin.getTime()) / 86_400_000,
   );
 
-  const branches = params.branch
-    ? SONO.branches.filter((b) => b.value === params.branch)
-    : SONO.branches;
+  const branches = selectBranches(SONO.branches, params);
   if (branches.length === 0) {
-    log("[sono] no matching branch", { branch: params.branch });
+    log("[sono] no branch to crawl", {
+      branch: params.branch,
+      excluded: params.excludeBranches?.length ?? 0,
+    });
     return [];
   }
 

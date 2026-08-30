@@ -1,3 +1,4 @@
+import { selectBranches } from "../_shared/branches";
 import { mapPool } from "../_shared/pool";
 import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { LOTTE, type LotteBranch } from "./config";
@@ -22,9 +23,17 @@ export async function performSearch(
     (params.checkout.getTime() - params.checkin.getTime()) / 86_400_000,
   );
 
-  const branches = params.branch
-    ? LOTTE.branches.filter((b) => b.value === params.branch)
-    : LOTTE.branches;
+  const branches = selectBranches(LOTTE.branches, params);
+  if (branches.length === 0) {
+    // 나머지 넷은 이미 갖고 있던 가드다. `mapPool([], …)`이 `[]`를 주고 아래 전멸
+    // 판정에도 `branches.length > 0`가 붙어 있어 터지지는 않지만, **이유를 말하지
+    // 않는 0행 윈도우는 "그날 전 객실 매진"과 글자 하나 다르지 않다.**
+    log("[lotte] no branch to crawl", {
+      branch: params.branch,
+      excluded: params.excludeBranches?.length ?? 0,
+    });
+    return [];
+  }
 
   // The four branches are independent JSON GETs to one host with no shared
   // state, so they go out together instead of end to end. This is the whole

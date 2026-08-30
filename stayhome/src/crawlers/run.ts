@@ -167,13 +167,29 @@ export async function runResortCrawl(
   const startedAt = new Date();
   const budgetMs = opts.budgetMs ?? DEFAULT_BUDGET_MS;
   const deadline = startedAt.getTime() + budgetMs;
-  const windows =
+  const resort = await prisma.resort.findUnique({
+    where: { slug },
+    include: { branchExclusions: { select: { branchName: true } } },
+  });
+  if (!resort) throw new Error(`Resort not found: ${slug}`);
+
+  // 운영자가 뺀 지점은 **여기 한 곳에서** 모든 윈도우에 얹힌다. 이 함수를 지나지 않는
+  // 크롤 경로가 없기 때문이다 — Inngest 크론과 `/api/cron/refresh` 백스톱은
+  // `opts.windows`로, 조회 화면 최신화는 `opts.search`로, 관리 화면 버튼과
+  // `scripts/run-crawl.ts`는 `defaultSearch()`로 전부 이리 온다.
+  //
+  // `findUnique`가 원래 있던 조회라 `include` 하나로 끝난다 — Neon 왕복이 늘지 않는다.
+  // 그리고 이 값은 **패스 시작에 한 번** 읽는다. 도중에 생긴 제외는 이 패스에 보이지
+  // 않고, 그 경주는 `scheduled-refresh`의 `purge-excluded-inventory`가 정리한다.
+  const excludeBranches = resort.branchExclusions.map((x) => x.branchName);
+  const baseWindows =
     opts.windows && opts.windows.length > 0
       ? opts.windows
       : [opts.search ?? defaultSearch()];
-
-  const resort = await prisma.resort.findUnique({ where: { slug } });
-  if (!resort) throw new Error(`Resort not found: ${slug}`);
+  const windows =
+    excludeBranches.length === 0
+      ? baseWindows
+      : baseWindows.map((w) => ({ ...w, excludeBranches }));
 
   const account = await prisma.resortAccount.findFirst({
     where: { resortId: resort.id, isPrimary: true },

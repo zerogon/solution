@@ -245,6 +245,22 @@
     고갈 거부는 `CRAWLER_TMP_FLOOR_MB`로 확인(브라우저를 띄우지 않고 즉시 던짐).
     DB 불변식 위반 0건, 한화 체크인 날짜 46개에 행이 고르게 분포(뭉갬 없음).
 
+- **지점 제외 (2026-08-29)**: 제휴가 없는 지점을 운영자가 빼는 기능. 관리 화면
+  `/admin/properties`(내비 "지점") + `scripts/set-exclusion.ts` + 서버 액션
+  `src/actions/properties.ts`. 크롤 쪽은 `SearchParams.excludeBranches` 하나와
+  `_shared/branches.ts`의 `selectBranches`로, 다섯 크롤러의 동일한 3줄 프롤로그를
+  대신한다(`_shared/pool.ts`가 도입된 것과 같은 모양). 상세는 아래 "지점 제외" 절.
+  · 새 테이블은 **목록이 아니라 빼는 규칙**이라 카탈로그의 "DB 사본 금지" 논증에
+    걸리지 않는다 — 뺄 수만 있고 더할 수 없다.
+  · **전 지점 제외는 막았다.** 그 상태의 리조트는 백스톱의 `covered === 0` 판정에
+    걸려 매일 두 번 헛돈다. 리조트를 끄는 스위치는 `Resort.active`로 이미 있다.
+  · 수렴 삭제를 `run.ts`가 아니라 `scheduled-refresh`에 둔 이유, `CACHE_VERSION`을
+    일부러 올리지 않은 이유도 그 절에 적혀 있다.
+  · 스키마는 마이그레이션 파일 없이 `npm run db:push`로 Neon에 반영했다(이 저장소에
+    `prisma/migrations/`가 없다). `AuditAction`에 `EXCLUDE_PROPERTY`/`INCLUDE_PROPERTY`
+    두 값이 늘었다 — 제외는 재고를 지우고 복구는 아무것도 만들지 않아 비대칭이라,
+    `ADD_ALLOWED_EMAIL`/`REMOVE_ALLOWED_EMAIL`처럼 쌍으로 둔다.
+
 ## 조회 필터 (Phase F 준비)
 
 `src/lib/resort-catalog.ts` + `src/components/search/{place-selection,PlaceFilter,PropertyPicker,FilterChipRow}.tsx`.
@@ -258,6 +274,9 @@
   크롤러가 `config.branches[].value`를 그대로 저장한 값이라, 테이블을 만들면 같은
   리스트의 사본이 생긴다. 사본이 어긋나면 증상이 "필터를 눌렀는데 0건"이고 크롤 실패와
   구분되지 않는다. 카탈로그는 UI가 읽는 배열 = 크롤러가 도는 배열이라 그 드리프트가 없다.
+  · **DB에 있는 것은 목록이 아니라 목록에서 빼는 규칙이다**(2026-08-29,
+    `resort_branch_exclusions`). 아래 "지점 제외" 절 — 그 표는 카탈로그에서 뺄 수만 있고
+    더할 수 없어서 위 논증에 걸리지 않는다.
 - **축은 점진 노출**(`visibleAxes`). 리조트 축은 리조트 ≥2, 지역 축은 지역 ≥2 **그리고**
   지점 수 > 지역 수일 때만 뜬다. 롯데 단독(지점 4 / 지역 4)일 때는 둘 다 숨겨져 지점 칩 한
   줄만 남았고, 소노가 붙으면서(지점 36 / 지역 10) 두 축이 저절로 나타났다 — 이 분기는
@@ -279,6 +298,56 @@
 - 지점 후보가 8곳을 넘으면 칩 그리드 대신 검색 가능한 바텀시트(`PropertyPicker`).
   칩 그리드 컬럼 수는 **개수 비의존**이어야 한다 — 예전 `sm:grid-cols-5`는 옵션 5개에
   맞춘 값이라 지점 수가 바뀌면 마지막 줄에 조각 칩이 생겼다.
+
+## 지점 제외 (2026-08-29)
+
+제휴가 없는 지점을 운영자가 뺀다. 관리 화면 `/admin/properties` + CLI
+`scripts/set-exclusion.ts`. 뺀 지점은 **조회 화면에서 사라지고 정기 수집에서도 빠지며,
+그 지점의 `resort_inventory` 행이 즉시 삭제된다.**
+
+- **표는 "지점 목록"이 아니라 "빼는 규칙"이다.** `ResortBranchExclusion`은
+  `(resortId, branchName)` 한 쌍이고 **행이 있으면 제외 · 없으면 노출**이다.
+  `enabled Boolean`을 두지 않는 이유는 그 순간 "노출"을 뜻하는 상태가 둘(행 없음 /
+  `enabled=true`)이 되기 때문이고, 해제된 규칙의 사유는 정보가 아니라 이력이라
+  `audit_logs.metadata`(`EXCLUDE_PROPERTY`/`INCLUDE_PROPERTY`)가 담는다.
+  · 카탈로그의 "DB 사본을 만들지 않는다"는 논증(위 "조회 필터" 절)에 걸리지 않는다 —
+    이 표는 **뺄 수만 있고 더할 수 없다.** 이름이 어긋난 행은 아무것도 걸러내지 않는
+    **무동작**이고, 실패 방향이 "지점이 사라짐"이 아니라 **"지점이 그대로 보임"**이다.
+  · 그 무동작은 조용하므로 두 곳이 이름을 댄다: `excludeProperty`가 생성 시 `CATALOG`와
+    대조해 거부하고, `/admin/properties`가 "카탈로그에 없는 제외 규칙"을 따로 그린다.
+- **적용점은 크롤러가 아니라 `_shared/branches.ts`의 `selectBranches` 하나다.**
+  다섯 크롤러가 각자 갖고 있던 동일한 3줄 프롤로그를 대신하고, 제외 목록은 `run.ts`가
+  `ResortBranchExclusion`에서 **패스 시작에 한 번** 읽어 모든 윈도우에 얹는다
+  (`findUnique`에 `include` 하나라 Neon 왕복이 늘지 않는다). `SearchParams`가
+  **허용 목록이 아니라 제외 목록**을 받는 이유 둘: `run.ts`는 크롤러 config를 모르고
+  (lazy `loadCrawler`가 `bizCd`류를 공용 모듈에서 막는다), 어긋난 이름이 허용 목록에서는
+  "그 지점만 조용히 안 돎"인데 제외 목록에서는 무동작이다.
+- **삭제는 두 층이다.** 즉시(서버 액션이 같은 트랜잭션에서 `deleteMany`) + 수렴
+  (`scheduled-refresh`의 `purge-excluded-inventory`). 수렴이 필요한 이유는 경주 하나다 —
+  크롤이 도는 중에 제외가 켜지면 그 지점 행은 아무도 다시 답하지 않고,
+  `removeVanishedRows`는 **방금 쓴 행에서 그룹을 뽑으므로 구조적으로 닿을 수 없다.**
+  그 스텝의 숫자는 평상시 0이어야 하고, 0이 아니면 "크롤이 제외와 경주했다"는 뜻이라 `warn`이다.
+  · `run.ts`가 아니라 스케줄러에 둔 이유는 옆의 두 purge 스텝과 같다 — 크롤 경로에 Neon
+    왕복을 더하지 않고, 정리가 실패해도 그날 수집이 안 도는 일이 없도록 팬아웃 **뒤**.
+- **리조트의 마지막 지점은 뺄 수 없다**(`excludeProperty`의 가드, UI에서도 버튼 비활성).
+  지점이 0곳이면 그 리조트는 매 핫 윈도우에서 0행이 되고 백스톱이 `covered === 0`을
+  낡음으로 읽어 **09:00 크론에 더해 12:00 백스톱이 매일** 재수집한다 — 아무것도 없는 것을
+  위해 브라우저를 하루 두 번 더 띄우고 `crawl_logs`에 "0행 SUCCESS"를 쌓는다.
+  리조트를 끄는 스위치는 `Resort.active`로 이미 있고, 같은 뜻의 스위치를 둘 두지 않는다.
+- **`/api/inventory`에는 필터를 걸지 않았다.** 기제는 *행이 걸러진다*가 아니라
+  **행이 없다**이다. 조회 hot path가 매 요청 제외 표에 의존하게 만들지 않는다.
+- **`sw.js`의 `CACHE_VERSION`도 올리지 않았다.** 규칙은 "응답 shape이 바뀌면"이고 shape은
+  그대로다. 실제 영향은 한 프레임뿐 — `/api/inventory`는 SWR이고 칩 목록은 서버 렌더
+  HTML인데 인증된 HTML은 애초에 캐시되지 않는다.
+- **`reason`은 평문이고 관리 표에 마스킹 없이 그려진다.** `ResortAccount.memo`가 한화
+  회원권 비밀번호를 담게 된 전례가 있어, 스키마 주석과 다이얼로그 placeholder가 무엇을
+  적는 자리인지 직접 말한다. 보안 규칙을 여섯 번째로 늘리지는 않았다 — 자격증명을 담지
+  않는 칸을 그 목록에 넣으면 "모든 항목이 진짜 비밀에 관한 것"이라는 값이 희석된다.
+- 실사이트 검증(2026-08-29): 리솜 1지점 제외 후 크롤 로그에 그 지점 없음(1,472행 = 나머지
+  2지점), 복구 후 60/60 4,186행으로 원상, 롯데 726행 삭제→재수집으로 **정확히 726행 복원**,
+  소노 제외 시 조회 화면에서 사라지고 형제 지점은 남음, 오크밸리 1/2에서 마지막 지점 버튼
+  비활성, 고아 규칙 삽입 시 경고 블록이 뜨고 조회 화면은 무변화(무동작 확인),
+  `resort_inventory ⋈ resort_branch_exclusions` 위반 0건, 번들 유출 0건.
 
 ## 월 캘린더 (react-day-picker v10)
 

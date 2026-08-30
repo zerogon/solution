@@ -37,6 +37,8 @@ enum AuditAction {
   LOGIN
   ADD_ALLOWED_EMAIL
   REMOVE_ALLOWED_EMAIL
+  EXCLUDE_PROPERTY
+  INCLUDE_PROPERTY
 }
 
 enum CrawlStage {
@@ -131,10 +133,11 @@ model Resort {
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
-  accounts  ResortAccount[]
-  inventory ResortInventory[]
-  crawlLogs CrawlLog[]
-  session   ResortSession?
+  accounts         ResortAccount[]
+  inventory        ResortInventory[]
+  crawlLogs        CrawlLog[]
+  session          ResortSession?
+  branchExclusions ResortBranchExclusion[]
 
   @@map("resorts")
 }
@@ -154,6 +157,40 @@ model ResortAccount {
 
   @@index([resortId, isPrimary])
   @@map("resort_accounts")
+}
+
+/// 운영자가 조회·수집에서 뺀 지점.
+///
+/// **이 표는 지점 목록이 아니라 목록에서 "빼는 규칙"이다.** `resort-catalog.ts`가
+/// 지점 메타를 DB 테이블로 두기를 거부한 논증(사본이 어긋나면 증상이 "필터를
+/// 눌렀는데 0건" — 크롤 실패와 구분 불가)은 그대로 유효하고, 이 표는 그것을
+/// 비껴간다: 행이 지점을 정의하지 않고 뺀다. 카탈로그에 없는 이름이 들어 있어도
+/// 아무것도 걸러내지 않는 **무동작**이고, 그 실패 방향은 "지점이 사라짐"이 아니라
+/// "지점이 그대로 보임"이다.
+///
+/// `enabled Boolean`을 두지 않는 이유: 두는 순간 "노출"을 뜻하는 상태가 둘(행 없음 /
+/// enabled=true)이 된다. 해제된 규칙의 사유는 정보가 아니라 이력이고, 이력은
+/// `audit_logs.metadata`가 담는다(EXCLUDE_PROPERTY / INCLUDE_PROPERTY).
+model ResortBranchExclusion {
+  id       String @id @default(uuid())
+  resortId String @map("resort_id")
+
+  /// `config.branches[].value` == `ResortInventory.branchName`, 문자 단위로 같은 값.
+  branchName String @map("branch_name")
+
+  /// 운영자가 적는 제외 사유(제휴 없음 · 계약 만료 등).
+  ///
+  /// **평문이고 `/admin/properties`에 마스킹 없이 그려진다.** `ResortAccount.memo`가
+  /// 한화 회원권 비밀번호를 담게 된 전례가 있으므로 이 칸은 이름부터 "메모"가 아니라
+  /// "사유"다 — 자격증명을 넣지 말 것.
+  reason String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)
+
+  @@unique([resortId, branchName])
+  @@map("resort_branch_exclusions")
 }
 
 model ResortSession {

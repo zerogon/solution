@@ -68,6 +68,25 @@ export interface SearchParams {
    * 각 크롤러가 자기 비용을 아는 자리에서 다시 판정한다.
    */
   withPrices?: boolean;
+
+  /**
+   * 이 리조트에서 **빼고** 도는 지점들 (`config.branches[].value` 기준).
+   *
+   * 운영자가 `/admin/properties`에서 제휴가 없는 지점을 뺀 결과이고, `run.ts`가
+   * `ResortBranchExclusion`에서 한 번 읽어 그 패스의 모든 윈도우에 같은 값으로
+   * 넣는다. 클라이언트가 주는 값이 **아니다** — 요청 본문으로 제외를 지정할 수도,
+   * 건너뛸 수도 없어야 한다.
+   *
+   * **허용 목록이 아니라 제외 목록인 이유 둘.** ① `run.ts`는 크롤러 config를 모른다
+   * (`loadCrawler`가 lazy이고, 그래야 `bizCd`·`brchCd`류가 공용 모듈에 새지 않는다) —
+   * 뺄 대상은 이름만으로 지목되지만 허용 목록은 전체 배열을 알아야 만든다.
+   * ② 여기 있는 이름이 `config.branches`와 어긋나면 **아무것도 걸러내지 않는
+   * 무동작**이다. 허용 목록에서 같은 어긋남은 "그 지점만 조용히 안 돎"이고, 그건
+   * `resort-catalog.ts`가 지점 메타의 DB 사본을 거부한 바로 그 증상이다.
+   *
+   * 적용은 크롤러가 직접 하지 않고 `_shared/branches.ts`의 `selectBranches`가 한다.
+   */
+  excludeBranches?: readonly string[];
 }
 
 export interface InventoryRow {

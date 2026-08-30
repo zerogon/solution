@@ -92,6 +92,29 @@ export const scheduledRefresh = inngest.createFunction(
     });
     if (ghosts > 0) logger.info(`purged ${ghosts} inventory rows nobody re-answered`);
 
+    // 그리고 **제외된 지점의 행**을 지운다.
+    //
+    // 평상시 이 숫자는 0이어야 한다 — `excludeProperty`가 제외를 만들면서 같은
+    // 트랜잭션에서 지우기 때문이다. 0이 아니면 뜻하는 것은 하나다: **크롤이 제외와
+    // 경주했다.** `run.ts`는 제외 목록을 패스 시작에 한 번 읽으므로 도중에 생긴
+    // 제외는 그 패스의 upsert에 보이지 않고, 그렇게 쓰인 행은 아무도 다시 답하지
+    // 않아 `removeVanishedRows`가 **구조적으로 닿을 수 없다**(그 함수는 방금 쓴
+    // 행에서 그룹을 뽑는다). 위의 7일 유령 청소가 유일한 다른 그물이다.
+    //
+    // `run.ts`가 아니라 여기인 이유는 바로 위 두 스텝과 같다 — 크롤 경로에 Neon
+    // 왕복을 더하지 않고(패스 하나당 ~200ms), 정리가 실패해도 그날 수집이 안 도는
+    // 일이 없도록 팬아웃 **뒤**에 둔다. 게다가 그 경주는 패스 안에서 닫을 수 없다.
+    const excludedRows = await step.run("purge-excluded-inventory", async () => {
+      return prisma.$executeRaw`
+        DELETE FROM resort_inventory i
+         USING resort_branch_exclusions x
+         WHERE i.resort_id = x.resort_id AND i.branch_name = x.branch_name
+      `;
+    });
+    if (excludedRows > 0) {
+      logger.warn(`purged ${excludedRows} inventory rows for excluded branches`);
+    }
+
     // 응답 없이 죽은 인보케이션이 남긴 로그를 닫는다.
     //
     // `runResortCrawl`은 `crawl_logs` 행을 RUNNING으로 열고 마지막에 닫는데,
@@ -120,7 +143,7 @@ export const scheduledRefresh = inngest.createFunction(
     });
     if (reaped > 0) logger.warn(`reaped ${reaped} crawl_logs rows stuck at RUNNING`);
 
-    return { dispatched: slugs.length, slugs, purged, ghosts, reaped };
+    return { dispatched: slugs.length, slugs, purged, ghosts, excludedRows, reaped };
   },
 );
 

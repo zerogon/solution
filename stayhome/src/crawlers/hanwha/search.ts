@@ -1,5 +1,6 @@
 import type { Page } from "playwright-core";
 import { addDaysUtc, toIsoDate } from "@/lib/utils";
+import { selectBranches } from "../_shared/branches";
 import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { HANWHA, type HanwhaBranch } from "./config";
 import { formatDateCompact } from "./format";
@@ -49,11 +50,12 @@ export async function performSearch(
     (params.checkout.getTime() - params.checkin.getTime()) / 86_400_000,
   );
 
-  const branches = params.branch
-    ? HANWHA.branches.filter((b) => b.value === params.branch)
-    : HANWHA.branches;
+  const branches = selectBranches(HANWHA.branches, params);
   if (branches.length === 0) {
-    log("[hanwha] no matching branch", { branch: params.branch });
+    log("[hanwha] no branch to crawl", {
+      branch: params.branch,
+      excluded: params.excludeBranches?.length ?? 0,
+    });
     return [];
   }
 

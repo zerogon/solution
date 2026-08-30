@@ -244,6 +244,35 @@ npx tsx scripts/set-active.ts LOTTE true    # 끌 때는 false
 둘 다 코드 쪽 절반(등록된 크롤러 / `CATALOG` 등재)을 함께 요구하므로 스크립트가
 그것도 같이 찍는다. 한쪽이 빠져 있으면 에러가 아니라 **빈 필터**로 나타난다.
 
+## 지점 제외 (2026-08-29)
+
+제휴가 없는 지점을 조회·수집에서 뺀다. 관리 화면은 `/admin/properties`이고 CLI는:
+
+```bash
+npx tsx scripts/set-exclusion.ts HANWHA "산정호수" "제휴 없음"
+npx tsx scripts/set-exclusion.ts HANWHA "산정호수" --include
+```
+
+
+**`Resort.active`와 다른 스위치다.** `active`는 리조트 전체이고 `listCrawlableResorts()`
+에서 **팬아웃 자체가 멈춘다**. 제외는 지점 단위이고 **크롤은 그대로 돌되 그 지점만 빠지며,
+그 지점의 `resort_inventory` 행을 즉시 지운다**(복구해도 다음 수집 전까지는 비어 있다).
+
+- **표는 지점 목록이 아니라 빼는 규칙이다.** `resort_branch_exclusions`는
+  `(resort_id, branch_name)` 한 쌍이고 **행이 있으면 제외 · 없으면 노출**이다. 카탈로그에
+  없는 이름은 아무것도 걸러내지 않는 **무동작**이라, 이 표는 지점을 만들어 낼 수 없다.
+  그 무동작은 조용하므로 두 곳이 이름을 댄다 — `excludeProperty`가 생성을 거부하고,
+  `/admin/properties`가 "카탈로그에 없는 제외 규칙" 블록으로 그린다.
+  (CLI는 생성도 거부하지 않고 `catalog match: no`만 찍는다 — 이름이 바뀐 뒤 남은 고아
+  규칙을 지우는 것이 정당한 사용이라, 대조로 막으면 그 정리가 불가능해진다.)
+- **리조트의 마지막 지점은 뺄 수 없다.** 지점이 0곳이면 그 리조트는 매 핫 윈도우에서
+  0행이 되고, 백스톱의 판정이 `covered === 0 → fresh:false`라 09:00 크론에 더해 12:00
+  백스톱이 **매일** 재수집한다. 리조트를 끄는 스위치는 이미 `active`다.
+- 크롤 경로의 적용점은 `_shared/branches.ts`의 `selectBranches` 하나이고, 제외 목록은
+  `run.ts`가 `ResortBranchExclusion`에서 읽어 그 패스의 모든 윈도우에 얹는다.
+- 크롤이 제외와 경주해 남은 행은 `scheduled-refresh`의 `purge-excluded-inventory`가
+  걷는다. 그 숫자는 **평상시 0이어야 한다.**
+
 ## 날짜 규약
 
 "YYYY-MM-DD" 문자열 ↔ `parseDate()`(UTC 자정 Date)만 사용. Date를 로컬 API로
@@ -1087,6 +1116,12 @@ SELECT checkin_date, count(*) FROM resort_inventory
 4. `/admin/accounts`에서 해당 리조트 자격증명 등록 (없으면 `run.ts`가 throw)
 5. `npx tsx scripts/set-active.ts <SLUG> true`
 
+새 리조트의 지점은 제외 행이 없으므로 **전부 기본 노출**이다. 제휴가 없는 지점은
+`/admin/properties`에서 뺀다(위 "지점 제외" 절). 지점 필터링은 크롤러가 아니라
+`_shared/branches.ts`의 `selectBranches`가 하므로, 새 크롤러도 `config.branches`를
+직접 순회하지 말고 그 헬퍼를 부를 것 — 안 부르면 제외가 그 리조트에만 적용되지 않고,
+증상은 에러가 아니라 "뺐는데 계속 수집된다"이다.
+
 핵심 코드(`run.ts`, `_shared/*`)는 물론 **Inngest 함수·조회 UI·`/api/inventory`도 무수정**이다.
 `crawl-resort`는 slug를 인자로 받는 단일 함수이고(리조트별 함수가 아니다),
 `scheduled-refresh`가 `listCrawlableResorts()`(= `active` ∩ 등록된 크롤러)로 팬아웃한다.
@@ -1122,6 +1157,10 @@ SELECT DISTINCT resort_name, branch_name, region FROM resort_inventory ORDER BY 
 `branchName`은 크롤러 config의 `value`가 그대로 저장된 값이고 카탈로그도 같은 배열을
 읽으므로 자동으로 일치해야 한다. 어긋난다면 크롤러가 `config.branches`를 우회해
 지점명을 만들고 있다는 뜻이다 (증상은 "필터를 눌렀는데 0건").
+
+⚠️ **다만 지점이 빠져 있는 것은 이제 정상일 수 있다** (2026-08-29). 운영자가 제외한
+지점은 크롤이 돌지 않으므로 이 결과에 나오지 않는다. 어긋나 보이면 크롤러를 의심하기
+전에 `resort_branch_exclusions`를 먼저 볼 것 — 위 "지점 제외" 절.
 
 ## 요청한 날짜보다 넓게 답하는 사이트 (`InventoryRow.stay`)
 

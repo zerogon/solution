@@ -1,4 +1,5 @@
 import type { Page } from "playwright-core";
+import { selectBranches } from "../_shared/branches";
 import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { OAKVALLEY } from "./config";
 import { monthScopeKey, monthsCovering } from "./format";
@@ -50,11 +51,12 @@ export async function performSearch(
     (params.checkout.getTime() - params.checkin.getTime()) / 86_400_000,
   );
 
-  const branches = params.branch
-    ? OAKVALLEY.branches.filter((b) => b.value === params.branch)
-    : OAKVALLEY.branches;
+  const branches = selectBranches(OAKVALLEY.branches, params);
   if (branches.length === 0) {
-    log("[oakvalley] no matching branch", { branch: params.branch });
+    log("[oakvalley] no branch to crawl", {
+      branch: params.branch,
+      excluded: params.excludeBranches?.length ?? 0,
+    });
     return [];
   }
 
