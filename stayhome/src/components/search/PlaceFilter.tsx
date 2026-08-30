@@ -68,7 +68,9 @@ export function PlaceFilter({
   ];
 
   return (
-    <div className="space-y-2">
+    // 제목이 붙은 뒤로는 `space-y-2`(8px)가 제목을 **위 덩이에 붙여** 보이게 한다 —
+    // 축과 축 사이가 축 안의 제목-칩 간격(4px)과 구별돼야 한다.
+    <div className="space-y-3">
       {axes.resort && (
         <FilterChipRow
           label="리조트"
