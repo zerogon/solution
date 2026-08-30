@@ -13,13 +13,10 @@ export const dynamic = "force-dynamic";
  * collected by a crawl (`runResortCrawl` → upsertInventory) for the given
  * check-in/check-out window, optionally narrowed to one resort.
  *
- * The search UI no longer asks for any place narrowing: resort, region and
- * property are all filtered client-side (`matchesPlace`) so the filter chips can
- * show per-axis availability counts without a round trip each, and so that every
- * place control commits the same way. `resort` and `branch`
- * (= `ResortInventory.branchName`) are still accepted, for URLs the service
- * worker may still hold in its data cache — and as an escape hatch if one
- * resort's row count ever grows enough to make the full window expensive.
+ * `resort` is the only narrowing the client asks for; region/property filtering
+ * happens client-side so the filter chips can show per-axis availability counts
+ * without a round trip each. `branch` (= `ResortInventory.branchName`) is still
+ * accepted for compatibility with service-worker-cached URLs.
  *
  * Dates are parsed with the same `parseDate` helper used on the write path so
  * `@db.Date` equality matching holds.

@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
 import { DateRangeField } from "./DateRangeField";
-import { PlaceField } from "./PlaceField";
+import { NightsStepper } from "./NightsStepper";
+import { PlaceFilter, type PlaceCounts } from "./PlaceFilter";
 import { AvailabilitySummary } from "./AvailabilitySummary";
 import { BranchResultSection } from "./BranchResultSection";
 import { ResultSkeleton } from "./ResultSkeleton";
@@ -19,24 +20,20 @@ import {
   ALL_PLACES,
   matchesPlace,
   refreshTarget,
-  type PlaceCounts,
   type PlaceSelection,
 } from "./place-selection";
 import type { Committed, InventoryRow, ResortCatalogEntry } from "./types";
 
 /**
- * URL을 만드는 **유일한** 자리. 조회와 최신화 직후 재조회가 같은 문자열을 만들어야
- * 서비스워커의 캐시 키(= URL)와 React Query 키가 갈리지 않는다.
- *
- * 보내는 것은 날짜뿐이다 — 장소 세 축은 전부 클라이언트가 좁힌다(`Committed` 주석).
- * 라우트는 `resort`/`branch`를 아직 받지만 그건 SW가 들고 있을 수 있는 옛 캐시 URL을
- * 위한 호환이고, 검색 UI는 더 이상 보내지 않는다.
+ * 빈 파라미터는 아예 보내지 않는다 — 서비스워커의 캐시 키는 URL이라 `resort=`와
+ * 파라미터 부재가 서로 다른 항목이 된다.
  */
 async function fetchInventory(
   c: Committed,
   opts: { fresh?: boolean } = {},
 ): Promise<InventoryRow[]> {
   const qs = new URLSearchParams({ checkin: c.checkin, checkout: c.checkout });
+  if (c.resort) qs.set("resort", c.resort);
   const res = await fetch(`/api/inventory?${qs.toString()}`, {
     // 최신화 직후에는 SW의 stale-while-revalidate를 건너뛰어야 한다 — 캐시본을 먼저
     // 돌려주면 방금 크롤한 결과가 한 박자 늦게 보인다 (public/sw.js).
@@ -88,31 +85,19 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
   });
 
   // 화면의 조건과 실제 조회된 조건이 어긋나면 결과를 흐리게 해서 알린다.
-  // **비교 대상은 날짜뿐이다** — 장소 세 축은 클라이언트에서 즉시 좁혀지므로 어긋날
-  // 수가 없다. 리조트가 여기 있던 시절에는 지역 칩과 똑같이 생긴 리조트 칩만 결과를
-  // 흐리게 만들었고, 그게 이 화면에서 가장 자주 어리둥절하게 만드는 자리였다.
+  // 지역·지점은 클라이언트에서 즉시 좁혀지므로 어긋날 수가 없어 비교 대상이 아니다.
   const stale =
     committed != null &&
-    (committed.checkin !== checkin || committed.checkout !== checkout);
+    (committed.checkin !== checkin ||
+      committed.checkout !== checkout ||
+      committed.resort !== place.resort);
 
   /**
-   * 축별 예약 가능 건수 — 칩과 목록 행의 숫자. 한 번의 순회로 세 축을 다 센다.
+   * 축별 예약 가능 건수 — 필터 칩 배지용. 한 번의 순회로 세 축을 다 센다.
    *
-   * ## 각 축은 자기 자신을 빼고 센다 (패싯 카운트)
-   * 리조트가 서버 축이던 시절에는 `rows`가 이미 그 리조트만 담아서 지역 배지가 저절로
-   * 스코프됐다. 이제 `rows`는 **항상 전 리조트**를 담으므로 그 공짜가 사라졌고,
-   * 그냥 세면 리조트=소노인 상태에서 "강원 12"라고 떠 있는 칩을 눌렀을 때 소노 강원
-   * 3건만 나온다 — 이 저장소가 명시적으로 거부한 실패 모드다("칩에 건수는 떠 있는데
-   * 눌러도 안 나온다"). 자기 축을 빼면 배지의 계약이 "여기 뭔가 있다"에서
-   * **"이 칩을 누르면 결과가 정확히 N건이 된다"**로 강해진다.
-   *
-   * `place.property`는 **어느 축에도 넣지 않는다** — 넣으면 지점 하나를 고른 순간
-   * 나머지 배지가 전부 0이 되어 되돌아갈 길이 안 보인다.
-   *
-   * ## `row.available`이 아니라 `toneOf`로 센다
-   * 이 숫자는 "여기 눌러 볼 만하다"는 신호라, 확인되지 않은 행을 넣으면 사용자를
-   * 13일 된 데이터로 안내하게 된다. (위 `stale`과 헷갈리지 말 것 — 저건 폼과 결과가
-   * 어긋났다는 뜻이고 데이터 나이와 무관하다.)
+   * `row.available`이 아니라 `toneOf`로 센다. 이 배지는 "여기 눌러 볼 만하다"는 신호라
+   * 확인되지 않은 행을 넣으면 사용자를 13일 된 데이터로 안내하게 된다.
+   * (위 `stale`과 헷갈리지 말 것 — 저건 폼과 결과가 어긋났다는 뜻이고 데이터 나이와 무관하다.)
    */
   const counts = useMemo<PlaceCounts | undefined>(() => {
     if (!rows) return undefined;
@@ -120,21 +105,12 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
     for (const row of rows) {
       const tone = toneOf(row, dataUpdatedAt);
       if (tone !== "available" && tone !== "closingSoon") continue;
-      const okResort = place.resort === null || row.resortSlug === place.resort;
-      const okRegion = place.region === null || row.region === place.region;
-      if (okRegion) {
-        acc.byResort[row.resortSlug] = (acc.byResort[row.resortSlug] ?? 0) + 1;
-      }
-      if (okResort) {
-        acc.byRegion[row.region] = (acc.byRegion[row.region] ?? 0) + 1;
-      }
-      if (okResort && okRegion) {
-        acc.byProperty[row.branchName] =
-          (acc.byProperty[row.branchName] ?? 0) + 1;
-      }
+      acc.byProperty[row.branchName] = (acc.byProperty[row.branchName] ?? 0) + 1;
+      acc.byRegion[row.region] = (acc.byRegion[row.region] ?? 0) + 1;
+      acc.byResort[row.resortSlug] = (acc.byResort[row.resortSlug] ?? 0) + 1;
     }
     return acc;
-  }, [rows, dataUpdatedAt, place.resort, place.region]);
+  }, [rows, dataUpdatedAt]);
 
   /** 지역·지점 축은 서버에 보내지 않고 여기서 좁힌다. */
   const visibleRows = useMemo(
@@ -149,7 +125,7 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
   }
 
   function onSearch() {
-    setCommitted({ checkin, checkout });
+    setCommitted({ checkin, checkout, resort: place.resort });
   }
 
   function onRefresh() {
@@ -198,7 +174,7 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
         }
         // invalidate가 아니라 직접 채운다 — 왕복이 한 번으로 줄고, `fresh`로 SW의
         // 캐시본을 건너뛰므로 방금 크롤한 결과가 곧바로 보인다.
-        const next: Committed = { checkin, checkout };
+        const next: Committed = { checkin, checkout, resort: place.resort };
         const fresh = await fetchInventory(next, { fresh: true });
         queryClient.setQueryData(["inventory", next], fresh);
         setCommitted(next);
@@ -217,16 +193,6 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
       {/* xl:self-start 필수 — 늘어난 그리드 아이템은 움직일 여지가 없어 sticky가 무효가 된다.
           top-8은 <main>의 md:py-8과 맞춘 값(데스크톱엔 sticky 헤더가 없다). */}
       <aside className="space-y-3 xl:sticky xl:top-8 xl:self-start">
-        {/* 장소가 맨 위인 이유 둘. (1) 발화 순서가 그렇다 — "설악 쏘라노 8/29 되나요".
-            (2) 커밋 모델이 그렇다: 즉시 반영되는 축이 위에, 버튼을 기다리는 축(날짜)과
-            그 버튼이 아래에 붙어 하나의 폼처럼 읽힌다. */}
-        <PlaceField
-          catalog={catalog}
-          value={place}
-          counts={counts}
-          onChange={setPlace}
-        />
-
         <DateRangeField
           checkin={checkin}
           nights={nights}
@@ -235,48 +201,50 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
           onSearch={onSearch}
         />
 
+        <NightsStepper
+          checkin={checkin}
+          nights={nights}
+          onChange={(next) => onRangeChange({ checkin, nights: next })}
+        />
+
+        <PlaceFilter
+          catalog={catalog}
+          value={place}
+          counts={counts}
+          onChange={setPlace}
+        />
+
+        {!target && (
+          <p className="px-0.5 text-xs text-muted-foreground">
+            전체·지역 조회는 캐시만 가능합니다. 라이브 최신화는 지점을 선택하세요.
+          </p>
+        )}
+
         <div className="flex items-center gap-2">
-          {/* 조회는 글자가 짧으니 폭을 고정하고 남는 폭을 최신화에 준다 — 그쪽 라벨은
-              지점 이름을 실어 나르므로 길다("최신화 · 소노벨 B·C 비발디파크"). */}
-          <Button
-            onClick={onSearch}
-            disabled={isFetching}
-            className="shrink-0 px-4"
-          >
+          <Button onClick={onSearch} disabled={isFetching} className="flex-1">
             <Search className="size-4" />
             {isFetching ? "조회 중…" : "조회"}
           </Button>
-          {/* disabled 버튼은 title 이벤트를 받지 못하므로 span으로 감싼다
-              (`admin/PropertyTable.tsx`와 같은 우회 — tooltip 프리미티브가 없다). */}
-          <span
-            className="min-w-0 flex-1"
+          <Button
+            variant="outline"
+            onClick={onRefresh}
+            disabled={refreshing || !target}
             title={
               !target ? "지점을 선택하면 라이브 최신화가 가능합니다" : undefined
             }
+            className="min-w-0 flex-1"
           >
-            <Button
-              variant="outline"
-              onClick={onRefresh}
-              disabled={refreshing || !target}
-              className="w-full min-w-0"
-            >
-              <RefreshCw
-                className={
-                  refreshing ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"
-                }
-              />
-              {/* 상시 안내문을 없애고 버튼이 자기 선행조건을 말한다. 같은 내용을
-                  결과 쪽 EmptyState가 이미 조건부로 말하고 있어서, 회색 문단 하나가
-                  패널 세로를 상시로 먹을 이유가 없었다. */}
-              <span className="min-w-0 truncate">
-                {refreshing
-                  ? "최신화 중…"
-                  : target
-                    ? `최신화 · ${target.label}`
-                    : "지점 선택 후 최신화"}
-              </span>
-            </Button>
-          </span>
+            <RefreshCw
+              className={refreshing ? "size-4 shrink-0 animate-spin" : "size-4 shrink-0"}
+            />
+            <span className="min-w-0 truncate">
+              {refreshing
+                ? "최신화 중…"
+                : target
+                  ? `최신화 · ${target.label}`
+                  : "최신화"}
+            </span>
+          </Button>
         </div>
       </aside>
 

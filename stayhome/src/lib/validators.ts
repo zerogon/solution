@@ -54,13 +54,10 @@ export type SearchParamsInput = z.infer<typeof searchParamsSchema>;
 /**
  * User-facing cache read.
  *
- * The search UI sends dates only. Resort, region and property are all filtered on
- * the client (`matchesPlace`) so that every chip's availability badge comes for
- * free without a round trip per chip — and so that every place control commits the
- * same way (a resort chip used to dim the results and demand a re-query while an
- * identical-looking region chip did not).
- *
- * `resort` stays accepted for the same reason `branch` does, one line down.
+ * `resort` is the only server-side narrowing axis — it is low-cardinality (≤5) and
+ * is what actually bounds the payload. Region and property filtering happens on the
+ * client (`matchesPlace`) so that every chip's availability badge comes for free
+ * without a round trip per chip.
  *
  * `branch` (= `ResortInventory.branchName`) stays for compatibility with any cached
  * URL the service worker still holds; the search UI no longer sends it.
