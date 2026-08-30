@@ -23,6 +23,19 @@ export const resortAccountUpdateSchema = resortAccountSchema.partial({
   password: true,
 });
 
+/**
+ * 지점 제외 규칙 하나. `branchName`은 `config.branches[].value`와 문자 단위로 같아야
+ * 하는데, 그 대조는 여기(형식)가 아니라 `excludeProperty`(카탈로그)가 한다 — zod는
+ * 그 리조트가 무엇인지 모른다.
+ */
+export const branchExclusionSchema = z.object({
+  resortId: z.string().uuid(),
+  branchName: z.string().min(1, "지점을 선택하세요").max(100),
+  reason: z.string().max(200).optional().nullable(),
+});
+
+export type BranchExclusionInput = z.infer<typeof branchExclusionSchema>;
+
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD 형식이어야 합니다");
 
 export const searchParamsSchema = z
@@ -41,10 +54,13 @@ export type SearchParamsInput = z.infer<typeof searchParamsSchema>;
 /**
  * User-facing cache read.
  *
- * `resort` is the only server-side narrowing axis — it is low-cardinality (≤5) and
- * is what actually bounds the payload. Region and property filtering happens on the
- * client (`matchesPlace`) so that every chip's availability badge comes for free
- * without a round trip per chip.
+ * The search UI sends dates only. Resort, region and property are all filtered on
+ * the client (`matchesPlace`) so that every chip's availability badge comes for
+ * free without a round trip per chip — and so that every place control commits the
+ * same way (a resort chip used to dim the results and demand a re-query while an
+ * identical-looking region chip did not).
+ *
+ * `resort` stays accepted for the same reason `branch` does, one line down.
  *
  * `branch` (= `ResortInventory.branchName`) stays for compatibility with any cached
  * URL the service worker still holds; the search UI no longer sends it.

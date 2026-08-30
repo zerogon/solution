@@ -31,6 +31,14 @@ function rangeLabel(checkin: string, nights: number): string {
  *
  * 미디어쿼리 훅이 아니라 CSS로만 분기한다 (hydration 불일치 없음). 양쪽 모두
  * 마운트되지만 상태는 전부 부모에 있어 항상 동기화된다.
+ *
+ * ## 박수 스테퍼도 이 컴포넌트가 소유한다
+ * 예전에는 `SearchView`가 패널에 한 벌, 이 파일의 시트가 또 한 벌 그려서 모바일에
+ * 같은 컨트롤이 둘 있었다. 그런데 중복보다 나빴던 것은 **둘이 서로 달랐다**는 점이다 —
+ * 시트 쪽만 `setAwaitingCheckout(false)`를 불렀다. 그래서 데스크톱에서 캘린더를 한 번
+ * 탭한 뒤(체크아웃 대기 상태) 스테퍼를 누르면 그 플래그가 안 꺼지고, **다음 캘린더
+ * 탭이 체크인 이동이 아니라 체크아웃으로 해석**됐다. 소유권을 여기로 모으면 두 자리가
+ * 같은 핸들러를 쓰게 되어 그 비대칭이 구조적으로 사라진다.
  */
 export function DateRangeField({
   checkin,
@@ -60,9 +68,23 @@ export function DateRangeField({
     />
   );
 
+  const stepper = (
+    <NightsStepper
+      checkin={checkin}
+      nights={nights}
+      onChange={(next) => {
+        setAwaitingCheckout(false);
+        onChange({ checkin, nights: next });
+      }}
+    />
+  );
+
   return (
     <>
-      <div className="hidden xl:block">{calendar}</div>
+      <div className="hidden space-y-3 xl:block">
+        {calendar}
+        {stepper}
+      </div>
 
       <div className="xl:hidden">
         <Sheet
@@ -91,14 +113,7 @@ export function DateRangeField({
 
             <div className="space-y-3 px-4">
               {calendar}
-              <NightsStepper
-                checkin={checkin}
-                nights={nights}
-                onChange={(next) => {
-                  setAwaitingCheckout(false);
-                  onChange({ checkin, nights: next });
-                }}
-              />
+              {stepper}
             </div>
 
             <SheetFooter>

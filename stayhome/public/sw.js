@@ -30,6 +30,13 @@
 // v4: 행에 occupancy(기준·최대 인원)가 추가됐다. v3와 정확히 같은 이유 — 낡은 본문은
 //     크래시하지 않고 인원만 안 보인다.
 // 올리면 activate 핸들러가 이전 접두사 캐시를 지운다.
+//
+// 2026-08-30에 조회 UI가 `resort` 파라미터를 보내지 않게 됐지만 **버전은 올리지
+// 않았다** — 규칙은 "응답 shape이 바뀌면"이고 shape은 그대로다(지점 제외 작업이
+// 같은 논거로 올리지 않은 선례가 CLAUDE.md에 있다). `?…&resort=SONO`가 붙은 옛
+// 항목들은 아무도 다시 요청하지 않는 **도달 불가능한 잔재**로 남고(상한 360항목),
+// 로그아웃의 CLEAR_CACHE나 다음 버전 상승 때 사라진다. 오염이 아니므로 그것만을
+// 위해 activate에 청소 코드를 더하지 않는다.
 const CACHE_VERSION = "v4";
 const STATIC_CACHE = `welfarestay-static-${CACHE_VERSION}`;
 const DATA_CACHE = `welfarestay-data-${CACHE_VERSION}`;
