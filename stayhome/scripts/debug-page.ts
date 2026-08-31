@@ -4,7 +4,10 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
 
 // Site exploration helper for rewriting the Lotte crawler against
 // lottehotel.com. Usage: npx tsx scripts/debug-page.ts <step> [url]
-// Steps: main | login | resort | keys | custom (custom just opens [url] and dumps)
+// Steps: main | login | resort | search | bizcds | dom | lpoint | doLogin |
+//        keys | roomlist | custom (custom just opens [url] and dumps)
+// `keys`는 roomList 응답 키 전수 조사다 — 요금(roomAvgAmt)과 정원(capacity/
+// maxCapacity)이 둘 다 거기서 나왔다. 로그인이 필요 없다(BAR는 공개다).
 const OUT = process.env.DEBUG_OUT ?? "/tmp/lotte-debug";
 
 async function acceptCookies(page: Page) {

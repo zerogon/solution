@@ -4,6 +4,7 @@ import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { OAKVALLEY } from "./config";
 import { monthScopeKey, monthsCovering } from "./format";
 import { buildRows, collectNights, type CalendarPayload, type NightMap } from "./parse";
+import { loadOccupancyBook } from "./occupancy";
 import { loadRateBook } from "./rates";
 import { SessionLostError } from "../_shared/errors";
 
@@ -64,6 +65,9 @@ export async function performSearch(
   // 패스당 한 번. 공개 API 한 번이라 비용이 O(1)이고, 리솜처럼 행마다 콜이 아니므로
   // `withPrices` 게이트를 타지 않는다 — 그 게이트가 재는 것은 비용이다.
   const rates = await loadRateBook(ctx);
+  // 같은 이유로 패스당 한 번. 요금과 달리 `available`을 보지 않으므로 게이트가 없고,
+  // 실패하면 정원만 빈다(`loadOccupancyBook`은 절대 던지지 않는다).
+  const occupancies = await loadOccupancyBook(ctx);
   const months = monthsCovering(params.checkin, OAKVALLEY.calendarMonths);
 
   // 이 패스에 실제로 남은 시간. 상수(`passBudgetMs`)로 추정하면 두 시계가
@@ -123,7 +127,7 @@ export async function performSearch(
         collectNights(payload, scope, map);
       }
 
-      const rows = buildRows(map, branch, { nights }, rates);
+      const rows = buildRows(map, branch, { nights }, rates, occupancies);
       out.push(...rows);
       log("[oakvalley] branch done", {
         branch: branch.value,

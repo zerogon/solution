@@ -1,4 +1,5 @@
 import { addDaysUtc } from "@/lib/utils";
+import { occupancyOf } from "../_shared/occupancy";
 import type { InventoryRow } from "../types";
 import { RESOM, type ResomBranch } from "./config";
 import { formatDateCompact, parseDateCompact } from "./format";
@@ -16,6 +17,18 @@ export interface CalendarEntry {
   /** member-level, not per-date — always "Y" on the account we crawl with */
   rsvPsblYn?: string;
   rsvBlckCd?: string;
+
+  /**
+   * 기준인원 / 최대인원(명). 문자열 숫자로 온다(`"5"`).
+   *
+   * ⚠️ **`allCondos`의 `initPersCount`/`maxPersCount`와 이름이 비슷한 다른 필드다.**
+   * 그쪽은 17엔트리 전부 `0`이고(죽은 칸), 값은 여기에만 있다 — 실측(2026-08-31,
+   * 포레스트 리솜 506엔트리) `initPersCnt {"2","5"}` · `maxPersCnt {"4","6","7"}`,
+   * 결측 0건. `Cnt` 하나 차이라, 이름만 보고 고르면 전 객실을 0명으로 발행한다.
+   * 이 저장소가 `rmAmt`(506엔트리 전부 `"0"`)에서 이미 한 번 배운 함정이다.
+   */
+  initPersCnt?: string | number;
+  maxPersCnt?: string | number;
 }
 
 /**
@@ -65,6 +78,14 @@ export function parseCalendar(
 ): InventoryRow[] {
   /** roomType -> check-in date -> that one night. */
   const calendar = new Map<string, Map<string, Night>>();
+  /**
+   * roomType -> 그 객실의 정원. 값은 날짜가 아니라 **방**의 속성이라 달력 밖에 둔다.
+   *
+   * `null`은 "판정하지 않는다"는 뜻이고, 한 번 null이 되면 되돌아오지 않는다 —
+   * 같은 객실유형의 엔트리가 서로 다른 정원을 주면 어느 쪽도 고를 수 없기 때문이다.
+   * 실측에서 그런 불일치는 0건이지만, 생긴다면 증상은 에러가 아니라 조용히 틀린 안내다.
+   */
+  const occupancies = new Map<string, { standard: number; max: number } | null>();
 
   for (const [dateKey, entries] of Object.entries(payload ?? {})) {
     if (!Array.isArray(entries)) continue;
@@ -83,6 +104,19 @@ export function parseCalendar(
       night.roomy ||= bookable && remaining > RESOM.closingSoonThreshold;
       nights.set(dateKey, night);
       calendar.set(roomType, nights);
+
+      const occupancy = occupancyOf(entry.initPersCnt, entry.maxPersCnt);
+      if (!occupancies.has(roomType)) {
+        occupancies.set(roomType, occupancy);
+      } else {
+        const seen = occupancies.get(roomType) ?? null;
+        const same =
+          seen != null &&
+          occupancy != null &&
+          seen.standard === occupancy.standard &&
+          seen.max === occupancy.max;
+        if (!same) occupancies.set(roomType, null);
+      }
     }
   }
 
@@ -109,6 +143,11 @@ export function parseCalendar(
         // entry point is the honest answer.
         detailUrl: RESOM.bookingUrl,
         stay: { checkin, checkout: addDaysUtc(checkin, request.nights) },
+        // 요금과 달리 `available`을 보지 않는다 — 정원은 가용성의 함수가 아니라
+        // 방의 속성이다. 계약(`InventoryRow.occupancy`)의 비대칭이 그것이다.
+        ...(occupancies.get(roomType) == null
+          ? {}
+          : { occupancy: occupancies.get(roomType)! }),
       });
     }
   }

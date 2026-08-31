@@ -25,6 +25,7 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *   rows      run sono/search.ts standalone (only after it exists)
  *   span      what one room-list call actually covers — the finding the
  *             scheduler's request count depends on
+ *   keys      응답 키 전수 조사 — 요금(2026-08-24)·정원(08-31) 둘 다 여기서 판정했다
  *   flow      금액 조사 Q2 — drive PAST the availability calendar into room
  *             selection and record every JSON body. `keys` censused the one
  *             response we already read; this asks what else the flow calls.

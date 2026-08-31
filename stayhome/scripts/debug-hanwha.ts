@@ -39,6 +39,8 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *   cal       record the member calendar's OWN request, then compare ours
  *             ← the step that proves we are asking the same question
  *   span      what one call covers · does the stay length matter · month edges
+ *   keys      응답 키 전수 조사 + 게이트웨이 INTF_ID 목록 (금액 조사 · 정원 조사)
+ *   axes      시즌·객실유형 축이 공개 요금표에 붙는가 (금액 조사 Q4)
  *   rows      run hanwha/search.ts + parse.ts standalone
  *   diff      site property list and room types vs HANWHA config
  *

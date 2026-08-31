@@ -1,6 +1,7 @@
 import { addDaysUtc, parseDate, toIsoDate } from "@/lib/utils";
 import type { InventoryRow } from "../types";
 import { OAKVALLEY, type OakvalleyBranch } from "./config";
+import type { OccupancyBook } from "./occupancy";
 import { stayRate, type RateBook } from "./rates";
 import { dayOfMonthToDate } from "./format";
 
@@ -94,6 +95,10 @@ export function buildRows(
    * 요금은 부가 정보이고, 그것 때문에 재고를 잃으면 안 된다.
    */
   rates?: RateBook | null,
+  /**
+   * 공표된 객실 정원. 없으면 정원 없이 행만 만든다 — 요금과 같은 취급이다.
+   */
+  occupancies?: OccupancyBook | null,
 ): InventoryRow[] {
   const stayNights = Math.max(1, request.nights);
   const out: InventoryRow[] = [];
@@ -103,6 +108,10 @@ export function buildRows(
     // 요금표의 줄 이름은 평형 라벨과 **다른 지도**로 찾는다(`config.rateRows` 주석).
     // 여기 없는 코드(밸리 AP·BU)는 요금표에 줄이 둘이라 고를 수 없으므로 그냥 없다.
     const rateRow = OAKVALLEY.rateRows[code];
+    // 요금과 달리 별도 지도가 필요 없다 — 조인이 평형 라벨이라 `roomTypes` 하나로
+    // 끝난다(`occupancy.ts`의 `buildOccupancyBook` 주석). 요금표는 같은 평형을
+    // 일반/노블 두 줄로 갈라 놓아 고를 수 없었지만, 정원은 그 변형들이 같은 값이다.
+    const occupancy = occupancies?.get(branch.value)?.get(code) ?? null;
     for (const iso of byDate.keys()) {
       const checkin = parseDate(iso);
       let available = true;
@@ -142,6 +151,10 @@ export function buildRows(
               return amount == null ? {} : { price: { amount, kind: "memberTable" as const } };
             })()
           : {}),
+        // 요금과 딱 하나 다르다: **`available`을 보지 않는다.** 정원은 가용성의
+        // 함수가 아니라 방의 속성이라, 매진된 방도 낡은 행도 여전히 그 인원수다.
+        // 이 비대칭은 `InventoryRow.occupancy`의 계약이 정한 것이다.
+        ...(occupancy ? { occupancy } : {}),
       });
     }
   }

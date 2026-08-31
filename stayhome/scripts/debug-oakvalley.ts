@@ -55,6 +55,8 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *               plus the same signature re-fired 3×   ← decides the mechanism
  *   span        month scope, does V_IN_BAKSU matter, and the AND consistency
  *               probe                                 ← decides `InventoryRow.stay`
+ *   keys        응답 키 전수 조사 (금액 조사 2026-08-24 · 정원 08-31)
+ *   probe       어떤 오버라이드가 실제로 먹는가 — 서명이 붙은 폼의 판별법
  *   memberships do different 회원권 see different calendars?
  *   rows        run oakvalley/search.ts standalone (only after it exists)
  *   diff        compare the site's village/room-type lists against OAKVALLEY config
@@ -1170,6 +1172,47 @@ async function main() {
     //
     // A "no rates here" verdict has to answer both, or it is just a narrower
     // claim wearing a wider one's clothes.
+    // Q0 — 공개 마케팅 API. **로그인 전에 먼저 묻는다**(비용 0이고, 여기서 나온 답이
+    // 2026-08-31의 정원 수집 전체다). 이 파일 머리말은 `/api/v1/village`와
+    // `/api/v1/condo`를 "재고가 없다"고만 적어 두었는데, 그 문장에 이름조차 없던
+    // `/api/v1/room`이 객실마다 `standardCount`/`maxCount`를 준다.
+    // 파라미터 `idCondo`는 마케팅 SPA 번들의 `getRoomTypeList`에서 읽은 것이지
+    // 추측이 아니다 — 틀린 이름은 전부 같은 400("콘도 정보가 누락되었습니다")이라
+    // 이름이 틀린 것과 값이 틀린 것이 구별되지 않는다.
+    const { OAKVALLEY } = await import("../src/crawlers/oakvalley/config");
+    console.log("\n=== Q0. 공개 마케팅 API (무인증) ===");
+    for (const [label, url] of [
+      ["api/v1/village", OAKVALLEY.villageApiUrl],
+      ["api/v1/condo", OAKVALLEY.condoApiUrl],
+    ] as const) {
+      const body = (await (await page.request.get(url, { timeout: 20_000 })).json()) as {
+        data?: Array<Record<string, unknown>>;
+      };
+      keyCensus(label, body.data ?? []);
+    }
+    {
+      const condos = (await (
+        await page.request.get(OAKVALLEY.condoApiUrl, { timeout: 20_000 })
+      ).json()) as { data?: Array<{ id?: number; name?: string; oakValleyVillageType?: string }> };
+      const rooms: Array<Record<string, unknown>> = [];
+      for (const c of condos.data ?? []) {
+        const r = (await (
+          await page.request.get(`${OAKVALLEY.roomApiUrl}?idCondo=${c.id}`, { timeout: 20_000 })
+        ).json()) as { data?: Array<Record<string, unknown>> };
+        for (const room of r.data ?? []) {
+          rooms.push({ ...room, __village: c.oakValleyVillageType, __condo: c.name });
+        }
+      }
+      keyCensus("api/v1/room?idCondo=… — 전 콘도의 객실", rooms);
+      console.log("\n  정원 ↔ 우리 roomTypes 조인 (occupancy.ts가 하는 판정):");
+      for (const room of rooms) {
+        console.log(
+          `    ${String(room.__village).padEnd(5)} ${String(room.__condo).slice(0, 18).padEnd(18)}` +
+            ` ${String(room.name).slice(0, 22).padEnd(22)} std=${room.standardCount} max=${room.maxCount}`,
+        );
+      }
+    }
+
     const pns = recordJson(page);
     await gotoCondo(page);
     await sessionCheck(page, "pre-keys");

@@ -45,6 +45,8 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *   rows      run resom/search.ts standalone (only after it exists)
  *   span      what one availability call actually covers, and whether the
  *             night count changes anything — decides `InventoryRow.stay`
+ *   keys      응답 키 전수 조사 — 요금(2026-08-24)과 정원(08-31)이 여기서 나왔다
+ *   prices    stockPrice 부착 단독 (1·2·3박 총액 대조)
  *   diff      compare the site's property list against RESOM.branches
  *
  * Credentials: `RESOM_ID`/`RESOM_PW` env if set, otherwise the primary

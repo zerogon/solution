@@ -1,3 +1,4 @@
+import { occupancyOf } from "../_shared/occupancy";
 import type { InventoryRow } from "../types";
 import { LOTTE, type LotteBranch } from "./config";
 
@@ -132,35 +133,4 @@ function stayTotal(avg: string | number | undefined, nights: number): number | n
   if (!Number.isFinite(perNight) || perNight <= 0) return null;
   if (!Number.isFinite(nights) || nights < 1) return null;
   return Math.round(perNight * nights);
-}
-
-/**
- * `capacity` / `maxCapacity` → 이 객실의 정원. 값이 미덥지 않으면 `null`.
- *
- * **둘 다이거나 둘 다 아니다.** 기준만 받아서 "4인"이라 쓰면, 최대 6인인 방을
- * 6인 가족을 위해 찾던 담당자가 후보에서 뺀다 — 없는 정보보다 나쁜, 틀린 정보다.
- *
- * 거르는 것들:
- * - 숫자가 아니거나(문자열 `""`·null), 유한하지 않거나, 정수가 아니거나, 1 미만.
- *   **필드가 있다고 값이 있는 게 아니라는 것은 리솜 `rmAmt`에서 이미 배웠다**
- *   (506엔트리 전부 `"0"`이었다).
- * - `max < standard`. 실측 71객실에서 0건이지만, 뒤집힌 값은 에러가 아니라 조용히
- *   틀린 안내가 된다 — 사이트가 두 필드의 의미를 바꾸면 그 형태로 나타날 것이다.
- */
-function occupancyOf(
-  capacity: string | number | undefined,
-  maxCapacity: string | number | undefined,
-): { standard: number; max: number } | null {
-  const standard = personCount(capacity);
-  const max = personCount(maxCapacity);
-  if (standard == null || max == null) return null;
-  if (max < standard) return null;
-  return { standard, max };
-}
-
-function personCount(v: string | number | undefined): number | null {
-  if (v == null || v === "") return null;
-  const n = Number(v);
-  if (!Number.isInteger(n) || n < 1) return null;
-  return n;
 }

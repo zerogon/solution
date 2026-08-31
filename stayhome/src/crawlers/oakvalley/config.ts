@@ -162,6 +162,21 @@ export const OAKVALLEY = {
   villageApiUrl: "https://api.oakvalley.co.kr/api/v1/village",
 
   /**
+   * 공표된 객실 정원. **무인증**이고 `villageApiUrl`과 같은 마케팅 호스트다.
+   *
+   * `condoApiUrl`은 동(棟) 목록이고(빌라 A·B, 타워 C/D, 캐릭터 룸 …8건) 그 자체에는
+   * 정원이 없다 — 정원은 `roomApiUrl?idCondo=<그 동의 id>`가 객실마다 답하는
+   * `standardCount`/`maxCount`에 있다. 이 파일 머리말이 오래 "재고가 없다"고만
+   * 적어둔 그 엔드포인트 옆이고, `roomApiUrl`은 이 저장소가 한 번도 부른 적이 없었다.
+   *
+   * 파라미터 이름 `idCondo`는 **관측**이다(마케팅 SPA 번들의 `getRoomTypeList`).
+   * 추측으로 고르면 400이 `"콘도 정보가 누락되었습니다"`로만 돌아와, 이름이 틀린 것과
+   * 값이 틀린 것이 구별되지 않는다.
+   */
+  condoApiUrl: "https://api.oakvalley.co.kr/api/v1/condo",
+  roomApiUrl: "https://api.oakvalley.co.kr/api/v1/room",
+
+  /**
    * 요금표의 세 열(기명 · 무기명 · 회원대여가) 중 이 계정이 쓰는 것.
    *
    * **사이트가 말해주지 않는다.** `getRoomMember`가 돌려주는 회원권 5개가 전부
