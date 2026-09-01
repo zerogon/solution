@@ -24,6 +24,35 @@ export const LOTTE = {
   roomListApiUrl: "https://resort.lottehotel.com/api/main/ko/reservation/roomList",
   /** Human-facing booking page — used for detailUrl and as API referer. */
   bookingUrl: "https://resort.lottehotel.com/main/ko/reservation/accommodation",
+  /**
+   * 로그인한 사용자 정보. **회원 요금의 열쇠 두 개가 여기서 나온다**
+   * (`memberNo`와 `registerCd` → `ownType`). 로그인 상태에서만 의미 있는 응답이고,
+   * 회원사명·담당자명·이메일이 평문으로 들어 있어 `member.ts`가 읽는 칸만 선언한다.
+   */
+  userApiUrl: "https://resort.lottehotel.com/common/login/user",
+
+  /**
+   * roomList 요청의 **고정** 파라미터. 예전에는 `search.ts`에 리터럴로 박혀 있었는데,
+   * 회원 축이 생기면서 "무엇이 고정이고 무엇이 신원인지"를 한 곳에서 말해야 해졌다.
+   *
+   * `rsvType`의 대안 어휘는 실측으로 하나뿐이고(번들에서 캔 `PRO`), 인증·익명 모두
+   * **0행**으로 거절됐다. 회원 요금을 여는 축은 `rsvType`이 아니라 `ownType`이다.
+   */
+  rsvType: "BAR",
+  procType: "",
+
+  /**
+   * 예약유형 코드. 사이트 번들 `layouts.base.js`가 직접 주석으로 적어 둔 값이다 —
+   * `ownType: null, // 예약유형 (1: 기명, 2: 지인, 5: 무기명)`.
+   *
+   * **어느 값을 쓸지는 계정이 정한다**(`member.ts`의 `ownTypeOf`). 여기 박는 것은
+   * 어휘이지 선택이 아니다 — 오크밸리 `rateFare`가 운영자의 답을 상수로 박아야 했던
+   * 것과 달리, 롯데는 사이트가 계정 필드(`registerCd`)로 답해 준다.
+   */
+  ownType: { named: "1", acquaintance: "2", unnamed: "5" },
+
+  /** 분양회원(`"R"`)만 회원 요금 트랙을 갖는다. 같은 응답에 `"CYBER"` 엔트리도 온다. */
+  membershipTypeOwned: "R",
 
   login: {
     /** Cookie-consent banner button (appears once per fresh context). */
@@ -126,8 +155,26 @@ export const LOTTE = {
   timeouts: {
     navigation: 20_000,
     login: 25_000,
-    /** Single roomList API call */
+    /**
+     * 한 번의 roomList 호출 **상한**. 실제 값은 남은 예산에서 유도한다
+     * (`search.ts`의 `callTimeout`) — 이 상수만 쓰면 시계가 둘이 된다.
+     *
+     * 유도가 필요한 이유는 이 사이트의 지연이 널뛰기 때문이다. 실측(2026-09-01,
+     * 같은 창을 세 번): **처음 묻는 (지점, 날짜)는 18초까지 걸리고 다시 물으면
+     * 1초 남짓**이다. 즉 콜 수가 아니라 **날짜가 새것이냐**가 비용을 정한다
+     * (BAR 4콜 병렬이 18.0초, BAR+회원 8콜 병렬이 0.6초로 나온 실측이 그 증거다).
+     * 핫 스윕은 60개 창이 전부 새 날짜라 이 꼬리를 매번 만난다.
+     */
     api: 15_000,
+    /**
+     * 검색이 `ctx.deadlineAt`보다 이만큼 먼저 끝나도록 뺀다.
+     *
+     * 넘기면 잃는 것은 그 콜이 아니라 **패스 전체의 SUCCESS 판정**이다 —
+     * `run.ts`가 검색을 `withDeadline`으로 감싸고, 초과는 부분 반환이 아니라
+     * `DeadlineExceeded`로 나타난다. 2026-09-01 핫 스윕이 정확히 그렇게 죽었다
+     * (11창 117행을 커밋해 놓고 `deadline exceeded for search after 6598ms`).
+     */
+    returnReserve: 1_500,
   },
 } as const;
 

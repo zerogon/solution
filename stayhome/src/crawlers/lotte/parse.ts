@@ -26,10 +26,13 @@ export interface RoomListPayload {
      * 실측(속초, 같은 방): 1박 238,620 → 2박 234,255 → 3박 232,800으로 *줄었다*.
      * 평일이 섞이며 평균이 내려간 것이고, 2박 234,255×2 = 468,510 =
      * 238,620(주말) + 229,890(평일)로 같은 응답의 `minRateAmt`와 산술이 정확히 맞는다.
+     * **회원 트랙도 같은 계약이다**(1·2·3박 모두 1박 평균) — 2026-09-01 실측.
      *
-     * `rsvType=BAR`로 물었고 응답의 `memberType`이 전 객실 `""`이므로 **공시가**다 —
-     * 제휴 담당자가 안내할 회원가가 아닐 수 있다. 그래서 `kind`는 `"public"`이고,
-     * 화면이 그렇게 말한다.
+     * ⚠️ **이 값이 공시가인지 회원가인지는 이 응답을 봐서는 알 수 없다.**
+     * `memberType`은 회원 트랙에서도 전 객실 `""`이고(2026-09-01 실측), 다른 어떤 칸도
+     * 트랙을 신고하지 않는다. 갈리는 것은 **우리가 보낸 요청**뿐이므로 라벨의 근거도
+     * 거기에 있어야 한다 — 아래 `parseRoomList`가 어느 페이로드에서 온 숫자인지로
+     * `kind`를 정하는 이유이고, 응답에서 유도하려던 첫 설계가 성립하지 않은 이유다.
      */
     roomAvgAmt?: string | number;
     /**
@@ -60,6 +63,14 @@ export interface RoomListPayload {
  */
 export function parseRoomList(
   payload: RoomListPayload,
+  /**
+   * 같은 지점·같은 날짜를 회원 트랙(`memberNo`+`ownType`)으로 물은 응답. 없으면 `null`.
+   *
+   * **재고는 여기서 오지 않는다.** 회원 트랙은 BAR의 부분집합이라(실측: 부여 23/25 ·
+   * 제주 13/14 · 김해 18/20) 이걸로 재고를 만들면 예약 가능한 방이 조회 화면에서
+   * 사라진다. 여기서 오는 것은 요금뿐이다.
+   */
+  memberPayload: RoomListPayload | null,
   branch: LotteBranch,
   dates: { checkinDt: string; checkoutDt: string; nights: number },
 ): InventoryRow[] {
@@ -72,6 +83,16 @@ export function parseRoomList(
     `${LOTTE.bookingUrl}?bizCd=${branch.bizCd}` +
     `&checkinDt=${dates.checkinDt}&checkoutDt=${dates.checkoutDt}` +
     `&roomCnt=1&reservationType=BAR`;
+
+  // 회원 요금표: 객실명 → 그 숙박의 총액. 이름이 유일 키인 것은 BAR와 같은 근거다
+  // (`roomNm`이 서로 다르다 — 아래 dedupe가 실제로 지우는 것이 없다).
+  const memberRates = new Map<string, number>();
+  for (const room of memberPayload?.roomList ?? []) {
+    const name = room.roomNm?.trim();
+    if (!name || memberRates.has(name)) continue;
+    const amount = stayTotal(room.roomAvgAmt, dates.nights);
+    if (amount != null) memberRates.set(name, amount);
+  }
 
   const out: InventoryRow[] = [];
   const seen = new Set<string>();
@@ -89,7 +110,7 @@ export function parseRoomList(
     // 거르지만("예약할 수 없는 방의 가격은 정보가 아니라 잡음이다") **DB에 두면
     // 불변식이 깨진다** — 이 저장소의 검증 목록에 "available=false에 요금 없음"이
     // 있고, 리솜 수집기도 available한 행만 대상으로 삼는다.
-    const amount = available ? stayTotal(room.roomAvgAmt, dates.nights) : null;
+    const price = available ? priceOf(room, roomType, memberPayload, memberRates, dates.nights) : null;
     const occupancy = occupancyOf(room.capacity, room.maxCapacity);
 
     out.push({
@@ -100,7 +121,7 @@ export function parseRoomList(
       closingSoon: available && remaining <= LOTTE.closingSoonThreshold,
       detailUrl,
       // `price`는 금액과 종류가 한 덩어리다 — 둘 다이거나 둘 다 아니다.
-      ...(amount == null ? {} : { price: { amount, kind: "public" as const } }),
+      ...(price == null ? {} : { price }),
       // 인원도 한 덩어리이지만 **`available`을 보지 않는다.** 위 요금과 이 비대칭이
       // 의도다 — 정원은 시간이 지나도, 방이 매진돼도 변하지 않는 방의 속성이라
       // 낡은 행에서도 여전히 맞는 값이다.
@@ -108,6 +129,37 @@ export function parseRoomList(
     });
   }
   return out;
+}
+
+/**
+ * 이 행의 요금과, 그 요금이 무엇인지.
+ *
+ * **라벨은 숫자가 어느 페이로드에서 왔는지로 정해진다.** 응답에는 트랙을 신고하는 칸이
+ * 없으므로(`memberType`이 양쪽 다 `""`) 유일하게 남은 근거가 출처다. 세 갈래이고,
+ * 실패 방향이 전부 안전한 쪽인 것이 이 함수의 요점이다:
+ *
+ * - **회원 트랙을 받았고 이 방이 거기 있다** → 회원가. 담당자가 안내할 숫자다.
+ * - **회원 트랙을 받았는데 이 방이 거기 없다** → 요금 없음. 회원 트랙은 BAR의
+ *   부분집합이고(부여 25→23), 빠진 방은 회원 요금이 없는 방이다. 여기서 BAR 값을
+ *   대신 넣으면 한 지점 안에 회원가와 공시가가 라벨 없이 섞인다 — 행 단위로는
+ *   구별할 방법이 없고, `price.ts`가 존재하는 이유가 정확히 그 혼동이다.
+ *   **빈칸은 정보가 없는 것이지만 섞인 숫자는 틀린 안내가 된다.**
+ * - **회원 트랙 자체가 없다**(로그인 전이거나 회원 콜이 실패했거나 분양회원이 아니거나)
+ *   → BAR 공시가. 2026-09-01 이전의 동작 그대로이고, 라벨도 그때 그대로다.
+ */
+function priceOf(
+  room: NonNullable<RoomListPayload["roomList"]>[number],
+  roomType: string,
+  memberPayload: RoomListPayload | null,
+  memberRates: Map<string, number>,
+  nights: number,
+): { amount: number; kind: "member" | "public" } | null {
+  if (memberPayload) {
+    const amount = memberRates.get(roomType);
+    return amount == null ? null : { amount, kind: "member" };
+  }
+  const amount = stayTotal(room.roomAvgAmt, nights);
+  return amount == null ? null : { amount, kind: "public" };
 }
 
 /**
