@@ -15,7 +15,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { PopoverTitle } from "@/components/ui/popover";
 import { LEAD_BUSINESS_DAYS } from "./deadline-shared";
 
 /** "YYYY-MM-DD"는 사전순이 곧 시간순이라 문자열 비교로 충분하다. */
@@ -27,19 +26,21 @@ const MONTHS_BACK = 12;
 const MONTHS_AHEAD = 24;
 
 /**
- * 팝업 내용 — **별도 모듈인 것이 요점이다.**
+ * 달력 + 결과 — **별도 모듈인 것이 요점이다.**
  *
  * `Calendar`는 `react-day-picker`와 `ko` 로케일을 자기가 속한 청크로 끌고 온다.
- * 이걸 `DeadlineCalculator`에 인라인하면 그 청크가 **인증된 모든 라우트**의 셸에
- * 들어간다 — 실측으로 `/admin/*` 세 화면이 ~90KB짜리 청크를 새로 받게 됐다.
- * md 미만에서는 보이지도 않고 대개 열리지도 않는 위젯 때문에.
+ * 이걸 `DeadlineCalculator`에 인라인하면 그 청크가 **인증된 모든 라우트**의 셸
+ * 정적 청크에 들어간다 — 실측으로 `/admin/*` 세 화면이 ~90KB짜리 청크를 새로 받게 됐다.
+ * 그래서 `next/dynamic`으로 여기만 지연 로드한다. 이 저장소에서 `next/dynamic`을
+ * 쓰는 첫 자리이고, 새 패턴을 들인 근거가 그 실측이다. 인라인 전환 뒤의 손익은
+ * `DeadlineCalculator`의 dynamic 주석에 적혀 있다.
  *
- * 그래서 `next/dynamic`으로 여기만 지연 로드한다(`ssr: false`는 무해하다 —
- * 클릭 뒤에야 존재하는 포털 안에서만 렌더된다). 이 저장소에서 `next/dynamic`을
- * 쓰는 첫 자리이고, 새 패턴을 들인 근거가 위의 실측이다.
- *
- * 닫히면 언마운트되므로 `month` 초기값이 다시 계산된다 —
- * 다시 열면 선택한 날짜의 달로 돌아오는 것이 의도된 동작이다.
+ * ## `month`는 이제 언마운트로 초기화되지 않는다
+ * 팝업이던 시절엔 닫힐 때 언마운트돼 `month`가 다시 계산됐다. 사이드바에 상시
+ * 렌더되는 지금은 세션 내내 살아 있으므로, `picked`가 **밖에서** 바뀌면(부모의 "오늘"
+ * 버튼) 달력이 그 달로 따라가야 한다. 아래에서 렌더 중 상태 조정으로 처리한다 —
+ * `useEffect`가 아니다. 달력 안의 클릭은 `showOutsideDays={false}` 덕분에 언제나
+ * 보이는 달의 날짜라 이 조정이 무동작이고, 따라서 화면이 튀지 않는다.
  */
 export function DeadlineCalculatorBody({
   picked,
@@ -65,6 +66,12 @@ export function DeadlineCalculatorBody({
   onRetry: () => void;
 }) {
   const [month, setMonth] = useState(() => parseDate(startOfMonthIso(picked)));
+  // 부모가 `picked`를 옮기면(= "오늘" 버튼) 달력도 그 달로 간다. 위 헤더 참조.
+  const [lastPicked, setLastPicked] = useState(picked);
+  if (picked !== lastPicked) {
+    setLastPicked(picked);
+    setMonth(parseDate(startOfMonthIso(picked)));
+  }
   const today = todayKstIso();
 
   // 달력이 갈 수 있는 범위. 커버리지 밖으로 넘어가면 모든 날짜가 "계산 불가"라
@@ -105,21 +112,6 @@ export function DeadlineCalculatorBody({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <PopoverTitle>마감일 계산기</PopoverTitle>
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={() => {
-            const t = todayKstIso();
-            onPick(t);
-            setMonth(parseDate(startOfMonthIso(t)));
-          }}
-        >
-          오늘
-        </Button>
-      </div>
-
       <Calendar
         mode="single"
         selected={parseDate(picked)}

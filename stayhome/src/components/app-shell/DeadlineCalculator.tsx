@@ -1,25 +1,26 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import dynamic from "next/dynamic";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, ChevronsUpDown } from "lucide-react";
+import { CalendarClock } from "lucide-react";
 
-import { cn, formatKoMd, todayKstIso } from "@/lib/utils";
+import { todayKstIso } from "@/lib/utils";
 import { subtractBusinessDaysIso } from "@/lib/business-days";
 import { holidayOracle, type HolidayMap } from "@/lib/holidays-kr";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import { LEAD_BUSINESS_DAYS } from "./deadline-shared";
 
 /**
- * 팝업 본문만 지연 로드한다 — `react-day-picker` + `ko` 로케일(~90KB)이 셸 청크로
- * 들어가면 `/admin/*` 세 화면까지 그걸 받는다. 상세는 `DeadlineCalculatorBody`의 헤더.
- * `ssr: false`가 무해한 이유는 이 컴포넌트가 클릭 뒤에야 생기는 포털 안에서만
- * 렌더되기 때문이다.
+ * 달력 본문만 지연 로드한다 — `react-day-picker` + `ko` 로케일(~90KB)이 셸 청크로
+ * 들어가면 `/admin/*` 세 화면까지 그걸 **초기 페이로드로** 받는다.
+ *
+ * ⚠️ 인라인 전환(달력이 상시 노출)으로 이 장치의 값이 줄었다는 것은 알고 있다 —
+ * 이제 데스크톱의 모든 인증 페이지가 이 청크를 실제로 **받는다**(예전엔 팝업을 연
+ * 사람만 받았다). 그래도 유지하는 이유는 둘이다: 청크가 셸의 정적 청크에 박히지 않고
+ * 하이드레이션 **뒤에** 오며, 사이드바를 접어 둔 세션에서는 아예 렌더되지 않아
+ * 여전히 받지 않는다. `ssr: false`가 무해한 이유는 바뀌었다 — 포털 안이라서가 아니라
+ * 서버 HTML이 이 자리를 비워 두는 것이 아래 `mounted` 게이트와 같은 뜻이라서다.
  */
 const DeadlineCalculatorBody = dynamic(
   () => import("./DeadlineCalculatorBody").then((m) => m.DeadlineCalculatorBody),
@@ -43,36 +44,71 @@ async function fetchHolidays(): Promise<HolidayResponse> {
 }
 
 /**
+ * `AppShell`의 `<aside>`가 `hidden … md:flex`로 쓰는 것과 **같은 경계**다.
+ * 어긋나면 증상이 조용하다 — 보이지도 않는 위젯이 공휴일을 받아오고 달력 청크를 내려받는다.
+ */
+const DESKTOP_MQ = "(min-width: 768px)";
+
+function subscribeDesktop(onChange: () => void) {
+  const mql = window.matchMedia(DESKTOP_MQ);
+  mql.addEventListener("change", onChange);
+  return () => mql.removeEventListener("change", onChange);
+}
+
+/**
  * 사이드바 마감일 계산기 — 기준일에서 **영업일 기준 10일 전**.
  *
  * ## 왜 셸에 있나
- * 사이드바 줄은 **상시 표시판**이고 팝업은 입력 장치일 뿐이다. 팝업을 닫아도 답이
- * 화면에 남는 것이 이 계산기를 페이지가 아니라 셸에 둔 이유 전부다 — 조회 화면을
- * 떠나지 않고 곁눈질하려고 만든 도구다.
+ * 사이드바는 **상시 표시판**이다. 예전엔 그 표시판이 요약 한 줄이고 달력은 팝업이었는데,
+ * 이제 달력과 답이 통째로 사이드바 안에 산다 — 조회 화면을 떠나지 않고 곁눈질하려고
+ * 만든 도구라, 누르지 않아도 보이는 것이 이 위젯의 목적 전부다.
  *
- * ## 데스크톱 전용은 공짜다
- * `AppShell`의 `<aside>`가 `hidden … md:flex`라 md 미만에서는 보이지 않는다.
- * 미디어쿼리 훅도, 두 벌 마운트도 필요 없다 — `DateRangeField`가 두 갈래를 마운트하는
- * 것은 그쪽이 *뷰포트* 분기를 넘나들기 때문이고, 여기는 그렇지 않다.
- * `collapsed`는 컴포넌트 상태이지 미디어쿼리가 아니다.
+ * ## 데스크톱 전용이 더 이상 공짜가 아니다
+ * `AppShell`의 `<aside>`가 `hidden … md:flex`라 md 미만에서는 **보이지 않는다.** 팝업이던
+ * 시절엔 그것으로 충분했다 — 안 보이면 누를 수도 없으니 아무 일도 일어나지 않았다.
+ * 상시 렌더가 되면서 그 전제가 깨졌다: 실측으로 390px 뷰포트에서도 컴포넌트가 마운트돼
+ * `/api/holidays`를 부르고 달력 청크(~90KB)를 내려받았다. **아무도 볼 수 없는 위젯 때문에.**
+ * 그래서 `DESKTOP_MQ`가 생겼다. 이 상수는 `<aside>`의 `md:` 분기와 한 쌍이다.
  *
- * ## 하이드레이션
- * `<aside>`는 서버 HTML에 **들어간다**. 그래서 `picked`가 `null`로 시작하고 첫 렌더의
- * 문구가 양쪽 다 상수다. `todayKstIso()`는 **이벤트 핸들러 안에서만** 부른다 —
- * 렌더 중에 부르면 KST↔UTC 15:00 경계에서 서버/클라 값이 갈린다. 덤으로, 자정을
- * 넘겨 켜둔 PWA에서도 "오늘"이 밀리지 않는다(`SearchView`는 마운트 시 한 번
- * 메모하는데, 세션 내내 살아 있는 셸에서는 그게 틀린다).
+ * ## 하이드레이션 + 페치 게이트가 같은 한 줄에 걸려 있다
+ * `<aside>`는 서버 HTML에 **들어간다.** 그런데 달력이 상시 노출이므로 기준일을 클릭
+ * 이전에 정해야 하고, `todayKstIso()`를 렌더에서 그냥 부르면 KST↔UTC 15:00 경계에서
+ * 서버/클라 값이 갈린다. `useSyncExternalStore`의 **서버 스냅샷이 false**라 그 문제가
+ * 미디어쿼리 구독과 같은 자리에서 해결된다 — `AppShell`이 사이드바 접힘에 쓰는 것과 같은
+ * 관용구다. `useEffect` + `setState`를 쓰지 않는 이유는 그 lint 오류를 하나 더 늘리지
+ * 않기 위해서다.
+ *
+ * 결과적으로 `picked !== null` 한 줄이 넷을 동시에 뜻한다 —
+ * **마운트됐고 · 데스크톱이고 · 사이드바가 펼쳐져 있고 · 서버 렌더가 아니다.**
+ * 그래서 `useQuery`의 `enabled` 게이트가 그대로 살아 있고, `{picked && <Body/>}`가
+ * 그 셋 중 하나라도 아니면 달력 청크를 **아예 요청하지 않는다.**
+ * 덤으로 `todayKstIso()`가 렌더마다 재평가되므로 자정을 넘겨 켜둔 PWA에서도 "오늘"이
+ * 밀리지 않는다(`SearchView`는 마운트 시 한 번 메모하는데, 세션 내내 사는 셸에서는 그게 틀린다).
  */
-export function DeadlineCalculator({ collapsed }: { collapsed: boolean }) {
-  const [open, setOpen] = useState(false);
-  const [picked, setPicked] = useState<string | null>(null);
+export function DeadlineCalculator({
+  collapsed,
+  onExpand,
+}: {
+  collapsed: boolean;
+  /** 레일에서 아이콘을 눌렀을 때 사이드바를 펼친다. `collapsed`일 때만 쓰인다. */
+  onExpand: () => void;
+}) {
+  const isDesktop = useSyncExternalStore(
+    subscribeDesktop,
+    () => window.matchMedia(DESKTOP_MQ).matches,
+    () => false,
+  );
+  /** 사용자가 고른 날. null이면 "오늘"이다 — 오늘은 상태가 아니라 렌더 시점의 사실이다. */
+  const [override, setOverride] = useState<string | null>(null);
+  const active = isDesktop && !collapsed;
+  const picked = active ? (override ?? todayKstIso()) : null;
 
   const { data, isPending, isError, refetch, isFetching } = useQuery({
     queryKey: ["holidays"],
     queryFn: fetchHolidays,
     // ⚠️ 이 게이트를 지우면 안 된다. 키가 더 이상 연도를 필요로 하지 않는다고 없애면
-    // 인증된 **모든 페이지 로드**에 요청이 하나씩 조용히 붙는다. `picked`는 팝업을
-    // 처음 열 때만 세워지므로, 지금은 관리 화면에서 요청이 0건이다.
+    // 인증된 **모든 페이지 로드**에 요청이 하나씩 조용히 붙는다. 지금은 `picked`가
+    // 위 헤더의 넷을 한꺼번에 뜻하므로, 모바일과 레일 사용자에겐 요청이 0건이다.
     enabled: picked !== null,
     // 프로바이더 기본 30초는 이 데이터에 무의미하다 — 공휴일은 하루에 몇 번씩
     // 바뀌지 않고, 서버가 이미 12시간 캐시를 들고 있다.
@@ -99,7 +135,7 @@ export function DeadlineCalculator({ collapsed }: { collapsed: boolean }) {
 
   // 달력에 점을 찍을 공휴일 — **건너뛴 것만이 아니라 받아온 전부**다.
   // 건너뛴 것만 찍으면 화면에 보이는 다른 공휴일(예: 주말과 겹쳐 주말로 센 광복절)에
-  // 점이 없어서 "위젯이 그 날을 모른다"처럼 읽힌다. 답을 설명하는 것은 아래 요약 줄
+  // 점이 없어서 "위젯이 그 날을 모른다"처럼 읽힌다. 답을 설명하는 것은 요약 줄
   // ("주말 4일 · 공휴일 1일")이고, 점은 달력의 사실을 그리는 것이라 역할이 다르다.
   const holidayDates = useMemo(
     () => (data ? Object.values(data.years).flatMap((m) => Object.keys(m)) : []),
@@ -115,74 +151,52 @@ export function DeadlineCalculator({ collapsed }: { collapsed: boolean }) {
     [data],
   );
 
-  const summary = !picked
-    ? "날짜를 선택하세요"
-    : failed
-      ? "계산 불가 · 공휴일 정보 없음"
-      : answer
-        ? `${formatKoMd(picked)} → ${formatKoMd(answer)}`
-        : "공휴일 정보 확인 중…";
+  const pickToday = useCallback(() => setOverride(todayKstIso()), []);
+
+  // 레일 — 표시판이 아니라 **문**이다. 60px에 달력이 들어가지 않으므로 아이콘만 두고
+  // 누르면 사이드바를 펼친다. 예전 레일에 있던 실패 점은 여기서 사라졌는데, 접힌
+  // 상태에서는 공휴일을 아예 받지 않아(위 `enabled` 게이트) 신고할 실패가 없기 때문이다.
+  if (collapsed) {
+    return (
+      <div className="flex justify-center">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onExpand}
+          title="마감일 계산기 · 사이드바 펼치기"
+          aria-label="마감일 계산기 · 사이드바 펼치기"
+        >
+          <CalendarClock className="size-4.5 text-sidebar-foreground/70" />
+        </Button>
+      </div>
+    );
+  }
 
   return (
-    <Popover
-      open={open}
-      onOpenChange={(next) => {
-        // 열 때 오늘을 읽는다. 렌더가 아니라 여기여야 하는 이유는 위 헤더 참조.
-        if (next && picked === null) setPicked(todayKstIso());
-        setOpen(next);
-      }}
-    >
-      {/* 트리거 엘리먼트는 접힘/펼침에서 **같은 노드**여야 한다. 삼항으로 서로 다른
-          엘리먼트를 갈아끼우면 열려 있는 동안 접었을 때 앵커가 언마운트된다.
-          바뀌는 것은 내용뿐이다. */}
-      <PopoverTrigger
-        className={cn(
-          "relative flex w-full items-center gap-2 rounded-md p-2 text-left text-sm transition-colors hover:bg-sidebar-accent/60 focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none data-popup-open:bg-sidebar-accent",
-          collapsed && "justify-center",
-        )}
-        title={collapsed ? `마감일 계산기 · ${summary}` : undefined}
-      >
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 px-1">
         <CalendarClock className="size-4.5 shrink-0 text-sidebar-foreground/70" />
-        {/* 접힘 상태에서 `hidden`이 아니라 `sr-only`인 것은 `AppSidebar`와 같다 —
-            보이지 않을 뿐 접근성 트리에는 남아야 한다. */}
-        <span className={cn("min-w-0 flex-1", collapsed && "sr-only")}>
-          <span className="block truncate font-medium">마감일 계산기</span>
-          <span
-            className={cn(
-              "block truncate font-mono text-xs tabular-nums",
-              failed ? "text-destructive/80" : "text-muted-foreground",
-            )}
-          >
-            {summary}
-          </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">
+          마감일 계산기
         </span>
-        {!collapsed && (
-          <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-        {/* 접힌 레일에서는 요약 줄이 안 보이므로, 실패를 아이콘 위에 점으로 남긴다.
-            안 그러면 접은 사용자에게는 위젯이 조용히 무의미해진다. */}
-        {collapsed && failed && (
-          <span className="absolute top-1 right-1 size-1.5 rounded-full bg-destructive" />
-        )}
-      </PopoverTrigger>
+        <Button variant="ghost" size="xs" onClick={pickToday}>
+          오늘
+        </Button>
+      </div>
 
-      {/* side/align은 `collapsed`로 분기하지 않는다 — 256px에서도 60px에서도 옳고,
-          align="end"라 하단에 붙은 트리거에서 위로 자란다. */}
-      <PopoverContent side="right" align="end" sideOffset={8} className="w-72">
-        {picked && (
-          <DeadlineCalculatorBody
-            picked={picked}
-            onPick={setPicked}
-            answer={answer}
-            skipped={result?.ok ? result : null}
-            holidayDates={holidayDates}
-            coveredRange={coveredRange}
-            loading={isPending || isFetching}
-            failed={failed}
-            onRetry={() => void refetch()}
-          />
-        )}
-      </PopoverContent>
-    </Popover>
+      {picked && (
+        <DeadlineCalculatorBody
+          picked={picked}
+          onPick={setOverride}
+          answer={answer}
+          skipped={result?.ok ? result : null}
+          holidayDates={holidayDates}
+          coveredRange={coveredRange}
+          loading={isPending || isFetching}
+          failed={failed}
+          onRetry={() => void refetch()}
+        />
+      )}
+    </div>
   );
 }
