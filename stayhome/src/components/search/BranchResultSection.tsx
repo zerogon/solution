@@ -11,8 +11,10 @@ import {
   showsPrice,
   toneOf,
 } from "@/lib/availability-tone";
-import { PRICE_KIND_LABEL, formatKrw, perNightAverage } from "@/lib/price";
-import { checkedLabel, syncedLabel } from "@/lib/freshness";
+import { PRICE_KIND_LABEL, formatKrw, perNightAverage, type PriceKind } from "@/lib/price";
+import { checkedLabel, relativeAge, syncedLabel } from "@/lib/freshness";
+import { RoomRateCell } from "./RoomRateCell";
+import { rateKey, showsRowPrice, type ManualRate } from "./manual-rates";
 import type { InventoryRow } from "./types";
 
 /**
@@ -26,6 +28,8 @@ export function BranchResultSection({
   rows,
   now,
   nights,
+  rates,
+  onRateSaved,
 }: {
   rows: InventoryRow[];
   /**
@@ -38,6 +42,13 @@ export function BranchResultSection({
    * 모르고(총액만 갖는다), 그 답은 조회 조건에 있다.
    */
   nights: number;
+  /**
+   * 운영자가 손으로 넣은 요금의 원본. 병합된 `row.price`만으로는 편집 폼을 채울 수 없다 —
+   * 저기 든 것은 **총액**이고 사람이 넣은 것은 **단가**다.
+   */
+  rates: Map<string, ManualRate>;
+  /** 저장·삭제 후 호출. 호출부가 `["room-rates"]`를 무효화한다. */
+  onRateSaved: () => void;
 }) {
   const head = rows[0];
 
@@ -65,10 +76,14 @@ export function BranchResultSection({
   //
   // `showsPrice`를 같이 보는 것이 중요하다 — 낡거나 마감된 행의 요금은 그려지지
   // 않으므로, 그것만 있는 섹션에 라벨이 뜨면 없는 숫자를 설명하게 된다.
+  //
+  // ⚠️ 렌더 게이트와 **같은 술어**여야 한다(`showsRowPrice`). 어긋나면 증상이 에러가 아니라
+  // "라벨 없는 숫자"이거나 "숫자 없는 라벨"이다 — 수동 요금은 낡은·매진 행에서도 그려지므로
+  // 여기서 `showsPrice`만 보면 그 섹션의 라벨이 통째로 사라진다.
   const priceKinds = [
     ...new Set(
       rows
-        .filter((r) => r.price && showsPrice(tones.get(r.id)!))
+        .filter((r) => showsRowPrice(r.price, showsPrice(tones.get(r.id)!)))
         .map((r) => r.price!.kind),
     ),
   ];
@@ -127,6 +142,10 @@ export function BranchResultSection({
       <ul className="grid gap-1.5 2xl:grid-cols-2">
         {sorted.map((row) => {
           const tone = tones.get(row.id)!;
+          const manual = rates.get(rateKey(row)) ?? null;
+          // 수동 요금은 사이트가 답하지 않은 자리를 사람이 채운 값이라, 자동 요금이
+          // 붙은 행에는 입력 자리를 만들지 않는다(운영자 결정: 자동 우선).
+          const editable = row.price == null || row.price.kind === "manual";
           return (
             <li
               key={row.id}
@@ -155,24 +174,54 @@ export function BranchResultSection({
                   {occupancyLabel(row.occupancy)}
                 </span>
               )}
-              {row.price && showsPrice(tone) && (
+              {showsRowPrice(row.price, showsPrice(tone)) && (
                 // `shrink-0`이 필수다. 이 줄은 2xl에서 2컬럼이 되어 폭이 절반이고
                 // 리솜 객실명은 길다("레스트리 S30 타워 클린 케어룸") — 좁아질 때
                 // 줄어들어야 하는 쪽은 요금이 아니라 이름이다.
                 <span
                   className="shrink-0 text-xs font-mono tabular-nums"
-                  title={`${PRICE_KIND_LABEL[row.price.kind]} · ${nights}박 합계`}
+                  title={priceTitle(row.price!, nights, manual, now)}
                 >
-                  {formatKrw(row.price.amount)}
-                  {nights > 1 && (
-                    // "평균"을 빼면 안 된다 — 요금은 밤마다 다르고(주중·주말) 이
-                    // 값은 그 숙박의 어느 밤 값도 아니다.
-                    <span className="hidden font-normal text-muted-foreground sm:inline">
-                      {" · 1박 평균 "}
-                      {formatKrw(perNightAverage(row.price.amount, nights))}
+                  {/*
+                    **행 단위 출처 표식.** 종류 라벨은 섹션 헤더에 한 번만 그려지는데,
+                    한 섹션 안에 자동 요금 행과 수동 요금 행이 실제로 섞인다 — 롯데는 회원
+                    트랙이 BAR의 부분집합이라 거기 없는 방이 빈칸이고(부여 23/25 · 제주
+                    13/14), 오크밸리는 밸리 31평·46평을 일부러 안 붙인다. 헤더는
+                    "회원가 · 수동 입력"이라고 둘 다 말할 뿐 어느 행이 어느 쪽인지는
+                    말하지 못하므로, 수동인 행이 스스로 이름을 댄다.
+                  */}
+                  {row.price!.kind === "manual" && (
+                    <span className="mr-1 font-sans text-[10px] font-normal text-muted-foreground">
+                      수동
                     </span>
                   )}
+                  {formatKrw(row.price!.amount)}
+                  {nights > 1 &&
+                    (row.price!.kind === "manual" ? (
+                      // 수동값은 단가가 원본이고 총액이 파생이다 — 나눠서 얻은 값이 아니므로
+                      // "평균"이 아니라 "단가"다. `price.ts`의 규약이 여기서만 뒤집힌다.
+                      <span className="hidden font-normal text-muted-foreground sm:inline">
+                        {" · 1박 "}
+                        {formatKrw(manual?.perNight ?? row.price!.amount / nights)}
+                      </span>
+                    ) : (
+                      // "평균"을 빼면 안 된다 — 요금은 밤마다 다르고(주중·주말) 이
+                      // 값은 그 숙박의 어느 밤 값도 아니다.
+                      <span className="hidden font-normal text-muted-foreground sm:inline">
+                        {" · 1박 평균 "}
+                        {formatKrw(perNightAverage(row.price!.amount, nights))}
+                      </span>
+                    ))}
                 </span>
+              )}
+              {editable && (
+                <RoomRateCell
+                  row={row}
+                  rate={manual}
+                  nights={nights}
+                  now={now}
+                  onSaved={onRateSaved}
+                />
               )}
               <span
                 className={cn(
@@ -228,6 +277,29 @@ function occupancyLabel(o: { standard: number; max: number }) {
       <span className="hidden font-normal sm:inline">{` · 최대 ${o.max}`}</span>
     </>
   );
+}
+
+/**
+ * 요금 칸의 hover 설명.
+ *
+ * 수동 요금에는 **자기 나이**가 들어간다. 이것이 `showsPrice` 면제의 대가다 — 크롤이 쓴
+ * 요금은 "요금의 나이 = `synced_at`"이라는 등식 덕분에 행의 신선도가 요금까지 덮지만
+ * (`run.ts`의 COALESCE 금지), 수동 단가는 그 등식 밖에 있어서 행이 아무리 새것이어도
+ * 그 숫자는 6개월 전 것일 수 있다. 그 사실을 말할 자리가 여기뿐이다.
+ */
+function priceTitle(
+  price: { amount: number; kind: PriceKind },
+  nights: number,
+  manual: ManualRate | null,
+  now: number,
+): string {
+  const label = PRICE_KIND_LABEL[price.kind];
+  if (price.kind !== "manual") return `${label} · ${nights}박 합계`;
+
+  const unit = manual ? `1박 ${formatKrw(manual.perNight)} × ${nights}박` : `${nights}박 합계`;
+  const age = manual ? ` · ${relativeAge(manual.updatedAt, now)} 입력` : "";
+  const note = manual?.note ? ` · ${manual.note}` : "";
+  return `${label} · ${unit}${age}${note}`;
 }
 
 function occupancyTitle(o: { standard: number; max: number }) {

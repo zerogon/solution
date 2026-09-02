@@ -22,6 +22,7 @@ import {
   refreshTarget,
   type PlaceSelection,
 } from "./place-selection";
+import { indexRates, withManualRates, type ManualRate } from "./manual-rates";
 import type { Committed, InventoryRow, ResortCatalogEntry } from "./types";
 
 /**
@@ -42,6 +43,19 @@ async function fetchInventory(
   const body = await res.json();
   if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
   return body.rows as InventoryRow[];
+}
+
+/**
+ * 운영자가 손으로 넣은 1박 단가 전부.
+ *
+ * 조회 조건이 인자가 아니다 — 단가는 (지점, 객실유형)의 속성이라 날짜 축이 없다.
+ * 그래서 쿼리 키가 상수이고, 조회를 다시 눌러도 이 요청은 다시 나가지 않는다.
+ */
+async function fetchRoomRates(): Promise<ManualRate[]> {
+  const res = await fetch("/api/room-rates");
+  const body = await res.json();
+  if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
+  return body.rates as ManualRate[];
 }
 
 /** 행들을 지점별로 묶는다. `/api/inventory`가 이미 region→resort→branch 순으로 정렬해 준다. */
@@ -84,6 +98,24 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
     enabled: committed != null,
   });
 
+  /**
+   * 수동 요금 표. 재고와 별도 쿼리인 이유는 서비스워커다 — `/api/inventory`만 SWR로
+   * 캐시되는데 요금을 거기 실으면 방금 저장한 값이 캐시본에 가린다(`api/room-rates` 주석).
+   *
+   * ⚠️ `enabled` 게이트를 지우지 말 것. 쿼리 키가 상수라 게이트가 없으면 조회를 누르지
+   * 않은 세션에도 요청이 하나 붙는다 — 마감일 계산기가 같은 실수를 한 번 했다.
+   *
+   * `staleTime`이 프로바이더 기본(30초)이 아니라 5분인 이유: 수동 단가는 사람이 가끔
+   * 고치는 값이라 30초마다 다시 물을 근거가 없다. 저장 직후의 반영은 시간이 아니라
+   * `invalidateQueries`가 책임진다.
+   */
+  const { data: rates } = useQuery({
+    queryKey: ["room-rates"],
+    queryFn: fetchRoomRates,
+    enabled: committed != null,
+    staleTime: 5 * 60_000,
+  });
+
   // 화면의 조건과 실제 조회된 조건이 어긋나면 결과를 흐리게 해서 알린다.
   // 지역·지점은 클라이언트에서 즉시 좁혀지므로 어긋날 수가 없어 비교 대상이 아니다.
   const stale =
@@ -118,6 +150,30 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
     [rows, place],
   );
 
+  /** 편집 폼이 읽는 원본. 병합된 `row.price`는 총액이라 단가를 되돌릴 수 없다. */
+  const rateIndex = useMemo(() => indexRates(rates ?? []), [rates]);
+
+  /**
+   * 자동 요금이 없는 행에 수동 단가를 얹는다.
+   *
+   * 자리가 중요하다 — `matchesPlace` **뒤**(안 보이는 행까지 곱할 이유가 없다),
+   * `groupByBranch` **앞**(섹션이 이미 요금을 그리고 헤더 라벨을 집합으로 구한다).
+   * 그리고 `useMemo`여야 한다: 매 렌더 새 배열이면 아래 `counts` memo가 통째로
+   * 무효화되고, 거기에 필터 칩의 예약 가능 건수가 걸려 있다.
+   *
+   * 박수는 화면 상태(`nights`)가 아니라 **실제로 조회된 조건**에서 온다 — 사용자가
+   * 박수를 바꾸고 아직 조회를 누르지 않았을 때 둘이 갈리고, 그러면 요금이 다른 숙박의
+   * 것으로 계산된다(`Results`의 `committedNights`와 같은 값이어야 한다).
+   */
+  const pricedRows = useMemo(() => {
+    if (!visibleRows || committed == null) return visibleRows;
+    return withManualRates(
+      visibleRows,
+      rateIndex,
+      diffDaysIso(committed.checkin, committed.checkout),
+    );
+  }, [visibleRows, rateIndex, committed]);
+
   /** 캘린더와 박수 스테퍼가 공유하는 단일 진입점 — 둘 다 같은 (checkin, nights)를 쓴다. */
   function onRangeChange(next: { checkin: string; nights: number }) {
     setCheckin(next.checkin);
@@ -126,6 +182,15 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
 
   function onSearch() {
     setCommitted({ checkin, checkout, resort: place.resort });
+  }
+
+  /**
+   * 수동 요금 저장·삭제 후. 재고는 건드리지 않는다 — 요금은 `resort_inventory`가 아니라
+   * 옆의 대장(`resort_room_rates`)에 있고, 그래서 무효화할 것도 그 쿼리 하나뿐이다.
+   * 서버 액션의 `revalidatePath`는 관리 화면용이고 여기에는 아무 영향이 없다.
+   */
+  function onRateSaved() {
+    queryClient.invalidateQueries({ queryKey: ["room-rates"] });
   }
 
   function onRefresh() {
@@ -253,7 +318,9 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
           committed={committed}
           place={place}
           catalog={catalog}
-          rows={visibleRows}
+          rows={pricedRows}
+          rates={rateIndex}
+          onRateSaved={onRateSaved}
           now={dataUpdatedAt}
           hasTarget={target != null}
           isFetching={isFetching}
@@ -270,6 +337,8 @@ function Results({
   place,
   catalog,
   rows,
+  rates,
+  onRateSaved,
   now,
   hasTarget,
   isFetching,
@@ -280,6 +349,9 @@ function Results({
   place: PlaceSelection;
   catalog: ResortCatalogEntry[];
   rows: InventoryRow[] | undefined;
+  /** 편집 폼이 읽는 수동 요금 원본(단가). 행에 실린 것은 총액이라 여기서 되돌릴 수 없다. */
+  rates: Map<string, ManualRate>;
+  onRateSaved: () => void;
   /** 행 신선도를 재는 기준 시각 — 이 행들을 받은 순간(React Query의 `dataUpdatedAt`). */
   now: number;
   hasTarget: boolean;
@@ -367,7 +439,13 @@ function Results({
                 <span className="h-px flex-1 bg-border" aria-hidden />
               </h3>
             )}
-            <BranchResultSection rows={group} now={now} nights={committedNights} />
+            <BranchResultSection
+              rows={group}
+              now={now}
+              nights={committedNights}
+              rates={rates}
+              onRateSaved={onRateSaved}
+            />
           </Fragment>
         );
       })}

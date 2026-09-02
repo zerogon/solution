@@ -19,7 +19,7 @@
  * 요금(`O12`)과 회원카드 대여 요금(`O20`)을 동시에 주고, 어느 쪽을 받을지는
  * 우리가 보내는 `rentYn`이 정한다. 슬러그 → 종류 맵은 리조트가 하나일 때도 이미 틀린다.
  */
-export type PriceKind = "member" | "public" | "memberTable";
+export type PriceKind = "member" | "public" | "memberTable" | "manual";
 
 /**
  * 어휘가 답하는 것은 두 가지이고, 둘 다 필요하다.
@@ -31,6 +31,13 @@ export type PriceKind = "member" | "public" | "memberTable";
  * 같은 "회원가"라도 신뢰 등급이 다르다: 견적은 그 방·그 날짜에 대한 사이트의 답이고,
  * 계산은 **표가 우리가 읽은 그대로일 때만** 맞는다. 표는 개정되고, 개정은 우리에게
  * 통보되지 않는다. 숫자만 보면 둘은 구별되지 않으므로 어휘가 구별해야 한다.
+ *
+ * **`manual`만은 크롤러가 발행하지 않는다.** 나머지 셋은 `ResortInventory.price_kind`에
+ * 실제로 저장되는 값이지만 `manual`은 운영자가 손으로 넣은 `resort_room_rates`에서 와서
+ * 조회 화면이 병합할 때만 존재한다(`search/manual-rates.ts`). 즉 이 유니언은 이제
+ * "DB에 저장되는 어휘"가 아니라 **"화면이 그리는 요금의 종류"**이고, 그 덕분에 섹션 헤더의
+ * 라벨 로직이 수동 요금을 무수정으로 그린다. `resort_inventory.price_kind = 'manual'`인
+ * 행은 존재해서는 안 된다 — 회귀 검사가 그 개수를 센다.
  *
  * 이 목록에 값을 더하는 것은 마이그레이션이 아니다 — `price_kind`는 Prisma enum이
  * 아니라 text다(`schema.prisma`의 그 필드 주석 참조). 대신 **여기가 유일한 출처**이므로
@@ -46,10 +53,11 @@ export const PRICE_KIND_LABEL: Record<PriceKind, string> = {
   member: "회원가",
   public: "공시가",
   memberTable: "회원가·요금표",
+  manual: "수동 입력",
 };
 
 export function isPriceKind(v: unknown): v is PriceKind {
-  return v === "member" || v === "public" || v === "memberTable";
+  return v === "member" || v === "public" || v === "memberTable" || v === "manual";
 }
 
 /** `252000` → `"252,000원"`. */
@@ -63,6 +71,10 @@ export function formatKrw(amount: number): string {
  * 호출부는 이 값을 반드시 **"1박 평균"**이라고 불러야 한다. 요금은 밤마다 다르고
  * (주중·주말), 평균은 그 숙박의 어느 밤 값도 아니다. "1박 요금"이라고 쓰면 화면이
  * 관측하지 않은 것을 주장하게 된다.
+ *
+ * ⚠️ **`manual`에는 이 함수를 쓰지 않는다.** 수동 요금은 단가가 원본이고 총액이 파생이라
+ * (`perNight × 박수`) 방향이 반대다 — 나눠서 얻은 값이 아니라 애초에 입력된 값이므로
+ * "평균"이 아니라 **"1박 단가"**라고 불러야 한다. 여기서만 이 규약이 뒤집힌다.
  */
 export function perNightAverage(total: number, nights: number): number {
   return Math.round(total / Math.max(1, nights));

@@ -414,6 +414,58 @@ npx tsx scripts/set-exclusion.ts HANWHA "산정호수" --include
 - 크롤이 제외와 경주해 남은 행은 `scheduled-refresh`의 `purge-excluded-inventory`가
   걷는다. 그 숫자는 **평상시 0이어야 한다.**
 
+## 수동 요금 (2026-09-02)
+
+사이트가 금액을 주지 않는 객실에 운영자가 **1박 단가**를 직접 넣는다. 넣는 곳은 조회
+결과의 객실 행이고, 관리 화면은 `/admin/rates`, CLI는:
+
+```bash
+npx tsx scripts/set-room-rate.ts SONO                                   # 그 리조트의 요금 나열
+npx tsx scripts/set-room-rate.ts SONO "소노벨 제주" "리조트 스위트" 170000 "2026 요금표 주중"
+npx tsx scripts/set-room-rate.ts SONO "소노벨 제주" "리조트 스위트" --delete
+```
+
+**`ResortInventory.price`와 다른 표다**(`resort_room_rates`). 저 컬럼은 크롤과 수명을
+공유해서(`run.ts`의 `price = EXCLUDED.price`, COALESCE 금지) 요금 없이 도는 다음 크롤이
+반드시 지운다 — 수동 요금은 그 등식 밖에 있어야 한다. 상세와 설계 근거는 `CLAUDE.md`의
+"수동 요금 입력" 절.
+
+- **조인 키가 둘이고 둘 다 조용히 어긋날 수 있다** — `branchName`과 `roomType`. 어느 쪽이
+  틀려도 에러가 아니라 **무동작**이고 증상은 "요금을 넣었는데 조회 화면이 빈칸"이다.
+  그래서 CLI가 매번 `catalog match`(지점)와 `inventory match`(객실유형)를 함께 찍는다.
+  · **`roomType`은 대조로 막지 않는다.** 카탈로그가 없는 축이고(사이트가 정한다),
+    이름이 바뀐 뒤 남은 고아 요금을 지우는 것이 정당한 사용이라 생성을 거부하면 그 정리가
+    불가능해진다 — `set-exclusion.ts`가 카탈로그 대조를 **보고만** 하는 것과 같은 판단이다.
+  · 화면에서는 오타가 생길 자리가 없다. 입력 다이얼로그가 **항상 실제 조회 행에서 열려**
+    그 행의 값을 그대로 싣는다. `/admin/rates`가 요금을 만들지 않는 이유도 이것이다.
+- **자동 수집 요금이 우선이다.** 요금이 이미 있는 행에는 입력 버튼이 뜨지 않는다.
+  ⚠️ 그래서 **한화 요금 조인이 언젠가 뚫리면 그 지점의 수동값은 화면에서 조용히 사라진다** —
+  지워지는 것이 아니라 가려지는 것이고, `/admin/rates`에는 계속 보인다.
+- **요일·시즌 축이 없다.** 금·토가 더 비싼 실제 요금표를 평일 값으로 주장하므로, 어느 기준으로
+  넣었는지는 `note`에 적는다. 특히 **소노는 뷰 변형이 접힌 행**이라(`parse.ts`가 570그룹 중
+  300개를 접는다) "그 방의 값"이 하나가 아닐 수 있다 — 접힌 축을 `note`에 명시할 것.
+- **`note`는 평문이고 관리 표에 마스킹 없이 그려진다.** `ResortAccount.memo` 전례를 볼 것.
+
+검증 SQL:
+
+```sql
+-- 단가가 양수인가 (0·음수는 "요금 없음"과 뜻이 겹친다)
+SELECT count(*) FROM resort_room_rates WHERE per_night <= 0;                 -- 0
+
+-- 크롤러가 이 어휘를 발행하면 안 된다
+SELECT count(*) FROM resort_inventory WHERE price_kind = 'manual';           -- 0
+
+-- 지금 아무 행에도 안 붙는 요금. 0이 아니어도 되지만 /admin/rates가 알려야 한다.
+-- ⚠️ 그 지점의 재고가 0행이면 판정 보류다 — 아직 안 물어본 것과 사라진 것은 다르다.
+SELECT r.branch_name, r.room_type FROM resort_room_rates r
+ WHERE EXISTS (SELECT 1 FROM resort_inventory i
+                WHERE i.resort_id = r.resort_id AND i.branch_name = r.branch_name)
+   AND NOT EXISTS (SELECT 1 FROM resort_inventory i
+                    WHERE i.resort_id = r.resort_id
+                      AND i.branch_name = r.branch_name
+                      AND i.room_type = r.room_type);
+```
+
 ## 마감일 계산기 (영업일 D-10)
 
 사이드바 위젯의 계산·공휴일 파싱을 단독으로 확인한다. 테스트 러너가 없으므로 `golden`이

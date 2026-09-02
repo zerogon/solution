@@ -214,3 +214,128 @@ export async function getPropertyAdminCatalog(): Promise<AdminCatalogEntry[]> {
     ];
   });
 }
+
+/** `/admin/rates`가 그리는 요금 한 줄. */
+export interface AdminRoomRate {
+  branchName: string;
+  /** 지점 칩에 쓰는 짧은 이름. 카탈로그에 없는 지점이면 `branchName`을 그대로 쓴다. */
+  label: string;
+  roomType: string;
+  /** 1박 단가(원). `ResortInventory.price`(숙박 총액)와 단위가 다르다. */
+  perNight: number;
+  note: string | null;
+  /** ISO. 수동 요금의 나이는 행의 `syncedAt`이 아니라 이것이다. */
+  updatedAt: string;
+  /**
+   * 이 요금이 지금 아무 행에도 안 붙고 있고, 그 이유를 **알 수 있는** 경우.
+   *
+   * `null`이면 정상이거나 판정 보류다. 판정이 두 단계인 이유는 아래 함수 주석에 있다.
+   */
+  orphan: null | "unknownBranch" | "unknownRoomType";
+  /** 조회 화면에서 이 지점이 아예 안 보이는 상태(제외됐거나 리조트가 꺼져 있다). */
+  hidden: boolean;
+}
+
+/** `/admin/rates`가 그리는 리조트 한 장. */
+export interface AdminRateEntry {
+  resortId: string;
+  slug: ResortSlug;
+  name: string;
+  active: boolean;
+  /** 입력된 요금만 들어간다 — 이 화면은 요금을 **만들지 않는다**(생성은 조회 화면에서). */
+  rates: AdminRoomRate[];
+}
+
+/**
+ * 관리 화면용 수동 요금 목록.
+ *
+ * **입력된 요금만 나열한다.** 지점×객실유형 격자를 그리지 않는 이유는 규모다 — 한화만
+ * 객실유형이 107종이고 지점이 16곳이라 격자는 한 카드에 수천 줄이 된다. 그리고 이
+ * 화면이 요금을 **만들지 않기** 때문에 격자가 필요하지도 않다: 새 요금은 조회 화면의
+ * 실제 행에서만 생긴다(그래야 `roomType`을 사람이 타이핑하지 않는다).
+ *
+ * ## 고아 판정이 지점 제외와 다르다
+ *
+ * `getPropertyAdminCatalog`의 `orphanExclusions`는 **코드 상수** `CATALOG`와 대조하므로
+ * 시간에 대해 안정적이다. 객실유형에는 그런 정답지가 없어서 `resort_inventory`를 대신
+ * 쓰는데, 그 표는 정답지가 아니다 — `removeVanishedRows`와 유령 청소가 지우고, 애초에
+ * **크롤된 (체크인, 체크아웃) 윈도우에만** 존재한다. 그래서 판정을 두 단계로 나눈다:
+ *
+ * 1. `branchName`이 `CATALOG`에 없다 → `unknownBranch`. 지점 제외와 같은 확실한 판정이다.
+ * 2. 그 지점의 재고 행이 **하나라도 있는데** 이 `roomType`만 없다 → `unknownRoomType`.
+ *    "그 지점은 아는데 이 객실만 모른다" = 사이트가 이름을 바꿨다는 뜻이다.
+ *
+ * 그 지점의 재고가 0행이면 **판정을 보류한다**(`null`). 아직 안 물어본 것과 사라진 것은
+ * 다르고, 여기서 단순히 "재고에 없으면 고아"라고 하면 제외된 지점이나 오래 안 돈 지점의
+ * 멀쩡한 요금이 전부 경고에 들어간다. 오탐이 섞인 목록에서는 진짜 오타가 구별되지 않는다.
+ */
+export async function getRoomRateAdminCatalog(): Promise<AdminRateEntry[]> {
+  const [resorts, invGroups] = await Promise.all([
+    prisma.resort.findMany({
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        active: true,
+        branchExclusions: { select: { branchName: true } },
+        roomRates: {
+          select: {
+            branchName: true,
+            roomType: true,
+            perNight: true,
+            note: true,
+            updatedAt: true,
+          },
+          orderBy: [{ branchName: "asc" }, { roomType: "asc" }],
+        },
+      },
+      orderBy: { name: "asc" },
+    }),
+    // 조인 상대. 개수는 쓰지 않고 존재 여부만 본다.
+    prisma.resortInventory.groupBy({
+      by: ["resortId", "branchName", "roomType"],
+      _count: { _all: true },
+    }),
+  ]);
+
+  // (지점, 객실유형)이 재고에 있는가 / 그 지점이 재고에 조금이라도 있는가.
+  const knownRoom = new Set<string>();
+  const branchHasRows = new Set<string>();
+  for (const g of invGroups) {
+    knownRoom.add(`${g.resortId}\u0000${g.branchName}\u0000${g.roomType}`);
+    branchHasRows.add(`${g.resortId}\u0000${g.branchName}`);
+  }
+
+  return resorts.flatMap((r) => {
+    if (r.roomRates.length === 0) return [];
+
+    const entry = CATALOG[r.slug];
+    const labels = new Map((entry?.properties ?? []).map((p) => [p.branchName, p.label]));
+    const excluded = new Set(r.branchExclusions.map((x) => x.branchName));
+
+    const rates: AdminRoomRate[] = r.roomRates.map((rate) => {
+      const inCatalog = labels.has(rate.branchName);
+      const orphan: AdminRoomRate["orphan"] = !inCatalog
+        ? "unknownBranch"
+        : branchHasRows.has(`${r.id}\u0000${rate.branchName}`) &&
+            !knownRoom.has(`${r.id}\u0000${rate.branchName}\u0000${rate.roomType}`)
+          ? "unknownRoomType"
+          : null;
+
+      return {
+        branchName: rate.branchName,
+        label: labels.get(rate.branchName) ?? rate.branchName,
+        roomType: rate.roomType,
+        perNight: rate.perNight,
+        note: rate.note,
+        updatedAt: rate.updatedAt.toISOString(),
+        orphan,
+        // 조회 화면에 안 뜨는 요금이라는 사실. 제외를 풀면 그대로 다시 쓰이므로
+        // 지우지 않고 표시만 한다 — 요금은 지점 제외의 purge 대상이 아니다.
+        hidden: !r.active || excluded.has(rate.branchName),
+      };
+    });
+
+    return [{ resortId: r.id, slug: r.slug, name: r.name, active: r.active, rates }];
+  });
+}
