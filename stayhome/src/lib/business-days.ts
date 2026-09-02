@@ -2,104 +2,156 @@ import { addDaysIso, parseDate } from "@/lib/utils";
 import type { HolidayOracle } from "@/lib/holidays-kr";
 
 /**
- * 영업일 기준 날짜 역산.
+ * 마감일 역산 — **달력 기준 D-10 + 양 끝 휴일 보정**.
  *
- * ## 규칙
+ * ## 규칙 (운영자 확인, 2026-09-02)
  *
- * > 기준일에서 **하루씩 뒤로** 간다. 이동한 날이 영업일(월~금 **그리고** 공휴일이
- * > 아님)일 때만 카운트한다. 카운트가 `n`이 되면 그날이 답이다.
+ * ```
+ * 1. 기준일 보정  기준일이 주말/공휴일이면 하루씩 뒤로 가 첫 영업일을 찾는다 → startIso
+ * 2. 카운트       startIso를 **1일째로 포함**해 n일을 센다 → rawIso = startIso - (n-1)일
+ * 3. 결과 보정    rawIso가 주말/공휴일이면 하루씩 뒤로 가 첫 영업일을 찾는다 → 답
+ * ```
  *
- * 따라오는 결론 셋, 각각이 결정이다:
+ * 1·3단계는 **완전히 같은 연산**이라 헬퍼 하나(`previousBusinessDay`)를 공유하고,
+ * 2단계만 산술이다. 세 줄 중 둘이 같은 함수라는 것이 이 모듈의 전부다.
  *
- * - **기준일 자신은 절대 세지 않는다.** 먼저 이동하고 나서 판정하므로, 월요일에서
- *   시작해 월요일이 나오는 일은 없다.
- * - **답은 언제나 영업일이다.** 루프가 카운트된 날에서만 종료되므로 구조적으로 보장된다.
- * - **기준일은 아무 날이나 될 수 있다.** 토요일·공휴일 입력에 특례가 없다 —
- *   첫 이동이 곧 금요일로 내려간다. 행사일이 일요일인 것은 정상 상황이다.
+ * 조심할 것 둘, 둘 다 운영자가 확인해 준 사항이다:
+ *
+ * - **`-(n-1)`이 오타가 아니다.** 기준일을 1일째로 세므로 10일째는 `-9`일이다.
+ *   `-10`으로 바꾸면 아래 골든 케이스가 하루씩 밀린다(2026-10-16이 10/7이 아니라 10/6).
+ * - **보정은 카운트 *이전*이다.** 순서를 뒤집으면 2026-10-05가 9/22가 되어 틀린다.
  *
  * ## 골든 케이스 (구현이 틀리면 여기서 갈린다)
  *
- * 기준일 2026-08-29(토), n=10. 이 구간에 광복절 8/15(토)와 대체공휴일 8/17(월)이 있다.
+ * 기준일 `2026-10-05(월)`, n=10. 이 날은 개천절(10/3 토)의 대체공휴일이다.
  *
  * ```
- *  이동  날짜          판정              누적
- *  1~5   8/28 … 8/24   영업일             5
- *  6~7   8/23, 8/22    주말 skip          5
- *  8~11  8/21 … 8/18   영업일             9
- *  12    8/17(월)      대체공휴일 skip     9
- *  13~14 8/16, 8/15    주말 skip          9
- *  15    8/14(금)      영업일            10 → 종료
+ *  1  기준일 보정  10/05(월) 대체공휴일 → 10/04(일) 주말 → 10/03(토) 주말 → 10/02(금) 영업일
+ *  2  카운트       10/02 - 9일 = 09/23(수)
+ *  3  결과 보정    09/23(수) 영업일 → 그대로
  * ```
  *
- * 결과 `2026-08-14(금)`. 단순 -10일은 `2026-08-19(수)`이고, 그 차이(5일)가
- * 이 모듈이 존재하는 이유다.
+ * 결과 `2026-09-23(수)`. 세 단계를 모두 지나가는 유일한 케이스라 여기 적어 둔다.
+ * 짝이 되는 반대 모양은 `2026-10-19(월) → 2026-10-08(목)`이다 — 기준일 보정은 없고
+ * 10일째 `10/10(토)`가 주말이라 뒤로 가다 한글날 `10/09(금)`까지 건너뛴다.
  *
  * ## 왜 boolean이 아니라 판별 유니온을 돌려주는가
  *
- * 실패를 값으로 표현해야 화면이 "계산 불가"를 **날짜 대신** 그릴 수 있다. 그리고
- * 성공 시 건너뛴 내역을 같이 주는 것은 장식이 아니다 — 화면의
- * "주말 4일 · 공휴일 1일(대체공휴일 8.17)"이 사용자가 답을 검산할 유일한 단서다.
+ * 실패를 값으로 표현해야 화면이 "계산 불가"를 **날짜 대신** 그릴 수 있다.
+ * 그리고 성공 시 건너뛴 내역을 같이 주는 것은 장식이 아니다 — 화면의
+ * "10일째 10.10(토) 휴일(한글날) → 10.8(목)"이 사용자가 답을 검산할 유일한 단서다.
+ *
+ * ## `covers()`를 묻는 이유는 규칙이 바뀌어도 그대로다
+ *
+ * 공휴일을 적게 세면 → 보정이 덜 일어나고 → 결과가 **뒤로 밀린다**
+ * → 사용자는 실제보다 시간이 더 있다고 믿는다. 즉 조용히 틀리는 쪽이 손해를 끼치는
+ * 쪽이라, 판정할 수 없는 날에 닿으면 답을 만들지 않는다(`holidays-kr.ts` 헤더).
  */
-export type BusinessDayResult =
+
+/** 한 번의 보정에서 건너뛴 내역. */
+export type Skip = {
+  /** 건너뛴 주말 일수. */
+  weekend: number;
+  /** 건너뛴 공휴일. 주말과 겹친 공휴일은 주말로만 센다(중복 계상 방지). */
+  holidays: { iso: string; name: string }[];
+};
+
+export type DeadlineResult =
   | {
       ok: true;
+      /** 최종 답. 구조적으로 반드시 영업일이다. */
       iso: string;
-      /** 건너뛴 주말 일수. */
-      skippedWeekend: number;
-      /** 건너뛴 공휴일. 주말과 겹친 공휴일은 주말로만 센다(중복 계상 방지). */
-      skippedHolidays: { iso: string; name: string }[];
+      /** 1단계 결과 = 세기를 시작한 날. 기준일이 영업일이면 기준일과 같다. */
+      startIso: string;
+      /** 2단계 결과 = `startIso - (n-1)`일. 보정 전이라 휴일일 수 있다. */
+      rawIso: string;
+      /** 기준일 → `startIso`. 비어 있으면 기준일이 영업일이었다는 뜻. */
+      baseSkipped: Skip;
+      /** `rawIso` → `iso`. 비어 있으면 10일째가 그대로 영업일이었다는 뜻. */
+      resultSkipped: Skip;
     }
   /** 오라클이 판정할 수 없는 날에 닿았다. `at`이 그 날짜. */
   | { ok: false; reason: "uncovered"; at: string }
   /** 오라클이 고장나 영원히 영업일이 안 나온다. 절대 도달하면 안 되는 안전망. */
   | { ok: false; reason: "unbounded" };
 
+/** 성공한 계산의 전체 경로. 화면이 자기 답을 설명할 때 이 shape을 그대로 받는다. */
+export type DeadlineTrace = Extract<DeadlineResult, { ok: true }>;
+
 /**
- * `iso`에서 `n` 영업일 뒤로 간 날짜.
+ * 한국 최장 연휴가 주말과 붙어도 6~7일이다. 상한은 넉넉하되 **유한해야** 한다 —
+ * 모든 날을 휴일이라 답하는 오라클이 UI 스레드를 잡으면 안 된다.
+ * (`freshness.ts`의 `!Number.isFinite` 가드와 같은 자리다.)
+ */
+const MAX_BACKOFF_STEPS = 30;
+
+type BackOff =
+  | { ok: true; iso: string; skip: Skip }
+  | { ok: false; reason: "uncovered"; at: string }
+  | { ok: false; reason: "unbounded" };
+
+/**
+ * `iso`가 영업일이면 그대로, 아니면 **직전 영업일**.
  *
- * `n >= 1`이 전제다(호출부가 상수를 넘긴다). 날짜 산술은 전부 `addDaysIso`를 거치므로
+ * 규칙의 1단계와 3단계가 이 함수 하나다. 날짜 산술은 전부 `addDaysIso`를 거치므로
  * 월·연·윤년 경계가 `setUTCDate`로 정규화되고 DST는 구조적으로 존재하지 않는다.
  * 로컬 타임 `Date`를 여기서 만들면 안 된다 — 이 저장소의 UTC 자정 규약(`utils.ts`).
  */
-export function subtractBusinessDaysIso(
-  iso: string,
-  n: number,
-  oracle: HolidayOracle,
-): BusinessDayResult {
-  // 10영업일이 최악의 연휴를 만나도 20일을 크게 넘지 않는다. 상한은 넉넉하되
-  // 유한해야 한다 — 모든 날을 휴일이라 답하는 오라클이 UI 스레드를 잡으면 안 된다.
-  // (`freshness.ts`의 `!Number.isFinite` 가드와 같은 자리다.)
-  const maxSteps = n * 3 + 40;
-
+function previousBusinessDay(iso: string, oracle: HolidayOracle): BackOff {
+  const skip: Skip = { weekend: 0, holidays: [] };
   let cur = iso;
-  let counted = 0;
-  let skippedWeekend = 0;
-  const skippedHolidays: { iso: string; name: string }[] = [];
 
-  for (let step = 0; step < maxSteps; step += 1) {
-    cur = addDaysIso(cur, -1);
-
+  for (let step = 0; step <= MAX_BACKOFF_STEPS; step += 1) {
     const day = parseDate(cur).getUTCDay();
     if (day === 0 || day === 6) {
       // 토·일은 공휴일 데이터와 무관하게 주말이다. 여기서 covers()를 묻지 않는 것은
       // 최적화가 아니라 정확성이다 — 답이 데이터에 의존하지 않는 날에 데이터를
       // 요구하면 멀쩡히 계산되는 케이스가 "계산 불가"로 떨어진다.
-      skippedWeekend += 1;
+      skip.weekend += 1;
+      cur = addDaysIso(cur, -1);
       continue;
     }
 
     if (!oracle.covers(cur)) return { ok: false, reason: "uncovered", at: cur };
 
     if (oracle.isHoliday(cur)) {
-      skippedHolidays.push({ iso: cur, name: oracle.nameOf(cur) ?? "공휴일" });
+      skip.holidays.push({ iso: cur, name: oracle.nameOf(cur) ?? "공휴일" });
+      cur = addDaysIso(cur, -1);
       continue;
     }
 
-    counted += 1;
-    if (counted === n) {
-      return { ok: true, iso: cur, skippedWeekend, skippedHolidays };
-    }
+    return { ok: true, iso: cur, skip };
   }
 
   return { ok: false, reason: "unbounded" };
+}
+
+/**
+ * `baseIso`의 마감일 — 위 헤더의 3단계.
+ *
+ * `leadDays >= 1`이 전제다(호출부가 상수를 넘긴다). `leadDays === 1`이면
+ * `rawIso === startIso`이고, 그때도 3단계는 무동작이라 규칙이 무너지지 않는다.
+ */
+export function deadlineIso(
+  baseIso: string,
+  leadDays: number,
+  oracle: HolidayOracle,
+): DeadlineResult {
+  const start = previousBusinessDay(baseIso, oracle);
+  if (!start.ok) return start;
+
+  // 기준일 포함이 곧 -(n-1)이다. 헤더의 경고를 볼 것.
+  const rawIso = addDaysIso(start.iso, -(leadDays - 1));
+
+  const end = previousBusinessDay(rawIso, oracle);
+  if (!end.ok) return end;
+
+  return {
+    ok: true,
+    iso: end.iso,
+    startIso: start.iso,
+    rawIso,
+    baseSkipped: start.skip,
+    resultSkipped: end.skip,
+  };
 }

@@ -6,10 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { CalendarClock } from "lucide-react";
 
 import { todayKstIso } from "@/lib/utils";
-import { subtractBusinessDaysIso } from "@/lib/business-days";
+import { deadlineIso } from "@/lib/business-days";
 import { holidayOracle, type HolidayMap } from "@/lib/holidays-kr";
 import { Button } from "@/components/ui/button";
-import { LEAD_BUSINESS_DAYS } from "./deadline-shared";
+import { LEAD_DAYS } from "./deadline-shared";
 
 /**
  * 달력 본문만 지연 로드한다 — `react-day-picker` + `ko` 로케일(~90KB)이 셸 청크로
@@ -56,7 +56,8 @@ function subscribeDesktop(onChange: () => void) {
 }
 
 /**
- * 사이드바 마감일 계산기 — 기준일에서 **영업일 기준 10일 전**.
+ * 사이드바 마감일 계산기 — 기준일에서 **10일 전**(기준일 포함, 양 끝 휴일 보정).
+ * 규칙 셋과 그 경계 사례는 `@/lib/business-days`의 헤더에 있다.
  *
  * ## 왜 셸에 있나
  * 사이드바는 **상시 표시판**이다. 예전엔 그 표시판이 요약 한 줄이고 달력은 팝업이었는데,
@@ -123,11 +124,7 @@ export function DeadlineCalculator({
 
   const result = useMemo(() => {
     if (!picked || !data) return null;
-    return subtractBusinessDaysIso(
-      picked,
-      LEAD_BUSINESS_DAYS,
-      holidayOracle(data.covered, data.years),
-    );
+    return deadlineIso(picked, LEAD_DAYS, holidayOracle(data.covered, data.years));
   }, [picked, data]);
 
   const failed = isError || (result != null && !result.ok);
@@ -189,7 +186,7 @@ export function DeadlineCalculator({
           picked={picked}
           onPick={setOverride}
           answer={answer}
-          skipped={result?.ok ? result : null}
+          trace={result?.ok ? result : null}
           holidayDates={holidayDates}
           coveredRange={coveredRange}
           loading={isPending || isFetching}

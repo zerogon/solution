@@ -15,7 +15,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
-import { LEAD_BUSINESS_DAYS } from "./deadline-shared";
+import type { DeadlineTrace, Skip } from "@/lib/business-days";
+import { LEAD_DAYS } from "./deadline-shared";
 
 /** "YYYY-MM-DD"는 사전순이 곧 시간순이라 문자열 비교로 충분하다. */
 const maxIso = (a: string, b: string) => (a > b ? a : b);
@@ -46,7 +47,7 @@ export function DeadlineCalculatorBody({
   picked,
   onPick,
   answer,
-  skipped,
+  trace,
   holidayDates,
   coveredRange,
   loading,
@@ -56,7 +57,8 @@ export function DeadlineCalculatorBody({
   picked: string;
   onPick: (iso: string) => void;
   answer: string | null;
-  skipped: { skippedWeekend: number; skippedHolidays: { iso: string; name: string }[] } | null;
+  /** 성공한 계산의 전체 경로. 아래 요약 줄이 이걸로 자기 답을 설명한다. */
+  trace: DeadlineTrace | null;
   /** 점을 찍을 공휴일 전체(받아온 연도 범위). 건너뛴 것만이 아니다 — 부모 주석 참조. */
   holidayDates: string[];
   /** 서버가 신고한 판정 가능 연도 [from, to]. 로딩·실패 중에는 null. */
@@ -107,8 +109,11 @@ export function DeadlineCalculatorBody({
   // 커버리지 전체의 공휴일이라 ~205개다(연도 2개 시절엔 ~40개였다). 매 렌더 돌 이유가 없다.
   const holidayModifier = useMemo(() => holidayDates.map(parseDate), [holidayDates]);
 
-  const pickedDay = parseDate(picked).getUTCDay();
-  const pickedIsOff = pickedDay === 0 || pickedDay === 6;
+  // ⚠️ 예전에는 여기서 `getUTCDay()`로 주말만 로컬 판정해 "기준일이 휴일입니다"를
+  // 그렸다. 그건 공휴일 기준일에 뜨지 않았고, 무엇보다 **아무 결과도 설명하지 못했다.**
+  // 이제 정확한 조건은 `trace.startIso !== picked`이고, 그 판정은 오라클을 거쳐서 온다.
+  const holidayNames = (s: Skip) =>
+    s.holidays.length > 0 ? ` (${s.holidays.map((h) => h.name).join(", ")})` : "";
 
   return (
     <div className="space-y-2">
@@ -157,12 +162,9 @@ export function DeadlineCalculatorBody({
           <span className="text-xs text-muted-foreground">기준일</span>
           <span className="font-mono text-sm tabular-nums">{formatKoMd(picked)}</span>
         </div>
-        {pickedIsOff && (
-          <p className="text-[11px] text-muted-foreground">기준일이 휴일입니다</p>
-        )}
         <div className="flex items-center gap-1 py-1 text-xs text-muted-foreground">
           <ArrowDown className="size-3" />
-          영업일 {LEAD_BUSINESS_DAYS}일 전
+          {LEAD_DAYS}일 전 · 휴일이면 앞당김
         </div>
 
         {/* 라이브 리전은 팝업이 열리는 순간부터 **같은 노드**로 존재해야 한다.
@@ -186,7 +188,7 @@ export function DeadlineCalculatorBody({
           ) : answer ? (
             <div className="flex items-center gap-2 rounded-md bg-accent px-2 py-1.5 text-accent-foreground">
               <Badge variant="secondary" className="shrink-0">
-                영업일 -{LEAD_BUSINESS_DAYS}
+                D-{LEAD_DAYS}
               </Badge>
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-base font-semibold tabular-nums">
@@ -200,8 +202,8 @@ export function DeadlineCalculatorBody({
                 </div>
               </div>
               <span className="sr-only">
-                영업일 기준 {LEAD_BUSINESS_DAYS}일 전은 {answer.slice(0, 4)}년{" "}
-                {Number(answer.slice(5, 7))}월 {Number(answer.slice(8, 10))}일입니다
+                마감일은 {answer.slice(0, 4)}년 {Number(answer.slice(5, 7))}월{" "}
+                {Number(answer.slice(8, 10))}일입니다
               </span>
               <Button
                 variant="ghost"
@@ -219,16 +221,28 @@ export function DeadlineCalculatorBody({
           )}
         </div>
 
-        {/* 이 줄이 기능의 작업 증명이다 — 없으면 "광복절을 건너뛴 것"과 "고장난 것"을
-            사용자가 구별할 수 없다. */}
-        {skipped && (
-          <p className="pt-1.5 text-[11px] text-muted-foreground">
-            주말 {skipped.skippedWeekend}일 · 공휴일 {skipped.skippedHolidays.length}일
-            {skipped.skippedHolidays.length > 0 &&
-              ` (${skipped.skippedHolidays
-                .map((h) => `${h.name} ${formatKoMd(h.iso)}`)
-                .join(", ")})`}
-          </p>
+        {/* 이 줄들이 기능의 작업 증명이다 — 없으면 "광복절을 건너뛴 것"과 "고장난 것"을
+            사용자가 구별할 수 없다. 규칙이 3단계이므로 보정이 일어난 단계만 말한다:
+            둘 다 없으면 "그대로", 하나만 있으면 그 하나만. */}
+        {trace && (
+          <div className="space-y-0.5 pt-1.5 text-[11px] text-muted-foreground">
+            {trace.startIso !== picked && (
+              // 한 문장을 JSX 텍스트 노드로 쪼개면 줄바꿈이 공백으로 들어가 이름 괄호
+              // 앞이 두 칸이 된다. 문장 하나는 표현식 하나로 만든다.
+              <p>
+                {`기준일 ${formatKoMd(picked)} 휴일${holidayNames(trace.baseSkipped)}` +
+                  ` → ${formatKoMd(trace.startIso)}부터`}
+              </p>
+            )}
+            {trace.rawIso !== trace.iso ? (
+              <p>
+                {`${LEAD_DAYS}일째 ${formatKoMd(trace.rawIso)} 휴일${holidayNames(trace.resultSkipped)}` +
+                  ` → ${formatKoMd(trace.iso)}`}
+              </p>
+            ) : (
+              <p>{LEAD_DAYS}일째가 그대로 영업일입니다</p>
+            )}
+          </div>
         )}
       </div>
     </div>
