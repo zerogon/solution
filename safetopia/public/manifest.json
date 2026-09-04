@@ -1,0 +1,50 @@
+{
+  "id": "/",
+  "name": "Safetopia — 카페 연차 관리",
+  "short_name": "Safetopia",
+  "description": "다지점 카페 직원 연차·반차 신청 및 관리",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#FBFCFB",
+  "theme_color": "#FBFCFB",
+  "lang": "ko-KR",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "연차 신청",
+      "short_name": "연차신청",
+      "url": "/leave/request",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "내 캘린더",
+      "short_name": "캘린더",
+      "url": "/calendar",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
