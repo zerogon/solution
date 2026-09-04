@@ -111,3 +111,13 @@ export function formatKoMd(s: string): string {
   const d = parseDate(s);
   return `${d.getUTCMonth() + 1}.${d.getUTCDate()}(${KO_WEEKDAYS[d.getUTCDay()]})`;
 }
+
+/** "2026-09-05" ~ "2026-09-06" → "9.5(토)~9.6(일)". 같은 날이면 하나만. */
+export function formatKoRange(startIso: string, endIso: string): string {
+  return startIso === endIso ? formatKoMd(startIso) : `${formatKoMd(startIso)}~${formatKoMd(endIso)}`;
+}
+
+/** "2026-09-05" → "2026.09.05". 표에서 연도까지 보여줄 때. */
+export function formatKoDate(iso: string): string {
+  return iso.replaceAll("-", ".");
+}
