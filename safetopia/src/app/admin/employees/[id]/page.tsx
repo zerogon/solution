@@ -4,7 +4,7 @@ import { ArrowLeft, History } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { EMPLOYEE_STATUS_LABEL, ROLE_LABEL, formatDays } from "@/lib/labels";
+import { EMPLOYEE_STATUS_LABEL, ROLE_LABEL } from "@/lib/labels";
 import { summarize } from "@/lib/leave-balance";
 import { formatKstDateTime, toIsoDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
@@ -89,7 +89,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
           <Card>
             <CardHeader>
               <CardTitle>기본 정보</CardTitle>
-              <CardDescription>소속 지점은 아래 '지점 이동'으로만 변경할 수 있습니다.</CardDescription>
+              <CardDescription>소속 지점은 아래 &lsquo;지점 이동&rsquo;으로만 변경할 수 있습니다.</CardDescription>
             </CardHeader>
             <CardContent>
               <EmployeeEditForm
