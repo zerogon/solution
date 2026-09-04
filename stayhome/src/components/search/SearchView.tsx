@@ -5,7 +5,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CalendarSearch, RefreshCw, Search, SearchX, TriangleAlert } from "lucide-react";
 
-import { addDaysIso, todayKstIso } from "@/lib/utils";
+import { addDaysIso, diffDaysIso, todayKstIso } from "@/lib/utils";
+import { toneOf } from "@/lib/availability-tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/empty-state";
@@ -21,6 +22,7 @@ import {
   refreshTarget,
   type PlaceSelection,
 } from "./place-selection";
+import { indexRates, withManualRates, type ManualRate } from "./manual-rates";
 import type { Committed, InventoryRow, ResortCatalogEntry } from "./types";
 
 /**
@@ -41,6 +43,19 @@ async function fetchInventory(
   const body = await res.json();
   if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
   return body.rows as InventoryRow[];
+}
+
+/**
+ * 운영자가 손으로 넣은 1박 단가 전부.
+ *
+ * 조회 조건이 인자가 아니다 — 단가는 (지점, 객실유형)의 속성이라 날짜 축이 없다.
+ * 그래서 쿼리 키가 상수이고, 조회를 다시 눌러도 이 요청은 다시 나가지 않는다.
+ */
+async function fetchRoomRates(): Promise<ManualRate[]> {
+  const res = await fetch("/api/room-rates");
+  const body = await res.json();
+  if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
+  return body.rates as ManualRate[];
 }
 
 /** 행들을 지점별로 묶는다. `/api/inventory`가 이미 region→resort→branch 순으로 정렬해 준다. */
@@ -69,6 +84,11 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
 
   const {
     data: rows,
+    // 신선도의 기준 시각. `Date.now()`를 렌더에서 부르면 리렌더마다 값이 달라져
+    // 임계값 경계의 행이 깜빡이고, React 컴파일러가 순수성 위반으로 막는다.
+    // 그보다 이 값이 의미상으로도 맞다 — 묻는 것은 "지금 몇 시인가"가 아니라
+    // "이 행들을 받았을 때 얼마나 낡아 있었나"이다.
+    dataUpdatedAt,
     isFetching,
     isError,
     error,
@@ -76,6 +96,24 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
     queryKey: ["inventory", committed],
     queryFn: () => fetchInventory(committed as Committed),
     enabled: committed != null,
+  });
+
+  /**
+   * 수동 요금 표. 재고와 별도 쿼리인 이유는 서비스워커다 — `/api/inventory`만 SWR로
+   * 캐시되는데 요금을 거기 실으면 방금 저장한 값이 캐시본에 가린다(`api/room-rates` 주석).
+   *
+   * ⚠️ `enabled` 게이트를 지우지 말 것. 쿼리 키가 상수라 게이트가 없으면 조회를 누르지
+   * 않은 세션에도 요청이 하나 붙는다 — 마감일 계산기가 같은 실수를 한 번 했다.
+   *
+   * `staleTime`이 프로바이더 기본(30초)이 아니라 5분인 이유: 수동 단가는 사람이 가끔
+   * 고치는 값이라 30초마다 다시 물을 근거가 없다. 저장 직후의 반영은 시간이 아니라
+   * `invalidateQueries`가 책임진다.
+   */
+  const { data: rates } = useQuery({
+    queryKey: ["room-rates"],
+    queryFn: fetchRoomRates,
+    enabled: committed != null,
+    staleTime: 5 * 60_000,
   });
 
   // 화면의 조건과 실제 조회된 조건이 어긋나면 결과를 흐리게 해서 알린다.
@@ -86,24 +124,55 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
       committed.checkout !== checkout ||
       committed.resort !== place.resort);
 
-  /** 축별 예약 가능 건수 — 필터 칩 배지용. 한 번의 순회로 세 축을 다 센다. */
+  /**
+   * 축별 예약 가능 건수 — 필터 칩 배지용. 한 번의 순회로 세 축을 다 센다.
+   *
+   * `row.available`이 아니라 `toneOf`로 센다. 이 배지는 "여기 눌러 볼 만하다"는 신호라
+   * 확인되지 않은 행을 넣으면 사용자를 13일 된 데이터로 안내하게 된다.
+   * (위 `stale`과 헷갈리지 말 것 — 저건 폼과 결과가 어긋났다는 뜻이고 데이터 나이와 무관하다.)
+   */
   const counts = useMemo<PlaceCounts | undefined>(() => {
     if (!rows) return undefined;
     const acc: PlaceCounts = { byProperty: {}, byRegion: {}, byResort: {} };
     for (const row of rows) {
-      if (!row.available) continue;
+      const tone = toneOf(row, dataUpdatedAt);
+      if (tone !== "available" && tone !== "closingSoon") continue;
       acc.byProperty[row.branchName] = (acc.byProperty[row.branchName] ?? 0) + 1;
       acc.byRegion[row.region] = (acc.byRegion[row.region] ?? 0) + 1;
       acc.byResort[row.resortSlug] = (acc.byResort[row.resortSlug] ?? 0) + 1;
     }
     return acc;
-  }, [rows]);
+  }, [rows, dataUpdatedAt]);
 
   /** 지역·지점 축은 서버에 보내지 않고 여기서 좁힌다. */
   const visibleRows = useMemo(
     () => rows?.filter((row) => matchesPlace(row, place)),
     [rows, place],
   );
+
+  /** 편집 폼이 읽는 원본. 병합된 `row.price`는 총액이라 단가를 되돌릴 수 없다. */
+  const rateIndex = useMemo(() => indexRates(rates ?? []), [rates]);
+
+  /**
+   * 자동 요금이 없는 행에 수동 단가를 얹는다.
+   *
+   * 자리가 중요하다 — `matchesPlace` **뒤**(안 보이는 행까지 곱할 이유가 없다),
+   * `groupByBranch` **앞**(섹션이 이미 요금을 그리고 헤더 라벨을 집합으로 구한다).
+   * 그리고 `useMemo`여야 한다: 매 렌더 새 배열이면 아래 `counts` memo가 통째로
+   * 무효화되고, 거기에 필터 칩의 예약 가능 건수가 걸려 있다.
+   *
+   * 박수는 화면 상태(`nights`)가 아니라 **실제로 조회된 조건**에서 온다 — 사용자가
+   * 박수를 바꾸고 아직 조회를 누르지 않았을 때 둘이 갈리고, 그러면 요금이 다른 숙박의
+   * 것으로 계산된다(`Results`의 `committedNights`와 같은 값이어야 한다).
+   */
+  const pricedRows = useMemo(() => {
+    if (!visibleRows || committed == null) return visibleRows;
+    return withManualRates(
+      visibleRows,
+      rateIndex,
+      diffDaysIso(committed.checkin, committed.checkout),
+    );
+  }, [visibleRows, rateIndex, committed]);
 
   /** 캘린더와 박수 스테퍼가 공유하는 단일 진입점 — 둘 다 같은 (checkin, nights)를 쓴다. */
   function onRangeChange(next: { checkin: string; nights: number }) {
@@ -113,6 +182,15 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
 
   function onSearch() {
     setCommitted({ checkin, checkout, resort: place.resort });
+  }
+
+  /**
+   * 수동 요금 저장·삭제 후. 재고는 건드리지 않는다 — 요금은 `resort_inventory`가 아니라
+   * 옆의 대장(`resort_room_rates`)에 있고, 그래서 무효화할 것도 그 쿼리 하나뿐이다.
+   * 서버 액션의 `revalidatePath`는 관리 화면용이고 여기에는 아무 영향이 없다.
+   */
+  function onRateSaved() {
+    queryClient.invalidateQueries({ queryKey: ["room-rates"] });
   }
 
   function onRefresh() {
@@ -144,7 +222,16 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
           return;
         }
         if (body.status === "SUCCESS") {
-          toast.success(`최신화 완료 (${elapsed}s · ${body.rowsUpserted ?? 0}건)`);
+          // 요금 건수는 0일 때 감춘다(다섯 중 리솜만 요금을 준다 — 나머지에서 "요금 0건"은
+          // 실패가 아니라 그냥 해당 없음이다). 반대로 0이 아닐 때는 반드시 보여준다:
+          // 요금 수집은 예산에 걸리면 조용히 일부만 붙이고 끝나는데, 그 절단이 숫자로
+          // 드러나지 않으면 "요금이 없는 방"과 "못 물어본 방"이 화면에서 똑같이 빈칸이다.
+          const priced = body.pricedRows ?? 0;
+          toast.success(
+            `최신화 완료 (${elapsed}s · ${body.rowsUpserted ?? 0}건` +
+              (priced > 0 ? ` · 요금 ${priced}건` : "") +
+              ")",
+          );
         } else {
           toast.error(
             `크롤링 실패 (${body.errorStage ?? "?"}): ${body.errorMessage ?? "원인 미상"}`,
@@ -231,7 +318,10 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
           committed={committed}
           place={place}
           catalog={catalog}
-          rows={visibleRows}
+          rows={pricedRows}
+          rates={rateIndex}
+          onRateSaved={onRateSaved}
+          now={dataUpdatedAt}
           hasTarget={target != null}
           isFetching={isFetching}
           isError={isError}
@@ -247,6 +337,9 @@ function Results({
   place,
   catalog,
   rows,
+  rates,
+  onRateSaved,
+  now,
   hasTarget,
   isFetching,
   isError,
@@ -256,6 +349,11 @@ function Results({
   place: PlaceSelection;
   catalog: ResortCatalogEntry[];
   rows: InventoryRow[] | undefined;
+  /** 편집 폼이 읽는 수동 요금 원본(단가). 행에 실린 것은 총액이라 여기서 되돌릴 수 없다. */
+  rates: Map<string, ManualRate>;
+  onRateSaved: () => void;
+  /** 행 신선도를 재는 기준 시각 — 이 행들을 받은 순간(React Query의 `dataUpdatedAt`). */
+  now: number;
   hasTarget: boolean;
   isFetching: boolean;
   isError: boolean;
@@ -311,6 +409,11 @@ function Results({
 
   const groups = groupByBranch(rows);
 
+  // 요금은 숙박 총액으로 저장되므로 1박 환산에 박수가 필요하다. 화면 상태(`nights`)가
+  // 아니라 **실제로 조회된 조건**에서 구한다 — 사용자가 박수를 바꾸고 아직 조회를
+  // 누르지 않았을 때 그 둘이 갈리고, 그러면 요금이 다른 숙박의 것으로 나뉜다.
+  const committedNights = diffDaysIso(committed.checkin, committed.checkout);
+
   // 지역을 좁히지 않은 상태에서 결과가 여러 지역에 걸쳐 있을 때만 구분선을 넣는다.
   // 행이 이미 region 우선으로 정렬돼 오므로 값이 바뀌는 지점만 보면 된다.
   const showRegionDividers =
@@ -320,6 +423,7 @@ function Results({
     <div className="space-y-6">
       <AvailabilitySummary
         rows={rows}
+        now={now}
         committed={committed}
         place={place}
         catalog={catalog}
@@ -335,7 +439,13 @@ function Results({
                 <span className="h-px flex-1 bg-border" aria-hidden />
               </h3>
             )}
-            <BranchResultSection rows={group} />
+            <BranchResultSection
+              rows={group}
+              now={now}
+              nights={committedNights}
+              rates={rates}
+              onRateSaved={onRateSaved}
+            />
           </Fragment>
         );
       })}

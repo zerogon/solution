@@ -79,10 +79,16 @@
   --radius: 0.5rem;
   /* 앱 셸 지오메트리 — 매직넘버 대신 토큰으로 두고 `md:w-(--app-sidebar-w)` 형태로 소비한다.
      content-w는 고정 사이드바가 "남긴" 폭을 채워야 한다. 72rem이던 시절엔 1920px에서
-     사이드바 오른쪽에 288px의 빈 공간이 생겨 본문이 셸 안에서 떠 보였다. */
-  --app-sidebar-w: 16rem;
+     사이드바 오른쪽에 288px의 빈 공간이 생겨 본문이 셸 안에서 떠 보였다.
+
+     ⚠️ 앞의 둘은 **한 쌍이다.** 합이 1664px(=288+1376)로 고정돼야 위 관계가 유지된다.
+     사이드바를 16rem에서 18rem으로 넓힌 것은 마감일 계산기 달력이 사이드바 안에
+     상시 렌더되기 때문이고(`DeadlineCalculator`), 그만큼 content-w를 88→86rem으로
+     줄였다. 한쪽만 고치면 1920px에서 본문이 밀려 예전 증상이 그대로 돌아온다.
+     rail-w는 그대로다 — 접힌 레일은 아이콘 하나만 담는다. */
+  --app-sidebar-w: 18rem;
   --app-sidebar-rail-w: 3.75rem;
-  --app-content-w: 88rem;
+  --app-content-w: 86rem;
   --sidebar: oklch(0.985 0.003 215);
   --sidebar-foreground: oklch(0.22 0.006 245);
   --sidebar-primary: oklch(0.52 0.1 205);

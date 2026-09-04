@@ -37,6 +37,10 @@ enum AuditAction {
   LOGIN
   ADD_ALLOWED_EMAIL
   REMOVE_ALLOWED_EMAIL
+  EXCLUDE_PROPERTY
+  INCLUDE_PROPERTY
+  SET_ROOM_RATE
+  DELETE_ROOM_RATE
 }
 
 enum CrawlStage {
@@ -131,10 +135,12 @@ model Resort {
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
 
-  accounts  ResortAccount[]
-  inventory ResortInventory[]
-  crawlLogs CrawlLog[]
-  session   ResortSession?
+  accounts         ResortAccount[]
+  inventory        ResortInventory[]
+  crawlLogs        CrawlLog[]
+  session          ResortSession?
+  branchExclusions ResortBranchExclusion[]
+  roomRates        ResortRoomRate[]
 
   @@map("resorts")
 }
@@ -154,6 +160,92 @@ model ResortAccount {
 
   @@index([resortId, isPrimary])
   @@map("resort_accounts")
+}
+
+/// 운영자가 조회·수집에서 뺀 지점.
+///
+/// **이 표는 지점 목록이 아니라 목록에서 "빼는 규칙"이다.** `resort-catalog.ts`가
+/// 지점 메타를 DB 테이블로 두기를 거부한 논증(사본이 어긋나면 증상이 "필터를
+/// 눌렀는데 0건" — 크롤 실패와 구분 불가)은 그대로 유효하고, 이 표는 그것을
+/// 비껴간다: 행이 지점을 정의하지 않고 뺀다. 카탈로그에 없는 이름이 들어 있어도
+/// 아무것도 걸러내지 않는 **무동작**이고, 그 실패 방향은 "지점이 사라짐"이 아니라
+/// "지점이 그대로 보임"이다.
+///
+/// `enabled Boolean`을 두지 않는 이유: 두는 순간 "노출"을 뜻하는 상태가 둘(행 없음 /
+/// enabled=true)이 된다. 해제된 규칙의 사유는 정보가 아니라 이력이고, 이력은
+/// `audit_logs.metadata`가 담는다(EXCLUDE_PROPERTY / INCLUDE_PROPERTY).
+model ResortBranchExclusion {
+  id       String @id @default(uuid())
+  resortId String @map("resort_id")
+
+  /// `config.branches[].value` == `ResortInventory.branchName`, 문자 단위로 같은 값.
+  branchName String @map("branch_name")
+
+  /// 운영자가 적는 제외 사유(제휴 없음 · 계약 만료 등).
+  ///
+  /// **평문이고 `/admin/properties`에 마스킹 없이 그려진다.** `ResortAccount.memo`가
+  /// 한화 회원권 비밀번호를 담게 된 전례가 있으므로 이 칸은 이름부터 "메모"가 아니라
+  /// "사유"다 — 자격증명을 넣지 말 것.
+  reason String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)
+
+  @@unique([resortId, branchName])
+  @@map("resort_branch_exclusions")
+}
+
+/// 운영자가 손으로 적어 넣는 **1박 단가**. 다섯 리조트 중 요금이 자동으로 붙는 곳은
+/// 롯데·오크밸리(정기)와 리솜(최신화 시)뿐이고, 소노·한화는 사이트가 금액을 아예 주지
+/// 않는다(`AGENTS.md`의 리조트별 "### 요금" 절). 그 빈칸을 사람이 채우는 자리다.
+///
+/// **`ResortInventory.price`에 쓰지 않는 이유**는 그 컬럼이 크롤과 수명을 공유하기
+/// 때문이다 — `run.ts`의 upsert가 `price = EXCLUDED.price`로 덮어 요금 없이 도는 다음
+/// 크롤이 반드시 지운다. 그건 버그가 아니라 "요금의 나이 = `synced_at`"을 지키는
+/// 불변식이고(그 함수의 주석), 수동 요금은 그 등식 **밖**에 서야 한다. 자기 나이는
+/// `updatedAt`이고 크롤과 무관하게 늙는다.
+///
+/// `ResortBranchExclusion`과 같은 계보다 — 카탈로그의 사본이 아니라 **덧붙이는 규칙**이고,
+/// 이름이 어긋나면 에러가 아니라 **무동작**(그 행에 요금이 안 붙는다)이다. 이 표는
+/// 지점도 객실도 만들어 내지 못한다.
+model ResortRoomRate {
+  id       String @id @default(uuid())
+  resortId String @map("resort_id")
+
+  /// `config.branches[].value` == `ResortInventory.branchName`, 문자 단위로 같은 값.
+  branchName String @map("branch_name")
+
+  /// `ResortInventory.roomType`과 문자 단위로 같은 값.
+  ///
+  /// 지점과 달리 **대조할 카탈로그가 없다** — 객실유형은 사이트가 정하고 한화만 107종이다.
+  /// 그래서 이 값은 사람이 타이핑하지 않는다: 입력 다이얼로그는 항상 실제 조회 행에서
+  /// 열리고 행의 값을 그대로 싣는다. 나중에 사이트가 객실명을 바꾸면 이 행은 아무것도
+  /// 붙이지 않는 무동작이 되고, `/admin/rates`가 "지금 재고에 없는 객실유형"으로 그린다.
+  roomType String @map("room_type")
+
+  /// **1박 단가**(원). `ResortInventory.price`가 숙박 **총액**인 것과 단위가 다르다 —
+  /// 화면이 조회한 박수를 곱한다.
+  ///
+  /// 요일·시즌 축이 없다(운영자 결정). 즉 금·토가 더 비싼 실제 요금표를 평일 값으로
+  /// 주장하고, 그 사실을 화면이 `수동 입력` 라벨로 고백한다. 나중에 축을 붙이려면
+  /// 유니크 키는 그대로 두고 nullable 컬럼을 더한 뒤 병합 함수가 밤을 걸으면 된다.
+  perNight Int @map("per_night")
+
+  /// 운영자가 적는 근거("2026 요금표 비수기 주중 · 오션뷰 기준").
+  ///
+  /// **평문이고 `/admin/rates`에 마스킹 없이 그려진다.** `ResortAccount.memo`가 한화
+  /// 회원권 비밀번호를 담게 된 전례가 있으므로 이 칸은 이름부터 "메모"가 아니라 "근거"다 —
+  /// 자격증명을 넣지 말 것.
+  note String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)
+
+  @@unique([resortId, branchName, roomType])
+  @@map("resort_room_rates")
 }
 
 model ResortSession {
@@ -180,7 +272,41 @@ model ResortInventory {
   available    Boolean
   closingSoon  Boolean  @default(false) @map("closing_soon")
   detailUrl    String?  @map("detail_url")
-  syncedAt     DateTime @default(now()) @map("synced_at")
+
+  /// 이 행이 서술하는 숙박 **전체**의 요금(원). 1박당이 아니다 — 행이 이미
+  /// checkinDate/checkoutDate를 갖고 있으므로 단위를 말할 컬럼이 필요 없고,
+  /// 1박 환산은 화면이 나눈다("1박 평균": 주중·주말이 섞이면 어느 밤의 값도 아니다).
+  ///
+  /// **얼마나 자주 채워지는지는 리조트마다 다르고, 그 차이는 비용에서 온다.**
+  /// 롯데는 재고 응답 안에 금액이 같이 오므로 추가 호출이 0이고 **정기 수집에서도**
+  /// 붙는다. 리솜은 요금 API가 행 하나에 콜 하나라 정기 크롤 예산에 들어가지 못하고,
+  /// 사용자가 "최신화"를 눌러 지목한 (지점, 날짜)에만 붙는다.
+  /// 요금이 아예 없는 곳도 있다 — 자세한 근거는 AGENTS.md의 리조트별 "### 요금" 절.
+  ///
+  /// Int4 상한 2,147,483,647원. 7박 스위트도 천만 원대라 여유가 크다.
+  price Int?
+
+  /// `price`가 무엇인지. 숫자만으로는 회원가와 공시가를 구별할 수 없고, 구별하지
+  /// 못하면 두 리조트를 나란히 놓는 순간 비교가 거짓말이 된다(조사에서 롯데 값이
+  /// BAR 공시가임을 이미 측정했다). `price`와 **둘 다이거나 둘 다 아니다**.
+  ///
+  /// Prisma enum이 아니라 text인 이유: 값을 늘리는 것이 마이그레이션이 되고,
+  /// `run.ts`의 raw SQL에 `::"PriceKind"` 캐스트를 요구하게 된다. 어휘의 단일
+  /// 출처는 `src/lib/price.ts`의 TS 유니언이다.
+  priceKind String? @map("price_kind")
+
+  /// 기준인원 / 최대인원(명). **둘 다이거나 둘 다 아니다.**
+  ///
+  /// 다섯 리조트 중 **롯데만 채워진다**(2026-08-28 조사) — 나머지 넷은 재고 응답의
+  /// 키를 전수로 세어봐도 정원 필드가 없다. 롯데는 이미 받고 있는 `roomList` 안에
+  /// 있어 추가 호출이 0이고, 그래서 정기 수집에서 붙는다(`price`와 같은 자리).
+  ///
+  /// `price`와 달리 **매진 행에도 채워진다.** 정원은 가용성의 함수가 아니라 방의
+  /// 속성이고, 사이트도 그렇게 답한다(속초 매진 8행 전부 값이 있었다).
+  stdCapacity Int? @map("std_capacity")
+  maxCapacity Int? @map("max_capacity")
+
+  syncedAt DateTime @default(now()) @map("synced_at")
 
   resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)
 
@@ -191,19 +317,19 @@ model ResortInventory {
 }
 
 model CrawlLog {
-  id            String       @id @default(uuid())
-  resortId      String       @map("resort_id")
-  resortName    String       @map("resort_name")
-  status        CrawlStatus
-  startedAt     DateTime     @map("started_at")
-  finishedAt    DateTime?    @map("finished_at")
-  durationMs    Int?         @map("duration_ms")
-  errorMessage  String?      @map("error_message")
-  errorStage    CrawlStage?  @map("error_stage")
-  rowsUpserted  Int?         @map("rows_upserted")
-  inngestRunId  String?      @map("inngest_run_id")
-  triggeredBy   String?      @map("triggered_by")
-  createdAt     DateTime     @default(now()) @map("created_at")
+  id           String      @id @default(uuid())
+  resortId     String      @map("resort_id")
+  resortName   String      @map("resort_name")
+  status       CrawlStatus
+  startedAt    DateTime    @map("started_at")
+  finishedAt   DateTime?   @map("finished_at")
+  durationMs   Int?        @map("duration_ms")
+  errorMessage String?     @map("error_message")
+  errorStage   CrawlStage? @map("error_stage")
+  rowsUpserted Int?        @map("rows_upserted")
+  inngestRunId String?     @map("inngest_run_id")
+  triggeredBy  String?     @map("triggered_by")
+  createdAt    DateTime    @default(now()) @map("created_at")
 
   resort Resort @relation(fields: [resortId], references: [id])
 

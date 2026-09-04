@@ -7,6 +7,19 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
+/**
+ * 인스턴트를 KST로 찍는다. 기본 JSON 직렬화는 UTC(`…Z`)라 틀리지는 않지만
+ * 눈으로 9시간을 더해야 한다 — 이 스크립트를 보는 사람은 항상 한국 시각을 묻는다.
+ */
+function kst(d: Date): string {
+  return `${d.toISOString().replace("T", " ").slice(0, 19)}Z (KST ${new Date(
+    d.getTime() + 9 * 3_600_000,
+  )
+    .toISOString()
+    .replace("T", " ")
+    .slice(0, 19)})`;
+}
+
 async function main() {
   const logs = await prisma.crawlLog.findMany({
     orderBy: { createdAt: "desc" },
@@ -23,7 +36,13 @@ async function main() {
     },
   });
   console.log("=== crawl_logs (latest 10) ===");
-  console.log(JSON.stringify(logs, null, 2));
+  console.log(
+    JSON.stringify(
+      logs.map((l) => ({ ...l, startedAt: kst(l.startedAt) })),
+      null,
+      2,
+    ),
+  );
 
   const inventoryCount = await prisma.resortInventory.count();
   const dateGroups = await prisma.resortInventory.groupBy({
@@ -43,7 +62,17 @@ async function main() {
     select: { resortId: true, expiresAt: true, updatedAt: true },
   });
   console.log("\n=== resort_sessions ===");
-  console.log(JSON.stringify(sessions, null, 2));
+  console.log(
+    JSON.stringify(
+      sessions.map((s) => ({
+        ...s,
+        expiresAt: kst(s.expiresAt),
+        updatedAt: kst(s.updatedAt),
+      })),
+      null,
+      2,
+    ),
+  );
 }
 
 main()

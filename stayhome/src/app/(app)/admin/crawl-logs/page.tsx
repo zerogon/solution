@@ -1,6 +1,7 @@
 import { ScrollText } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
+import { formatKstDateTime } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -28,14 +29,8 @@ const STATUS_VARIANT: Record<
 
 const LOG_LIMIT = 50;
 
-function formatStarted(d: Date): string {
-  return d.toLocaleString("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+// 서버 컴포넌트가 렌더하므로 서버 타임존(Vercel=UTC)이 그대로 나온다 — KST 고정.
+const formatStarted = formatKstDateTime;
 
 export default async function CrawlLogsPage() {
   const [resorts, logs] = await Promise.all([
@@ -119,7 +114,17 @@ export default async function CrawlLogsPage() {
                       )}
                     </div>
                     {l.errorMessage && (
-                      <p className="text-xs text-destructive">
+                      // 성공한 행에도 이 칸이 채워질 수 있다 — `run.ts`가 자원
+                      // 상태(`[res] tmp …`)를 여기에 남기기 때문이다. 색은
+                      // 그래서 내용이 아니라 **판정**을 따라간다. 무조건 빨강이면
+                      // 성공한 크롤이 매번 실패처럼 보인다.
+                      <p
+                        className={
+                          l.status === CrawlStatus.FAILED
+                            ? "text-xs text-destructive"
+                            : "text-xs text-muted-foreground"
+                        }
+                      >
                         {l.errorStage ? `[${l.errorStage}] ` : ""}
                         {l.errorMessage}
                       </p>

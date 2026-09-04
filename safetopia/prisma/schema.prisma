@@ -1,0 +1,274 @@
+// safetopia — 다지점 카페 연차 관리 데이터 모델.
+// datasource url은 prisma.config.ts가 공급한다(.env.local > .env, scripts/load-env.ts).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────── Enums ─────────────────────────
+
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  RETIRED
+}
+
+enum BranchStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LeaveType {
+  FULL_DAY
+  AM_HALF
+  PM_HALF
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum AuditAction {
+  LOGIN
+  CREATE_EMPLOYEE
+  UPDATE_EMPLOYEE
+  CHANGE_EMPLOYEE_STATUS
+  RESET_PASSWORD
+  CHANGE_BRANCH
+  CREATE_BRANCH
+  UPDATE_BRANCH
+  CHANGE_BRANCH_STATUS
+  GRANT_LEAVE
+  ADJUST_LEAVE
+  CARRY_OVER_LEAVE
+  APPROVE_REQUEST
+  REJECT_REQUEST
+  CANCEL_REQUEST_ADMIN
+}
+
+enum AuditTargetType {
+  USER
+  BRANCH
+  LEAVE_REQUEST
+  LEAVE_BALANCE
+}
+
+/// Phase 2 — 인앱 알림.
+enum NotificationType {
+  REQUEST_CREATED
+  REQUEST_APPROVED
+  REQUEST_REJECTED
+  REQUEST_CANCELLED
+  LEAVE_ADJUSTED
+}
+
+// ───────────────────────── Core ─────────────────────────
+
+model User {
+  id                 String         @id @default(uuid())
+  loginId            String         @unique @map("login_id")
+  password           String
+  mustChangePassword Boolean        @default(true) @map("must_change_password")
+  name               String
+  email              String?        @unique
+  phone              String?
+  role               Role           @default(EMPLOYEE)
+  status             EmployeeStatus @default(ACTIVE)
+  /// ADMIN은 null 허용. EMPLOYEE는 zod에서 필수.
+  branchId           String?        @map("branch_id")
+  hireDate           DateTime?      @map("hire_date") @db.Date
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
+
+  branch            Branch?           @relation(fields: [branchId], references: [id])
+  leaveBalances     LeaveBalance[]
+  leaveRequests     LeaveRequest[]    @relation("RequestOwner")
+  leaveDays         LeaveRequestDay[]
+  approvedRequests  LeaveRequest[]    @relation("RequestApprover")
+  cancelledRequests LeaveRequest[]    @relation("RequestCanceller")
+  adjustments       LeaveAdjustment[] @relation("AdjustmentTarget")
+  adjustmentsMade   LeaveAdjustment[] @relation("AdjustmentActor")
+  branchHistories   BranchHistory[]   @relation("BranchHistoryUser")
+  branchChangesMade BranchHistory[]   @relation("BranchHistoryActor")
+  auditLogs         AuditLog[]
+  notifications     Notification[]
+
+  @@index([branchId, status])
+  @@map("users")
+}
+
+model Branch {
+  id             String       @id @default(uuid())
+  name           String       @unique
+  address        String?
+  phone          String?
+  status         BranchStatus @default(ACTIVE)
+  /// 정기 휴무 요일. 0=일 … 6=토 (JS getUTCDay 규약). 예: [1] = 매주 월요일 휴무.
+  closedWeekdays Int[]        @default([]) @map("closed_weekdays")
+  /// Phase 2 — 최소 근무 인원 경고 임계값.
+  minStaff       Int?         @map("min_staff")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  users         User[]
+  historiesFrom BranchHistory[] @relation("BranchHistoryFrom")
+  historiesTo   BranchHistory[] @relation("BranchHistoryTo")
+
+  @@map("branches")
+}
+
+model LeaveBalance {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  year            Int
+  totalDays       Float    @default(0) @map("total_days")
+  carriedOverDays Float    @default(0) @map("carried_over_days")
+  adjustedDays    Float    @default(0) @map("adjusted_days")
+  /// 승인 완료 누계. approve / adminCancelApproved 에서만 변경한다.
+  /// pendingDays는 저장하지 않고 PENDING 신청의 days 합으로 집계한다.
+  usedDays        Float    @default(0) @map("used_days")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year])
+  @@map("leave_balances")
+}
+
+model LeaveRequest {
+  id              String      @id @default(uuid())
+  userId          String      @map("user_id")
+  type            LeaveType
+  startDate       DateTime    @map("start_date") @db.Date
+  endDate         DateTime    @map("end_date") @db.Date
+  /// 신청 시점 계산값(지점 휴무·공휴일 제외). 0.5 단위.
+  days            Float
+  reason          String
+  status          LeaveStatus @default(PENDING)
+  rejectionReason String?     @map("rejection_reason")
+  approvedById    String?     @map("approved_by_id")
+  approvedAt      DateTime?   @map("approved_at")
+  cancelledById   String?     @map("cancelled_by_id")
+  cancelledAt     DateTime?   @map("cancelled_at")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  user        User              @relation("RequestOwner", fields: [userId], references: [id])
+  approvedBy  User?             @relation("RequestApprover", fields: [approvedById], references: [id])
+  cancelledBy User?             @relation("RequestCanceller", fields: [cancelledById], references: [id])
+  dayRows     LeaveRequestDay[]
+
+  @@index([userId, status])
+  @@index([status, createdAt])
+  @@index([startDate, endDate])
+  @@map("leave_requests")
+}
+
+/// 신청이 실제로 차감하는 날짜 1개 = 행 1개.
+/// PENDING/APPROVED 동안만 존재하며 REJECTED/CANCELLED 전이 시 같은 트랜잭션에서 삭제한다.
+/// 그래서 (user_id, date) 단순 유니크가 "같은 직원·같은 날짜 중복 신청"을 DB 층에서 막고,
+/// 캘린더와 지점 근무 인원 집계도 이 표에서 읽는다.
+model LeaveRequestDay {
+  id             String    @id @default(uuid())
+  leaveRequestId String    @map("leave_request_id")
+  userId         String    @map("user_id")
+  date           DateTime  @db.Date
+  /// 인원 집계 가중치(반차 0.5)용 비정규화.
+  type           LeaveType
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@unique([userId, date])
+  @@index([date])
+  @@map("leave_request_days")
+}
+
+model LeaveAdjustment {
+  id          String   @id @default(uuid())
+  userId      String   @map("user_id")
+  year        Int
+  /// +1.0 / -0.5 처럼 부호 있는 0.5 단위.
+  amount      Float
+  reason      String
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user      User @relation("AdjustmentTarget", fields: [userId], references: [id])
+  createdBy User @relation("AdjustmentActor", fields: [createdById], references: [id])
+
+  @@index([userId, year])
+  @@map("leave_adjustments")
+}
+
+model BranchHistory {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  /// 최초 배정은 null.
+  fromBranchId String?  @map("from_branch_id")
+  toBranchId   String   @map("to_branch_id")
+  changedById  String   @map("changed_by_id")
+  reason       String?
+  changedAt    DateTime @default(now()) @map("changed_at")
+
+  user       User    @relation("BranchHistoryUser", fields: [userId], references: [id])
+  fromBranch Branch? @relation("BranchHistoryFrom", fields: [fromBranchId], references: [id])
+  toBranch   Branch  @relation("BranchHistoryTo", fields: [toBranchId], references: [id])
+  changedBy  User    @relation("BranchHistoryActor", fields: [changedById], references: [id])
+
+  @@index([userId, changedAt])
+  @@map("branch_histories")
+}
+
+model AuditLog {
+  id          String          @id @default(uuid())
+  actorId     String?         @map("actor_id")
+  /// 행위자 이름 스냅샷 — 개명·삭제 후에도 이력이 읽히도록.
+  actorName   String          @map("actor_name")
+  action      AuditAction
+  targetType  AuditTargetType @map("target_type")
+  targetId    String?         @map("target_id")
+  description String?
+  metadata    Json?
+  ip          String?
+  userAgent   String?         @map("user_agent")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([targetType, targetId])
+  @@map("audit_logs")
+}
+
+/// Phase 2 골격 — 인앱 알림.
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  body      String?
+  href      String?
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
+}

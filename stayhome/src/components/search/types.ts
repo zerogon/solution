@@ -1,4 +1,5 @@
 import type { ResortSlug } from "@/generated/prisma/enums";
+import type { PriceKind } from "@/lib/price";
 
 /** `/api/inventory`가 돌려주는 한 행. 라우트의 `select`와 필드가 일치해야 한다. */
 export interface InventoryRow {
@@ -12,6 +13,29 @@ export interface InventoryRow {
   available: boolean;
   closingSoon: boolean;
   detailUrl: string | null;
+  /**
+   * 이 행이 서술하는 숙박 **전체**의 요금. 1박당이 아니다 — 화면이 나눠서 "1박 평균"을
+   * 병기한다.
+   *
+   * **빈칸은 에러가 아니다.** 리조트마다 요금을 얻는 비용이 달라서 채워지는 빈도도
+   * 다르다 — 롯데는 재고 응답 안에 같이 오므로 정기 수집에서도 붙고, 리솜은 행 하나에
+   * 콜 하나라 사용자가 "최신화"로 지목한 (지점, 날짜)에만 붙는다. 아예 없는 곳도 있다.
+   *
+   * DB는 컬럼 두 개(`price`/`price_kind`)지만 라우트가 하나로 접어 내려보낸다 —
+   * 금액과 그 종류는 둘 다이거나 둘 다 아니어야 하고, 두 필드로 두면 라벨 없는
+   * 숫자를 그릴 수 있게 된다.
+   */
+  price: { amount: number; kind: PriceKind } | null;
+  /**
+   * 이 객실의 기준인원 / 최대인원(명).
+   *
+   * **빈칸은 에러가 아니다** — 다섯 리조트 중 롯데만 정원을 응답에 실어 준다
+   * (2026-08-28 조사; 나머지 넷은 재고 응답의 키를 전수로 세어봐도 없다).
+   *
+   * `price`와 달리 **매진된 행에도 붙는다.** 정원은 시간이 지나도 방이 팔려도
+   * 변하지 않으므로, 요금처럼 신선도·가용성으로 가릴 이유가 없다.
+   */
+  occupancy: { standard: number; max: number } | null;
   syncedAt: string;
 }
 

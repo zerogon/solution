@@ -24,6 +24,276 @@ lotteresort.com은 2026-07에 LOTTE HOTELS & RESORTS(lottehotel.com)로 통합�
   (산정호수는 통합 시 라인업 제외. bizCd 출처: CMS 카탈로그
   `resort.lottehotel.com/cms/common/hotel-catalogs/ko_catalogs.json`의 `anotherBookingUrl`)
 
+### 지점 4곳은 한 번에 묻는다 (2026-08-27)
+
+`searchAvailability`가 지점을 순차로 돌던 것을 `mapPool`(`_shared/pool.ts`)로 바꿨다.
+`LOTTE.branchPool`은 지점 수와 같은 4 — 독립적인 JSON GET 넷이고, 이 엔드포인트 앞에는
+한화의 넷퍼넬 같은 문지기가 없다(로그인 앞에는 있다. 위 절 참조).
+
+롯데는 행에 `stay`를 붙이지 않아 **윈도우 하나에 지점 수만큼 콜**을 그대로 낸다. 그래서
+이 병렬화가 곧 패스 수다 — 실측 1패스에 14윈도우 → **27윈도우**. 60개 핫 윈도우가
+5패스에서 ~2패스가 되고, 패스 하나는 워밍 인스턴스에 브라우저 한 벌이다.
+
+- **한 지점 실패를 삼키는 규칙은 그대로다.** `removeVanishedRows`가 "0행 그룹은 안
+  건드린다"로 안전한 것은 실패한 지점이 조용히 0행이 되기 때문이다. 삼킴을 없애면
+  크롤 실패가 매진으로 발행된다.
+- **다만 `전부` 실패하면 던진다**(2026-08-27 추가). 0행 SUCCESS는 "그날 전 객실 매진"과
+  글자 하나 다르지 않고, 이제 백스톱까지 재고를 근거로 판정하므로 그 거짓 성공이
+  "고칠 필요 없음"으로까지 읽힌다.
+
+### 로그인은 폼 하나가 아니라 네 홉이고, 앞에 문지기가 둘 있다
+
+`scripts/debug-page.ts doLogin`으로 성공한 로그인을 그대로 녹화한 결과(2026-08-09):
+
+```
+GET  netfunnel.lottehotel.com/ts.wseq?…&aid=login   ← 넷퍼넬(대기열/입장 제어)
+POST members.lpoint.com/exView/api/callLgn_01_001
+POST members.lpoint.com/exBiz/login/login_01_001    ← L.POINT가 실제로 인증
+POST api.lottehotel.com/ssoLogin/ssoLogin           → {"code":"0000", …}
+```
+
+그리고 컨텍스트에 `reese84` · `visid_incap_*` · `nlbi_*` · `incap_ses_*` 쿠키가 쌓인다 —
+**Imperva(Incapsula) WAF + Advanced Bot Protection**이다.
+
+즉 폼 앞에 우리 셀렉터와 무관한 문지기가 둘(넷퍼넬, Imperva) 있고, 둘 중 하나에서
+막히면 **페이지는 제출조차 안 한 것과 똑같아 보인다** — 에러도 알림도 없이 `isLogin`만
+계속 false다. 프로덕션에서 반복되는 실패가 정확히 이 모양이라, 자격증명 오류로 오진하기
+쉽다(실제로 한 번 오진했다).
+
+한국 IP(로컬)에서는 안정적으로 통과하고 Vercel의 미국 리전에서는 4번에 1번쯤만 통과한다는
+비대칭도 이 가설과 맞는다. **로그인 실패를 셀렉터 문제로 의심하기 전에 어느 홉까지 갔는지부터
+볼 것** — `login.ts`가 실패 시 `[lotte] login failed — auth traffic`으로 홉 목록을,
+`— bot-protection cookies`로 문지기 쿠키 유무를 남긴다.
+
+- `login_01_001`이 없다 → L.POINT가 인증을 안 해줬다(자격증명 또는 그 앞 문지기)
+- `ssoLogin`이 없다 → L.POINT는 통과했는데 lottehotel.com이 세션을 안 받았다
+- 둘 다 없다 → 폼이 아니라 그 앞에서 막혔다
+
+### 로그인 페이지를 가리는 쿠키 동의 레이어
+
+로그인 화면 앞에 모달이 뜬다 — 제목 `최상의 경험 제공 (쿠키 활용 동의)`,
+버튼 `쿠키 설정 / 전체 동의 / 필수·분석·마케팅 쿠키 더보기 / 확인`.
+이걸 안 닫으면 **탭 클릭이 실패한다.** 실패가 고약한 건 원인과 증상이 떨어져
+있다는 것 — 증상은 몇십 초 뒤 `locator.click: Timeout ... <div class="modal-dimm">
+from <div class="layer-wrap"> subtree intercepts pointer events`라서 "탭 셀렉터가
+깨졌다"처럼 읽힌다. 실제로 탭 자체는 로그에 정상 resolve된다.
+
+- **감지는 `.modal-dimm:visible`로 한다.** `.layer-wrap`을 보면 안 된다 —
+  페이지에 여러 개 있고 자식이 fixed라 래퍼 자신의 박스가 비어 `isVisible()`이
+  false다. 클릭은 막히는데 검사만 통과하는 상태가 되고, 그러면 **로그가 아무것도
+  안 남는다**(그 침묵 자체가 감지가 틀렸다는 신호였다). 래퍼는 버튼을 찾을
+  scope로만 쓰고, 살아 있는 dimm을 가진 것을 고른다.
+- **후보는 `getByText`로 찾는다.** 닫기 컨트롤이 `button` role이 아니라서
+  `getByRole("button", { name: "전체 동의" })`는 못 잡았다.
+- 레이어는 `domcontentloaded` 시점에 아직 DOM에 없다. 잠깐 기다린 뒤 확인하고,
+  탭 클릭은 "닫고-클릭"을 몇 번 반복한다. 긴 타임아웃 하나로는 이 레이스에서
+  회복할 수 없다 — 아무도 안 닫은 오버레이를 상대로 시간을 쓸 뿐이다.
+- 후보가 전부 안 맞으면 레이어의 heading과 버튼 라벨을 로그에 남긴다(로그인당 1회).
+  리전마다 다른 레이어가 뜰 수 있고, 그러지 않으면 여기서 보이지 않는다.
+- 탭 입력창은 **두 탭이 DOM에 공존**하므로 `[data-tab-value="LPOINT"][aria-selected="true"]`가
+  붙은 뒤에 채운다. 안 그러면 리조트 아이디가 리워즈 폼에 들어가고, 실패가
+  자격증명 오류와 구분되지 않는다(에러 없이 `isLogin`만 계속 false).
+
+### 요금은 재고 응답 안에 이미 있다 — 그리고 2026-08-26부터 실제로 수집한다
+
+`roomList`의 한 객실은 키 **49개**를 갖고 있고 `parse.ts`의 `RoomListPayload`는 그중 5개만
+선언한다("Subset ... we rely on"이라고 스스로 적어둔 그대로다). 나머지에 요금이 있다 —
+`keys` 스텝이 세어서 확인했다.
+
+| 키 | 뜻 | 관측 (속초, 1박) |
+| --- | --- | --- |
+| `roomAvgAmt` | **숙박 기간의 1박 평균가** | 238,620 |
+| `minRateAmt` | 그 숙박에서 가장 싼 하룻밤 | 238,620 |
+| `earlybirdRateAmt` | 얼리버드 적용 시 1박가 | 265,000 |
+| `pointAmt` · `pointFullAmt` | 적립 포인트(원이 아님) | 662 · 16,558 |
+
+- **총액이 아니라 1박 값이다.** 같은 방을 1·2·3박으로 물었을 때 `roomAvgAmt`가
+  238,620 → 234,255 → 232,800으로 *줄었다*. 평일이 섞이며 평균이 내려간 것이고,
+  숙박 총액은 `roomAvgAmt × 박수`다 — 2박 234,255×2 = 468,510 = 238,620(주말) + 229,890(평일)로
+  `minRateAmt`와 산술이 정확히 맞는다. 이 값을 그대로 "2박 요금"이라 부르면 실제의 절반을
+  발행하게 되고, 그건 2026-08-09에 고친 소노 2박 버그와 같은 모양이다.
+- ~~**BAR 공시가이지 회원가가 아니다.**~~ 맞는 말이었지만 **닫힌 문이 아니었다** —
+  2026-09-01에 회원 요금을 여는 축을 찾아 실제로 수집한다. 아래 "### 회원 요금은 쿠키가
+  아니라 파라미터 둘이 연다" 절. 그때까지 이 문단은 "회원가가 아닐 수 있다"에서 멈춰
+  있었고, 그 근거가 **전부 비로그인 측정**이었다는 사실은 어디에도 적혀 있지 않았다.
+- **추가 호출이 없다.** 크롤러가 이미 받아 버리고 있는 응답 안이라 요청 수·예산에 영향 0.
+- `roomNm`은 13개 객실이 전부 서로 달라(`parse.ts:44-47`의 dedupe가 실제로 지우는 게 없다)
+  행 하나에 정확한 값 하나를 붙일 수 있다.
+
+**수집(2026-08-26).** `RoomListPayload`에 `roomAvgAmt`를 선언하고 `parse.ts`의 `stayTotal`이
+읽는다. 규칙 셋:
+
+- **박수를 곱한다.** `InventoryRow.price`의 계약이 "이 행이 서술하는 숙박 **전체**의
+  요금"인데 `roomAvgAmt`는 1박 평균이다. 평균 × 박수 = 총액인 것은 평균의 정의이지 추정이
+  아니고, 사이트가 반올림한 평균을 주므로 마지막 자리가 몇 원 어긋날 수 있다 — 그건
+  안내를 틀리게 만들 크기가 아니지만 곱을 생략했을 때의 오차는 100%다.
+- **`available`한 행에만 붙인다.** `roomList`에는 매진된 방(대기예약)도 실려 있고 거기에도
+  금액이 있다. 실측: 가용성을 안 보면 113행이 `available=false`인 채 요금을 갖는다.
+  화면의 `showsPrice(tone)`가 어차피 거르지만("예약할 수 없는 방의 가격은 정보가 아니라
+  잡음이다") DB에 두면 이 저장소의 불변식이 깨진다.
+- **`withPrices` 게이트를 타지 않는다.** 그 게이트는 *비용*을 재는 것이고 롯데는 0이다.
+  즉 롯데 요금은 최신화가 아니라 **정기 수집에서** 붙는다 — 다섯 곳 중 유일하다.
+- 값이 숫자가 아니거나(`""`·null) 0 이하면 붙이지 않는다. **필드가 있다고 값이 있는 게
+  아니다** — 리솜 `rmAmt`가 506엔트리 전부 `"0"`이었다.
+
+실사이트 검증(2026-08-26): 단일 윈도우 45행 중 **요금 38행**(나머지 7행은 마감),
+핫 윈도우 60/60 **2,464행 중 1,857행**. 같은 방 1·2·3박 총액이 328,830 → 811,890 →
+1,087,371로 박수에 비례(비율이 정확히 2·3이 아닌 것은 주말이 섞이며 평균이 움직이기
+때문이다). DB 불변식 위반 0건 — `price>0`, `price_kind` 동반, `available=false`에 요금 없음,
+**2박 총액 ≤ 1박 총액인 행 0건**.
+
+### 회원 요금은 쿠키가 아니라 **파라미터 둘**이 연다 (2026-09-01)
+
+운영자 관측에서 시작했다 — 사이트에 직접 로그인하면 **객실 목록 단계에서 이미** 다른
+금액이 보이는데 우리는 공시가를 발행하고 있었다. 조사 도구는 `debug-page.ts`의 **`member`
+스텝**이고(오크밸리 `probe` → 소노 `flow` → 한화 `cal`과 같은 계보, 이번 축은 **신원**이다),
+답은 셋으로 나왔다.
+
+**1. 로그인은 이 요청의 답을 한 글자도 바꾸지 않는다.** 같은 여섯 파라미터를 인증/익명으로
+쏴서 대조: 4개 지점 **공통 71행 · 다른 셀 0개 · 객실 집합 차이 0개**. `config.ts`와
+`search.ts`가 오래 적어 두었던 "`page.request`라 로그인 쿠키가 실려 회원 요금이 온다"는
+**틀린 문장이었다.** (그 대조에서 유일하게 달랐던 `id`는 응답마다 새로 발급되는 UUID다 —
+두 번 물어본 효과이지 신원의 효과가 아니라서, 세면 판정이 정반대로 뒤집힌다.)
+
+**2. 사이트는 로그인하면 파라미터 둘을 다르게 채운다.** 21개 칸 중 정확히 둘이다:
+
+| 칸 | 비로그인 | 로그인 |
+| --- | --- | --- |
+| `memberNo` | `""` | 10자리 분양회원 번호 |
+| `ownType` | `"1"` | `"5"` |
+
+나머지 19개(`exclusiveCd`·`packageNo`·`userId`…)는 로그인 여부와 무관하게 빈 값이고,
+**전체를 그대로 재생해도 그 둘 없이는 응답이 BAR와 같다.** 그래서 우리도 그 둘만 더한다 —
+의미 없는 칸을 흉내 내면 무엇이 실제로 답을 움직이는지가 다음 사람에게 보이지 않는다.
+
+**3. 그 둘을 실으면 회원 요금이 온다.** 속초 12객실 실측: 223,000→170,000(-23.8%),
+321,000→237,000(-26.2%), 386,000→304,000(-21.2%) … 폭은 **-14.2 ~ -26.6%**.
+`memberNo`만 보내면 **0행**, `ownType`만 보내면 BAR와 동일 — **둘 다여야 한다.**
+
+#### `ownType`은 상수가 아니라 유도값이다
+
+사이트 번들이 직접 적어 둔다 — `layouts.base.js`의
+`ownType: null, // 예약유형 (1: 기명, 2: 지인, 5: 무기명)`. 고르는 것은
+`accommodationFull.js`이고 규칙은 `registerCd`(N 기명 / U 무기명 / NU 혼합)와 `webMemCd`다.
+실측 계정은 `registerCd:"U"` → `5`(무기명)였고 사이트가 스스로 쏜 요청도 `ownType=5`였다.
+
+**이것이 오크밸리 `rateFare`와 갈리는 지점이다.** 거기서는 기명/무기명을 사이트가 말해주지
+않아 운영자의 답을 상수로 박아야 했지만(그래서 회원권 구성이 바뀌면 조용히 4~27% 틀린다),
+롯데는 **계정 필드가 답한다.** 그래서 `member.ts`가 유도하고 config에는 어휘만 둔다.
+· 다만 `ownTypeOf`는 **모르는 `registerCd`에 값을 지어내지 않는다.** 사이트의 기본값은
+  `"1"`(기명)이지만 우리는 `null`을 돌려 공시가로 물러난다 — 기명과 무기명은 서로 다른
+  요금이고, 추측이 틀렸을 때의 증상은 에러가 아니라 **틀린 금액**이다.
+
+#### 열쇠는 세션에서 읽는다 (`member.ts`)
+
+`GET /common/login/user` → `data.resortList[]` / `data.intgList[]`에서
+`membershipType === "R"`(분양회원)인 엔트리를 고른다. `"CYBER"` 엔트리도 같이 오므로
+거르지 않으면 `memberNo`가 없는 쪽을 집는다.
+- **`ctx.page`로 키잉한 WeakMap이라 패스당 한 번**이다(`oakvalley/rates.ts`·한화 `booted`).
+- **절대 던지지 않는다.** 부가 정보 하나가 `withDeadline`을 넘기면 잃는 것은 요금이 아니라
+  그 패스가 모은 **재고 행 전부**다.
+- **회원번호는 로그에 남기지 않는다** — `{ memberNo: "present", ownType }`만 찍는다.
+- ⚠️ **이 응답에는 회원사명·담당자명·휴대폰·이메일이 평문으로 들어 있다.** `member.ts`는
+  읽는 칸만 선언하고, `debug-page.ts`도 구조 필드 **화이트리스트**로만 찍는다(처음엔
+  "가릴 것을 열거하는" 블랙리스트였고 그대로 터미널에 찍혔다 — `login.ts:150-165`가
+  화이트리스트를 쓰는 이유가 정확히 이것이다).
+- 이 계정은 `primaryYn` Y/N 두 엔트리를 받는데 **둘이 완전히 같은 요금표를 답했다**(12행
+  전부 동일). 그래서 `primaryYn === "Y"` 선택은 지금 무동작이지만, 임의로 첫 번째를 집는
+  것과 사이트의 기본값을 따르는 것은 다른 약속이다.
+
+#### 지점마다 콜이 둘이고, 재고와 요금의 출처가 다르다
+
+**재고는 BAR가, 요금은 회원 트랙이 답한다.** 회원 트랙이 BAR의 **부분집합**이기 때문이다 —
+실측 부여 23/25 · 제주 13/14 · 김해 18/20. 회원 트랙으로 재고를 만들면 **예약 가능한 방이
+조회 화면에서 사라진다.**
+
+그래서 `parse.ts`의 `priceOf`가 세 갈래이고, 실패 방향이 전부 안전한 쪽이다:
+
+| 상황 | 요금 | 라벨 |
+| --- | --- | --- |
+| 회원 트랙을 받았고 이 방이 거기 있다 | 회원 트랙 값 | `member` |
+| 회원 트랙을 받았는데 이 방이 없다 | **없음** | — |
+| 회원 트랙 자체가 없다(로그인 전·콜 실패·분양회원 아님) | BAR 값 | `public` |
+
+가운데 칸에 BAR 값을 대신 넣지 않는 이유: 한 지점 안에 회원가와 공시가가 **행 단위로는
+구별할 수 없게** 섞인다(라벨은 섹션 헤더에 한 번만 그려진다). `price.ts`가 존재하는 이유가
+그 혼동이고, **빈칸은 정보가 없는 것이지만 섞인 숫자는 틀린 안내가 된다.**
+
+- **라벨은 응답이 아니라 출처가 정한다.** `memberType`은 **회원 트랙에서도 전 객실 `""`**라,
+  응답 안에는 트랙을 신고하는 칸이 없다. 처음 설계는 "응답에서 유도"였고 그건 성립하지 않았다.
+- **두 콜은 동시에 나간다.** 지점이 이미 `branchPool`로 병렬이라 벽시계에 곱해지지 않는다 —
+  요금을 붙이면서 패스 수가 늘지 않는 이유다. 실측: BAR 4콜 병렬 18.0초 vs BAR+회원 8콜
+  병렬 0.6초(같은 세션, 연속). **비용을 정하는 것은 콜 수가 아니라 날짜가 새것이냐다.**
+- BAR는 던지고 **회원 콜은 삼킨다.** 재고는 이 도구의 본질이고 요금은 부가 정보라,
+  회원 콜 하나가 실패했을 때의 옳은 결과는 "그 지점 실패"가 아니라 "그 지점은 공시가"다.
+
+#### 콜 타임아웃을 남은 예산에서 유도한다
+
+`timeouts.api`(15초)는 이제 **상한**이고 실제 값은 `ctx.deadlineAt`에서 나온다
+(`search.ts`의 `callTimeout`). 한화가 지점을 병렬로 묻기 시작하며 배운 것과 같은 규칙이다 —
+한꺼번에 던진 뒤에는 "다음" 앞에서 멈춰 세울 자리가 없고, 상한만 쓰면 **낙오자 하나가
+남은 예산을 넘겨 부분 반환을 `DeadlineExceeded`로 바꾼다.** 2026-09-01 핫 스윕이 정확히
+그렇게 죽었다(11창 117행을 커밋해 놓고 `deadline exceeded for search after 6598ms`).
+
+이 사이트의 지연은 널뛴다 — 같은 창을 세 번 재보면 **처음 묻는 (지점, 날짜)가 18초까지
+가고 다시 물으면 1초 남짓**이다. 핫 스윕은 60창이 전부 새 날짜라 그 꼬리를 매번 만난다.
+
+#### 붙이지 않은 것 하나
+
+`detailUrl`에는 여전히 `reservationType=BAR`가 박혀 있다. 회원 축을 URL로 실어 보낼 수
+없어서다 — `accommodationFull.js`가 `ownType`·`membYearUseDaysType`·`exclusiveCd`를
+`history.replaceState`로 **URL에서 지운다**(값은 페이지의 hidden input에서 온다).
+담당자는 사이트에서 회원번호를 고르게 된다.
+
+**실사이트 검증(2026-09-01)**: 단일 윈도우 22행 중 21행에 회원 요금, 핫 윈도우 **60/60 ·
+974행 · 624행 요금 · 114.6초**. `price_kind` 분포 member 624 / public 0(이번 스윕이 쓴 행 기준).
+**한 지점·한 날짜에 두 라벨이 섞인 그룹 0개.** 2박 총액이 정확히 1박의 2배(회원 요금은
+요일에 따라 움직이지 않는다 — BAR는 움직인다). DB 불변식 위반 0건 — `price>0`,
+`price_kind` 동반, `available=false`에 요금 없음, **2박 총액 ≤ 1박 총액인 행 0건**,
+어휘 밖 라벨 0건, 정원 반쪽 0건.
+· 조사·검증 중 핫 스윕이 두 번 `SEARCH_FAILED`로 죽었는데 **변경 전 코드로 A/B 해보니
+  같은 오류·같은 창 수로 죽었다**(사이트가 느린 구간이었다). 이 저장소에서 실패를
+  변경 탓으로 읽기 전에 되돌려 재보는 것이 유일한 판별법이다.
+
+### 인원도 같은 자리에 있었다 (2026-08-28)
+
+같은 응답, 같은 교훈. `roomList` 객실 객체의 49키 중 `capacity`(기준인원)와
+`maxCapacity`(최대인원)가 있고, **추가 호출 0**이라 정기 수집에서 그대로 붙는다.
+
+실측(비로그인 BAR 호출, 4개 지점 71객실 전수):
+
+| 지점 | 객실 | capacity 결측 | 기준≠최대 | 기준 | 최대 |
+| --- | --- | --- | --- | --- | --- |
+| 속초(81) | 12 | 0 | 4 | 2~6 | 2~8 |
+| 부여(61) | 25 | 0 | 5 | 2~8 | 2~8 |
+| 제주(71) | 14 | 0 | 13 | 4~10 | 6~11 |
+| 김해(91) | 20 | 0 | 14 | 2~4 | 2~6 |
+
+- **두 값을 다 저장한다.** 71객실 중 36개가 기준≠최대다 — 속초 "콘도 스위트 더블" 4/6,
+  "콘도 럭셔리 A형" 6/8, 제주 "승효상 115평형 (4룸)" 9/11. 기준만 쓰면 6인 가족이
+  들어갈 수 있는 방을 담당자가 후보에서 뺀다. 그래서 `occupancy`는 `price`와 같은
+  **한 덩어리** 규약이다(둘 다이거나 둘 다 아니다).
+- **요금과 딱 하나 다르게 처리한다: `available`을 보지 않는다.** `roomAvgAmt`는 매진 행에
+  붙이면 불변식이 깨지지만(예약할 수 없는 방의 가격은 잡음), 정원은 가용성의 함수가
+  아니라 방의 속성이고 사이트도 그렇게 답한다(속초 매진 8행 전부 값이 있었다).
+  화면도 `showsPrice(tone)`에 해당하는 게이트 없이 그린다 — 낡은 행의 정원은 여전히 맞다.
+- `maxCapacity < capacity`면 붙이지 않는다. 실측 0건이지만, 사이트가 두 필드의 의미를
+  바꾸면 그 형태로 나타나고 증상은 에러가 아니라 조용히 틀린 안내다.
+- 같은 응답의 `shortDesc`가 "…기준인원 6인의 콘도 타입 객실"이라고 같은 말을 해서
+  교차 검증이 된다.
+
+**나머지 넷은 재고 응답에 정원이 없다** — 소노 `rmTypeList` 15키, 한화 `ds_result` 18키,
+오크밸리 `getCalendar` 14키 전수에 없다. 다만 **"재고 응답에"가 조건절이다**: 2026-08-31에
+넷을 다 재보니 리솜은 자기 재고 응답(`calendarRooms`)에 정원을 싣고 있었고(위 목록은
+`rmTypeList`류만 셌다), 오크밸리는 공개 `api/v1/room`에, 한화는 공개 객실 페이지에 있었다.
+결과는 **리솜·오크밸리 부착 / 한화는 기준만이라 미부착 / 소노는 없음**이고, 리조트별
+근거는 각 절의 "### 인원", 요약과 정정은 `CLAUDE.md`의 "인원(기준·최대) 수집" 절.
+
+실사이트 검증(2026-08-28): 핫 윈도우 1,512행에 정원 부착, **`available` 양쪽 모두 결측
+0건**(true 1,121 / false 391), 한쪽만 있는 행 0건, `max < std` 0건. 컬럼이 없던 시절에
+쓰인 기존 행이 재크롤에서 값을 얻었으므로 `DO UPDATE SET` 경로도 확인됐다. 요금 불변식
+회귀 없음(`available=false` 391행 전부 요금 없음).
+
 ## 로컬 검증
 
 ```bash
@@ -32,7 +302,55 @@ npx playwright install chromium    # 최초 1회
 npx tsx scripts/run-crawl.ts       # 수동 크롤 (RefreshButton과 동일 경로)
 npx tsx scripts/check-logs.ts      # crawl_logs / inventory / sessions 확인
 npx tsx scripts/debug-page.ts roomlist   # 로그인 없이 검색+파싱 파이프라인만 테스트
+npx tsx scripts/debug-page.ts doLogin    # 실로그인 + 네트워크 녹화 (성공한 로그인의 기준선)
+npx tsx scripts/debug-page.ts keys       # 응답 키 전수 조사 (금액 조사, 로그인 불필요)
+npx tsx scripts/debug-page.ts member     # 회원가 조사 — 신원이 응답을 바꾸는가 (doLogin 먼저)
+npx tsx scripts/drop-session.ts LOTTE    # 캐시 세션 삭제 → 다음 크롤이 반드시 로그인
+npx tsx scripts/login-check.ts           # 5곳 로그인만 순차 점검 (아래)
 ```
+
+`login-check.ts`는 리조트별 `debug-*.ts doLogin`과 다른 질문에 답한다. 그 스텝들은 충실도가
+제각각이라(롯데·한화는 크롤러의 `performLogin`을 부르지만 소노·리솜·오크밸리는 스크립트가
+폼을 직접 몬다) "사이트에 로그인이 되나"까지만 말해준다. `login-check.ts`는 5곳 모두에서
+`registry` → `crawler.login()` → `validateSession()`으로 **`run.ts`와 같은 경로**를 태우므로
+"크롤러의 로그인이 되나"에 답한다. `crawl_logs`·`resort_sessions`·`resort_inventory`에
+아무것도 쓰지 않고(`--save` 명시 시 세션만 저장), 재시도하지 않으며(실계정 잠금 위험),
+자격증명은 길이만 찍는다. 순차 실행이고, 실패 스크린샷을 남기려면 `CRAWLER_DEBUG_DIR`이
+필요하다 — 없으면 각 크롤러가 스크린샷을 조용히 건너뛴다.
+
+```bash
+CRAWLER_DEBUG_DIR=/tmp/login-check npx tsx scripts/login-check.ts          # 5곳 전부
+npx tsx scripts/login-check.ts HANWHA SONO                                 # 일부만
+```
+
+**`doLogin`은 이제 세션을 `/tmp/lotte-debug-state.json`에 남긴다**(나머지 네 크롤러의
+디버그 스크립트와 같은 규약). 롯데는 다섯 중 로그인이 가장 무르고 실계정이 법인 계정이라
+반복 실패에 잠금 위험이 있어서, 조사가 질문마다 로그인하면 그 위험을 질문 수만큼 곱한다 —
+**조사는 로그인 1회로 끝나야 한다.** 저장은 성공 분기에서 `checkLoggedIn`을 한 번 더
+물어보고서만 한다(실패한 로그인의 쿠키를 남기면 이후 모든 스텝이 익명 질문에 답하면서
+"인증됐다"고 주장한다).
+
+⚠️ **`keys`·`roomlist`는 그 파일을 일부러 읽지 않는다**(`ANON_STEPS`). 둘은 비로그인인
+것이 설계이고, `AGENTS.md`의 정원 표가 그 census의 출처를 "비로그인 BAR 호출"이라고
+명시한다. 세션이 생겼다는 이유로 조용히 인증되기 시작하면 같은 명령이 **다른 질문에
+답하면서 예전 표와 나란히 비교된다.** 그래서 모든 스텝이 출력 첫 줄에 자기 상태를 찍는다
+(`[state] anonymous by design` / `[state] reusing … age=12m`).
+
+**`member` 스텝이 존재하는 이유**: `keys`는 "이 응답에 무엇이 있나"를 묻고, 이건
+**"신원이 이 응답을 바꾸는가, 안 바꾼다면 사이트는 무엇을 다르게 묻는가"**를 묻는다.
+질문 순서는 **로그인 비용 우선**이고(Q1 익명 census → Q2 인증/익명 대조 → Q3 사이트 요청
+녹화 → Q4 대안 `rsvType`), 각 질문은 로그가 아니라 판정을 찍는다. 지켜야 할 것 둘:
+- **세션이 없으면 Q2를 건너뛴다.** 익명↔익명 대조의 출력은 글자 하나 다르지 않게
+  "로그인은 아무 차이도 만들지 않는다"로 읽힌다 — 이 조사가 낼 수 있는 최악의 오답이다.
+- **Q4는 후보가 있을 때만 돈다.** 모르는 `rsvType`에 사이트가 200으로 BAR 목록을 그대로
+  돌려주면 "회원가와 공시가가 같다"는 틀린 결론이 나온다(오크밸리 `probe`의 교훈).
+  수용 규칙은 **같은 실행의 BAR 기준선과 다를 때만** — 실측에서 유일한 후보 `PRO`는
+  인증·익명 모두 **0행 REJECTED**였다.
+
+`drop-session.ts`가 필요한 이유: 유효한 세션이 있으면 크롤이 성공해도 **로그인에
+대해서는 아무것도 말해주지 않는다**(`session valid, skipping login`). 로그인 경로를
+검증하려면 세션을 지우고 시작해야 한다. 반대로 로그인 실패를 조사할 때는 시도가
+실계정에 쌓인다는 것도 같이 기억할 것 — 반복 실패는 잠금 위험이 있다.
 
 성공 조건:
 - `crawl_logs`: `status=SUCCESS`, `rows_upserted > 0`
@@ -57,9 +375,129 @@ npm run dev                # 별 터미널
 ## Resort 활성화
 
 검증 통과 후:
-```sql
-UPDATE resorts SET active = true WHERE slug = 'LOTTE';
+
+```bash
+npx tsx scripts/set-active.ts LOTTE true    # 끌 때는 false
 ```
+
+`active` 하나가 두 가지를 동시에 켠다 — `listCrawlableResorts()`가 3시간 크론을
+그 리조트에 팬아웃하고, `getSearchCatalog()`가 조회 화면에 지점을 노출한다.
+둘 다 코드 쪽 절반(등록된 크롤러 / `CATALOG` 등재)을 함께 요구하므로 스크립트가
+그것도 같이 찍는다. 한쪽이 빠져 있으면 에러가 아니라 **빈 필터**로 나타난다.
+
+## 지점 제외 (2026-08-29)
+
+제휴가 없는 지점을 조회·수집에서 뺀다. 관리 화면은 `/admin/properties`이고 CLI는:
+
+```bash
+npx tsx scripts/set-exclusion.ts HANWHA "산정호수" "제휴 없음"
+npx tsx scripts/set-exclusion.ts HANWHA "산정호수" --include
+```
+
+
+**`Resort.active`와 다른 스위치다.** `active`는 리조트 전체이고 `listCrawlableResorts()`
+에서 **팬아웃 자체가 멈춘다**. 제외는 지점 단위이고 **크롤은 그대로 돌되 그 지점만 빠지며,
+그 지점의 `resort_inventory` 행을 즉시 지운다**(복구해도 다음 수집 전까지는 비어 있다).
+
+- **표는 지점 목록이 아니라 빼는 규칙이다.** `resort_branch_exclusions`는
+  `(resort_id, branch_name)` 한 쌍이고 **행이 있으면 제외 · 없으면 노출**이다. 카탈로그에
+  없는 이름은 아무것도 걸러내지 않는 **무동작**이라, 이 표는 지점을 만들어 낼 수 없다.
+  그 무동작은 조용하므로 두 곳이 이름을 댄다 — `excludeProperty`가 생성을 거부하고,
+  `/admin/properties`가 "카탈로그에 없는 제외 규칙" 블록으로 그린다.
+  (CLI는 생성도 거부하지 않고 `catalog match: no`만 찍는다 — 이름이 바뀐 뒤 남은 고아
+  규칙을 지우는 것이 정당한 사용이라, 대조로 막으면 그 정리가 불가능해진다.)
+- **리조트의 마지막 지점은 뺄 수 없다.** 지점이 0곳이면 그 리조트는 매 핫 윈도우에서
+  0행이 되고, 백스톱의 판정이 `covered === 0 → fresh:false`라 09:00 크론에 더해 12:00
+  백스톱이 **매일** 재수집한다. 리조트를 끄는 스위치는 이미 `active`다.
+- 크롤 경로의 적용점은 `_shared/branches.ts`의 `selectBranches` 하나이고, 제외 목록은
+  `run.ts`가 `ResortBranchExclusion`에서 읽어 그 패스의 모든 윈도우에 얹는다.
+- 크롤이 제외와 경주해 남은 행은 `scheduled-refresh`의 `purge-excluded-inventory`가
+  걷는다. 그 숫자는 **평상시 0이어야 한다.**
+
+## 수동 요금 (2026-09-02)
+
+사이트가 금액을 주지 않는 객실에 운영자가 **1박 단가**를 직접 넣는다. 넣는 곳은 조회
+결과의 객실 행이고, 관리 화면은 `/admin/rates`, CLI는:
+
+```bash
+npx tsx scripts/set-room-rate.ts SONO                                   # 그 리조트의 요금 나열
+npx tsx scripts/set-room-rate.ts SONO "소노벨 제주" "리조트 스위트" 170000 "2026 요금표 주중"
+npx tsx scripts/set-room-rate.ts SONO "소노벨 제주" "리조트 스위트" --delete
+```
+
+**`ResortInventory.price`와 다른 표다**(`resort_room_rates`). 저 컬럼은 크롤과 수명을
+공유해서(`run.ts`의 `price = EXCLUDED.price`, COALESCE 금지) 요금 없이 도는 다음 크롤이
+반드시 지운다 — 수동 요금은 그 등식 밖에 있어야 한다. 상세와 설계 근거는 `CLAUDE.md`의
+"수동 요금 입력" 절.
+
+- **조인 키가 둘이고 둘 다 조용히 어긋날 수 있다** — `branchName`과 `roomType`. 어느 쪽이
+  틀려도 에러가 아니라 **무동작**이고 증상은 "요금을 넣었는데 조회 화면이 빈칸"이다.
+  그래서 CLI가 매번 `catalog match`(지점)와 `inventory match`(객실유형)를 함께 찍는다.
+  · **`roomType`은 대조로 막지 않는다.** 카탈로그가 없는 축이고(사이트가 정한다),
+    이름이 바뀐 뒤 남은 고아 요금을 지우는 것이 정당한 사용이라 생성을 거부하면 그 정리가
+    불가능해진다 — `set-exclusion.ts`가 카탈로그 대조를 **보고만** 하는 것과 같은 판단이다.
+  · 화면에서는 오타가 생길 자리가 없다. 입력 다이얼로그가 **항상 실제 조회 행에서 열려**
+    그 행의 값을 그대로 싣는다. `/admin/rates`가 요금을 만들지 않는 이유도 이것이다.
+- **자동 수집 요금이 우선이다.** 요금이 이미 있는 행에는 입력 버튼이 뜨지 않는다.
+  ⚠️ 그래서 **한화 요금 조인이 언젠가 뚫리면 그 지점의 수동값은 화면에서 조용히 사라진다** —
+  지워지는 것이 아니라 가려지는 것이고, `/admin/rates`에는 계속 보인다.
+- **요일·시즌 축이 없다.** 금·토가 더 비싼 실제 요금표를 평일 값으로 주장하므로, 어느 기준으로
+  넣었는지는 `note`에 적는다. 특히 **소노는 뷰 변형이 접힌 행**이라(`parse.ts`가 570그룹 중
+  300개를 접는다) "그 방의 값"이 하나가 아닐 수 있다 — 접힌 축을 `note`에 명시할 것.
+- **`note`는 평문이고 관리 표에 마스킹 없이 그려진다.** `ResortAccount.memo` 전례를 볼 것.
+
+검증 SQL:
+
+```sql
+-- 단가가 양수인가 (0·음수는 "요금 없음"과 뜻이 겹친다)
+SELECT count(*) FROM resort_room_rates WHERE per_night <= 0;                 -- 0
+
+-- 크롤러가 이 어휘를 발행하면 안 된다
+SELECT count(*) FROM resort_inventory WHERE price_kind = 'manual';           -- 0
+
+-- 지금 아무 행에도 안 붙는 요금. 0이 아니어도 되지만 /admin/rates가 알려야 한다.
+-- ⚠️ 그 지점의 재고가 0행이면 판정 보류다 — 아직 안 물어본 것과 사라진 것은 다르다.
+SELECT r.branch_name, r.room_type FROM resort_room_rates r
+ WHERE EXISTS (SELECT 1 FROM resort_inventory i
+                WHERE i.resort_id = r.resort_id AND i.branch_name = r.branch_name)
+   AND NOT EXISTS (SELECT 1 FROM resort_inventory i
+                    WHERE i.resort_id = r.resort_id
+                      AND i.branch_name = r.branch_name
+                      AND i.room_type = r.room_type);
+```
+
+## 마감일 계산기 (D-10 · 양 끝 휴일 보정)
+
+사이드바 위젯의 계산·공휴일 파싱을 단독으로 확인한다. 테스트 러너가 없으므로 `golden`이
+사실상 이 기능의 회귀 테스트다 — **네트워크도 키도 없이 돌고**, 나머지 스텝도 전부 키가 없다.
+
+```bash
+npx tsx scripts/debug-holidays.ts golden          # 걷기 8 + 파서 10, 오프라인
+npx tsx scripts/debug-holidays.ts feed [2026]     # 라이브 피드 요약 + 정규화 결과
+npx tsx scripts/debug-holidays.ts diff            # 라이브 ↔ 인라인 픽스처, 차이 있으면 exit 1
+npx tsx scripts/debug-holidays.ts calc 2026-10-05 # 3단계를 한 줄씩
+```
+
+**규칙은 영업일 카운트가 아니다**(2026-09-02 교체). ① 기준일이 휴일이면 직전 영업일로
+당기고 → ② **그 날을 1일째로 포함해** 달력 10일을 세고(= `-9`일) → ③ 그 날이 휴일이면
+다시 직전 영업일로 당긴다. ①과 ③이 같은 연산이다.
+
+`calc`가 표를 찍는 이유는 오크밸리 `probe`·한화 `cal`과 같다: 답이 틀렸을 때 "틀렸다"가
+아니라 **어디서 갈렸는지**가 보여야 한다. 기준선은 `2026-10-05(월, 쉬는 날 개천절) →
+2026-09-23(수)` — 3단계를 모두 지나가는 유일한 케이스다. 짝은 `2026-10-19(월) →
+2026-10-08(목)`(기준일 보정 없음, 10일째 10/10 토 → 한글날 10/9 → 10/8).
+
+- **`diff`는 감시 장치다.** 공휴일 정책 뉴스가 보이거나 마감일이 이상하면 여기부터 돌린다.
+  구글이 `DESCRIPTION` 표기를 바꾸거나 새 임시공휴일을 넣으면 여기서 먼저 보인다 —
+  개수 바닥이 못 잡는 종류의 변화(라벨이 셋으로 갈라지는 경우)는 **이것 말고 잡을 것이 없다.**
+- **`feed`의 `DESCRIPTION 분포` 줄이 그 감시선이다.** `{공휴일, 기념일}` 말고 다른 이름이
+  보이면 그때가 손볼 때다.
+- 이 스크립트는 **프로덕션과 같은 파서**(`src/lib/holidays-ical.ts`)를 쓴다. 특일정보 시절엔
+  일부러 재사용하지 않았는데, 소스가 바뀌며 가장 위험한 코드가 걷기에서 파싱으로 옮겨가
+  그 판단이 뒤집혔다. 상세는 `CLAUDE.md`의 "마감일 계산기" 절.
+- **`golden`의 `2026-10-16 → 2026-10-07`이 "기준일 포함" 규약을 혼자 지킨다.** `-(n-1)`을
+  `-n`으로 고치면 10/6이 되는데, 운영자가 준 예시 둘은 **양쪽 모두 같은 답을 낸다** —
+  그 둘만으로는 이 규약이 검증되지 않아서 판별 케이스를 따로 넣었다.
 
 ## 날짜 규약
 
@@ -68,19 +506,999 @@ UPDATE resorts SET active = true WHERE slug = 'LOTTE';
 
 ---
 
+# SONO 크롤러 (sonohotelsresorts.com 회원 예약)
+
+소노 사이트 전체가 `/api/hms/user/...` JSON API 위의 SPA다. 롯데와 마찬가지로
+**브라우저는 로그인에만** 쓰고 검색은 `page.request`로 직접 호출한다.
+롯데와 갈리는 지점은 셋:
+
+- **비로그인으로는 아무것도 못 본다.** 예약 위젯을 로그아웃 상태로 열면
+  "로그인이 필요합니다" 다이얼로그가 뜬다. 롯데의 BAR 요금처럼 공개된 재고가 없다.
+- **`storeCdList`가 배열이라 여러 지점을 한 콜에 조회한다.** 실측: 32곳 한 번에
+  7.4초/2.6MB, 1곳 0.35초/54KB. 그래서 `search.ts`가 지점 루프가 아니라
+  **배치 루프**다 (`SONO.batchSize = 8` → 4콜). 전 지점 크롤이 로그인 포함 17초라
+  `/admin/crawl-logs`의 전체 새로고침(maxDuration=60)도 안전하다.
+- **응답은 "그 숙박이 되느냐"가 아니라 달력이다.** 실측(2026-08-09,
+  `scripts/debug-sono.ts span`으로 재현 가능):
+  - 요청한 `ciYmd`는 **달만 고른다.** 그 달 전체를 오늘로 클리핑하고 `nights-1`일
+    꼬리를 붙여 돌려준다 — 0809·0820·0831 요청이 전부 `0809→0831`, 0915 요청이
+    `0901→0930`. "요청일 주변 23일"이 아니다.
+  - **`nights`는 재고에 아무 영향이 없다.** 1박·2박·7박 요청의 공통 엔트리 299건이
+    상태코드·잔여수까지 전부 동일했다.
+
+  그래서 `parse.ts`가 응답을 **달력으로 읽고 숙박 일수만큼 AND** 한다 — N박은 모든
+  밤이 예약 가능해야 가능이고, 한 밤이라도 마감임박이면 마감임박이다. 응답의 꼬리
+  `nights-1`일이 정확히 월말 걸친 숙박을 판정할 데이터라 월 경계에도 구멍이 없고,
+  밤이 하나라도 없으면 행을 **안 만든다**(추측하지 않는다).
+
+  이걸 안 하고 응답을 요청 윈도우 아래 그대로 넣으면 **체크인 당일 상태만 보고
+  "2박 가능"이라 주장**하게 된다. 실측상 그 차이가 예약가능 6,379행 → 5,720행이었다.
+
+엔드포인트 (2026-08-09 실계정 검증):
+
+```
+POST {apiBase}/management/auth/login              로그인 (폼 조작으로 유발)
+GET  {apiBase}/management/auth/userinfo           세션 검증 → body.userInfo.memNo
+GET  {apiBase}/memberReservation/room/placeList   지점 목록 (조사용)
+POST {apiBase}/memberReservation/room/list/pc     잔여 객실
+```
+
+- 로그인 폼은 `#lginId` / `#lginPw`. **`<form>` 요소가 없고** `name` 속성도 없다.
+  헤더의 "로그인" 링크가 제출 버튼과 접근성 이름이 같아 셀렉터를 폼 영역으로 좁혀야 한다.
+- `memNo`는 계정마다 다르므로 매 윈도우 `userinfo`에서 읽는다 (config에 박지 않는다).
+  `userIndCd:"Y"` / `rsvIndCd:"9"`는 SPA 요청에서 관측한 상수라 `SONO.request`에 고정 —
+  다른 계정에서 전 지점 0행이 나오면 여기부터 다시 캔다.
+- 상태 코드 `A`=예약원활 `E`=마감임박 `D`=예약마감 `W`=예약대기 `N`=예약불가.
+  `rsvRmCnt`는 예약대기 행에서 **음수**가 나온다(관측 -31). `closingSoon`은
+  임계값 추론이 아니라 사이트의 `E`를 그대로 쓴다 — 23일×32지점 실측에서 A의 잔여
+  중앙값 54~206, E는 3~11로 상태 코드가 잔여와 잘 대응했다.
+- 지점 32곳. `outsYn:"Y"`인 3곳(파나크 영덕·팔라티움 해운대·소노벨 경주 감포)은
+  **회원 예약 응답에서 조용히 빠지므로** config에서 제외했다 (에러가 아니라 무응답).
+- `region`은 API의 `jiyukNm`(강원권/경상권…)이나 `addr` 접두사(강원특별자치도/강원도/
+  경북/경상북도 혼재)가 아니라 **롯데와 같은 2글자 광역**으로 정규화해 하드코딩한다.
+  안 그러면 지역 칩이 롯데와 갈라진다.
+- `branchName`은 `config.branches[].value`가 유일 출처다. placeList는 storeCd 09를
+  "소노벨 A 비발디파크", room/list는 "소노벨 비발디파크 A"라고 부른다 — 파서가
+  응답의 `storeNm`을 읽으면 그 순간 카탈로그와 어긋난다.
+
+### 요금은 없다 — 재고 응답에도, 그 **다음 화면**에도 (금액 조사 2026-08-24 · Q2 보강 08-25)
+
+**Q1 — 우리가 읽는 응답.** `rmTypeList`의 한 엔트리는 키 **15개**이고 그중 돈은 하나도
+없다 — 240엔트리 전수: `ciYmd errorId errorMsg levelYn pyeongCd resortTypeCd resortTypeNm
+rmTypeCd roomTypeCd roomTypeNm rsvRmCnt rsvStatusCd rsvStatusNm storeCd viewCd`.
+지점 객체(`body[]`)도 `storeCd storeNm outsYn` 셋뿐이라 "지점 최저가" 같은 것도 없다.
+
+**Q2 — 그 화면이 부르는 다른 콜** (`flow` 스텝, 2026-08-25). 08-24 시점에 이 절은
+Q1만 근거로 "요금은 없다"고 적고 있었다. 그건 **재고 응답에 없다**는 뜻이었지 사이트에
+없다는 뜻이 아니었고, 리솜이 정확히 그 자리에서 뒤집혔다(달력의 `rmAmt`는 전부 `"0"`,
+진짜 회원가는 객실 클릭 때 부르는 `stockPrice`에 있었다). 그래서 예약 흐름을 실제로
+몰아 **객실 선택 단계까지** 걸으며 JSON 전량을 본문까지 기록했다. 결론은 유지된다.
+
+- **`POST memberReservation/room/detail`**이 소노판 `stockPrice`다 — 객실 선택 홉에서
+  딱 한 번 불린다. 엔트리당 키가 15개에서 **34개로 늘지만 요금은 없다.** 늘어난 것은
+  `dongNm bedNm cookNm penaltyYn petYn waitSeq partialWaitDays partialAvailableDays
+  ciOverStnd groupRoomNameNm` 같은 재고·속성 필드다. 돈 이름을 가진 유일한 필드
+  `outsTotAmt`는 **16엔트리 전부 null**이다(`outsItemCd`·`outsRmTpCd`도 같이 null —
+  외부 위탁 상품 자리이고, 이 계정엔 해당이 없다).
+- 같은 홉의 나머지도 전부 무(無): `reserveRoomLinkUrlMulti`(객실 소개 페이지 링크),
+  `penalty/room/list`·`penalty/room/prdtSeq`(위약 판정), `store/name`·`store/info`,
+  `holiday/list`, `room/filter`, `room/reserve/pre`, `room/reserve/session/check`.
+- ⚠️ **스캐너가 고장 난 게 아니다.** 같은 실행에서 `ebiz/reserve/sales/NEW_AND_HOT/list`와
+  `.../PACKAGE/list`의 `amt`를 **정상적으로 잡아냈다**(`"\ 104,000 ~"`, `originalAmt`
+  `"218,000"`). 그건 홈 화면의 **패키지 판매 상품**이지 회원 객실 예약이 아니다 —
+  리솜의 `room/price/list`(패키지)와 정확히 같은 함정이고, 이름만 보고 집으면
+  **다른 상품의 요금을 회원 객실 재고 옆에 붙이게 된다.**
+- **비용은 문제가 아니었다.** `room/detail` 요청은 `{"storeCdList":["29"], ciYmd, coYmd,
+  nights, rmCnt, adultCnt, childCnt}` 하나로 그 지점 **13개 객실유형 전체**를 860ms에
+  답한다. 리솜처럼 행마다 한 콜이 아니라 `room/list/pc`와 같은 배치형이다 — 즉 여기에
+  요금이 있었다면 거의 공짜였다. 없어서 못 가져오는 것이지 비싸서 안 가져오는 게 아니다.
+- 📌 **경계**: 이 조사는 **객실 선택까지**다. 그 다음(실제 예약·결제 확정)은 몰지 않았다 —
+  법인 실계정에 예약을 만들게 된다. 화면의 "★ 스마트요금 적용 객실입니다"라는 안내가
+  가리키는 값이 그 뒤에 있을 수 있고, 있다 해도 **거기는 수집 대상이 아니다.**
+
+그리고 이 리조트는 **요금이 나왔더라도 행에 붙일 수 없었다.** `parse.ts:60-66`이
+평형·뷰 변형을 한 행으로 접는데, 실측에서 150개 (날짜, 객실유형) 그룹 중 **90개가
+2개 이상의 변형을 접고 있고** `rsvRmCnt`는 그중 83개에서 서로 다르다(최대 차이 34).
+즉 접힌 행에 "그 방의 값"이라는 건 존재하지 않는다 — 요금을 붙이려면 최저가로 접고
+행이 스스로 "부터"라고 말해야 한다. `room/detail`도 `roomTypeNm > viewList > rmTypeList`
+3단으로 **변형 단위**라 이 문제를 그대로 물려받는다.
+
+### 인원도 없다 — 그리고 막는 것은 접기가 아니었다 (2026-08-31)
+
+`rmTypeList` 15키에 정원이 없다는 것은 이미 적혀 있었고, 이번에 **그 너머**까지 물었다.
+
+- **공개 객실 소개 페이지**(`/complex_vp/roomsviewall` 등)의 SSR 페이로드에
+  `personCnt`와 `peopleCntText`가 **있다.** 그리고 **61개 객실 전부 `null`이다.**
+  리솜 `rmAmt`(506엔트리 전부 `"0"`)와 같은 함정이고, 이름만 보고 배선했다면 전 객실이
+  0명으로 나갔을 것이다.
+- **`room/detail`은 닿지 못했다.** `flow`의 자동 클릭이 hop 2에서 멈췄고
+  (`누를 것이 없습니다`), 직접 POST로 부르면 `"이용회원번호는 필수입니다"`(`W22M3S4`)에
+  걸린다 — `memNo`·`userIndCd`·`rsvIndCd`·`echPyeongMemNo`·`outsMemNo` 어느 조합으로도
+  안 열렸다. 번들의 조립부(`ce.reserve.rsv.room.detail`)는 `listPc`와 **같은 본문
+  빌더**를 쓰는데도 그렇다. ⚠️ **이것은 "정원이 없다"의 증거가 아니다** —
+  셀렉터/필드를 못 찾은 것과 구별되지 않는다(이 파일이 `flow` 절에 적어둔 그 경고).
+  다시 볼 때는 `SONO_FLOW_MANUAL=1`로 손으로 몰 것.
+- 📌 **부수 소득 — 요금 조사의 결론을 다시 봐야 할 자리가 나왔다.** 번들에
+  `${Pt}/detail/price` · `/detail/price-detail` · `/detail/coin-price`가 **셋이나**
+  선언돼 있다(`Pt = "/memberReservation/room"`). 08-25의 `flow`는 `room/detail`까지만
+  걸었고 이 셋은 부른 적이 없다. "소노에 요금이 없다"는 그 조사의 경계 안에서만 참이다.
+
+**접기는 범인이 아니다** — 이 문서와 `CLAUDE.md`가 오래 그렇게 적고 있었다.
+실측(2026-08-31, 4지점 1,080엔트리): 570그룹 중 **2개 이상으로 접힌 그룹이 300개(52%)**인데
+**평형(`pyeongCd`)이 섞인 그룹은 0개**다. 접힘은 전부 뷰(`viewCd`) 축이라 같은 평형이고,
+따라서 그 그룹에 단일 정원이 없을 이유가 없다. 요금이 막혔던 이유(`rsvRmCnt`가 변형마다
+다르다)를 정원에 그대로 옮겨 적은 것이 틀렸다. **소노가 빈 것은 값이 없어서다.**
+
+## 로컬 검증
+
+```bash
+npx tsx scripts/debug-sono.ts main       # 진입점 · 헤더 · 아웃바운드 호스트
+npx tsx scripts/debug-sono.ts login      # 로그인 폼 인풋/버튼/프레임
+npx tsx scripts/debug-sono.ts doLogin    # 실로그인 → /tmp/sono-debug-state.json 저장
+npx tsx scripts/debug-sono.ts doSearch   # 위젯 구동 + 요청/응답 페이로드 전량 덤프
+npx tsx scripts/debug-sono.ts api <url>  # 저장된 세션으로 GET
+POST_BODY='{...}' npx tsx scripts/debug-sono.ts apiPost <url>
+npx tsx scripts/debug-sono.ts rows ["지점명"]   # search+parse 단독 실행
+npx tsx scripts/debug-sono.ts span             # 한 콜이 덮는 범위 · nights 무영향 재확인
+npx tsx scripts/debug-sono.ts diff       # 사이트 지점 목록 ↔ SONO.branches 대조
+npx tsx scripts/debug-sono.ts keys ["지점명"]   # 응답 키 전수 조사 (금액 조사, 잘림 없음)
+npx tsx scripts/debug-sono.ts flow ["지점명"]   # 금액 조사 Q2 — 예약 흐름을 객실 선택까지
+SONO_FLOW_MANUAL=1 NET_WAIT_MS=180000 npx tsx scripts/debug-sono.ts flow   # 손으로 몰기
+```
+
+**`flow` 스텝이 존재하는 이유**: `keys`는 *우리가 읽는 응답*의 키를 전수 조사한다.
+그건 "이 응답에 요금이 없다"까지만 답하고, 리솜은 정확히 그 너머에서 뒤집혔다.
+`flow`는 홈 위젯부터 객실 선택까지 홉을 걸으며 **이름 필터 없이** JSON을 본문까지
+기록하고, 응답마다 **이름과 값을 둘 다** 보는 스캐너를 돌린다 — 이름만 보면 `amt1`
+같은 필드를 놓치고, 값만 보면 리솜 `rmAmt`(전부 `"0"`)처럼 이름은 맞고 값이 없는
+경우에 속는다. 오크밸리 `probe`·한화 `cal`과 같은 계보의 질문이다:
+**"성공한 응답이 옳은 응답은 아니다" → "우리가 읽는 필드가 응답의 전부는 아니다" →
+"우리가 읽는 응답이 그 화면의 전부는 아니다."**
+
+주의 둘 — ① 달력에서 **예약 가능한 날짜**를 고를 것. 마감된 날은 누를 것이 없어
+"콜이 없다"로 보인다. ② 자동 클릭이 실패하면 그것은 "요금 콜이 없다"의 증거가
+**아니다**. 셀렉터를 못 찾은 것과 구별되지 않으므로 `SONO_FLOW_MANUAL=1`로 다시 볼 것.
+
+`doLogin`이 세션을 파일로 남기고 나머지 스텝이 재사용한다 — 스텝마다 로그인하면
+사이트 레이트리밋에 걸린다.
+
+# RESOM 크롤러 (book.resom.co.kr 회원 객실 예약)
+
+리솜리조트(호반호텔앤리조트)의 예약 사이트는 `book.resom.co.kr`이고 Vue SPA다
+(마케팅 사이트 `www.resom.co.kr`과 다른 호스트 — `Resort.baseUrl`은 후자를 가리키니
+config의 `baseUrl`과 헷갈리지 말 것). 롯데·소노처럼 **브라우저는 로그인에만** 쓰고
+검색은 `page.request`로 JSON을 직접 부른다. 수집 대상은 **회원 객실 예약 하나**다 —
+패키지·추첨(`/drawLots`)·쿠폰 전용 예약은 다른 상품이라 같은 테이블에 섞으면
+"잔여 객실"의 의미가 리조트마다 달라진다.
+
+엔드포인트 (2026-08-09 실계정 검증, `apiBase` = `https://book.resom.co.kr/api/user/reservation`):
+
+```
+POST {apiBase}/auth/login                       로그인 (폼 조작으로 유발)
+GET  {apiBase}/auth/info                        세션 검증 → member.memNo / memInd
+GET  {apiBase}/roomReservation/allCondos        지점 + 객실유형 카탈로그
+GET  {apiBase}/roomReservation/calendarRooms    잔여 객실 (날짜별 달력)
+```
+
+롯데·소노와 갈리는 지점은 넷이다.
+
+- **API가 쿠키가 아니라 베어러 토큰이다.** 로그인 쿠키를 다 들고 가도 헤더가 없으면
+  401이다. SPA는 `Authorization: Bearer …` + `login-id: <intnetId>` +
+  `user-device: HOMEPAGE`를 보낸다.
+  · 토큰은 **로그인 응답에만** 나온다(`{ accessToken, member: { intnetId, memNo, memInd } }`).
+    사이트 자신은 localStorage에 pinia-persist로 넣는데, 키가
+    `SHA256("hoban-user-front-local")`이고 값이 앱 상수 패스프레이즈로 AES 암호화돼 있다.
+    **크롤러는 그 블롭을 읽지 않는다** — 프런트엔드 빌드의 난독화 세부에 묶이는 데다
+    localStorage는 해당 오리진으로 이동해야만 읽힌다.
+  · 대신 `login.ts`가 토큰을 **우리 쿠키**(`welfarestay_auth`, base64 JSON)에 넣는다.
+    쿠키는 `storageState`에 그대로 실려 세션 재사용에서 살아남고, 네비게이션 없이
+    `context.cookies()`로 읽히므로 `validateSession`이 롯데·소노처럼 요청 한 번으로 끝난다.
+  · 조사 스크립트는 예외적으로 그 블롭을 복호화한다(`decryptPinia`). 질문 하나마다
+    실계정 로그인을 새로 하지 않기 위한 것이지 크롤러 경로가 아니다.
+- **`calendarRooms`는 체크인 날짜를 키로 하는 달력이다.** `{ "20260901": [ …객실유형… ], … }`
+  이고 `ciYmd`..`coYmd` 범위를 **문자 그대로** 지킨다 — 20260809→20260930 요청이 월 경계를
+  넘어 53일 전부를 구멍 없이 돌려줬다. 그래서 지점당 한 콜로 핫 윈도우 전체가 덮인다.
+  요청 폭은 `RESOM.calendarSpanDays`(45일)이고, 이 상수는 **크롤러에만** 있다 —
+  `windows.ts`에 사본을 두면 어긋났을 때 증상이 "그 날짜만 조용히 빔"이다.
+- **`nights`는 재고에 아무 영향이 없다.** 1·2·7박 요청의 공통 180건이 `statusBooking`·
+  `remdRmCnt`까지 전부 동일했다. 응답은 하룻밤씩을 말하므로 `parse.ts`가 숙박 일수만큼
+  AND 한다(소노와 같은 결론이지만, 유추가 아니라 실측으로 얻은 것이다).
+  판정할 밤이 하나라도 없으면 행을 **안 만든다**.
+- **`remdRmCnt`가 음수로 나온다**(관측 -33). `statusBooking === 1` ⟺ `remdRmCnt > 0`이
+  실측 180건에서 완전히 일치했으므로 예약 가능 판정은 `statusBooking`을 쓴다.
+  마감임박은 사이트가 코드로 주지 않아 **롯데식 임계값 추론**이다(잔여 ≤ 2). 소노처럼
+  사이트의 `E`를 쓰는 것과 근거가 다르다는 점을 기억할 것.
+
+그 밖에:
+
+- 지점 3곳 — 포레스트 리솜(1075·제천·**충북**), 스플라스 리솜(1027·덕산·충남),
+  아일랜드 리솜(1001·안면도·충남). `region`은 API의 `bizNm`(덕산/제천/안면도)이 아니라
+  **2글자 광역**으로 정규화한다. 안 그러면 지역 칩이 롯데·소노와 갈라진다.
+- `roomType`에 `dongNm`을 붙인다(`"레스트리 S30 타워 클린"`). 동이 사실상 별개 숙소로
+  홍보되고(포레스트/레스트리, 오션빌라스/오션타워, 스테이타워/플렉스타워), `roomType`이
+  upsert 유니크 키의 일부라 이름이 겹치면 한쪽이 조용히 사라지기 때문이다.
+- 객실유형 코드는 **config가 아니라 `allCondos`에서** 가져온다. `calendarRooms`가
+  `rmTypeCd` 목록을 필수로 요구하고(빈 배열이면 400), 객실유형은 지점명과 달리 자주 바뀌며
+  다른 무엇과도 일치할 필요가 없다. 지점명(`branchName`)만이 config 단독 출처다.
+- 로그인 폼에 `<form>`도 `name`/`id`도 없다. 아이디는 placeholder로, 제출은
+  `a.login_btn`으로 잡는다 — 페이지의 유일한 `button` role은 "GO"이고, 헤더에 같은
+  접근성 이름의 `로그인` 앵커가 하나 더 있다.
+
+실사이트 검증(2026-08-09): 전 지점 1윈도우 2,116행 11.4초, **핫 윈도우 60개 → 58개
+스킵·요청 2세트(6콜) 4,186행 21초**(세션 재사용). 30일 핫 윈도우에 1박·2박 모두 결측
+0일, 과거 날짜 0행, "2박 가능인데 1박 불가" 모순 0행, 지점·지역 카탈로그 완전 일치.
+
+### 요금은 있다. 단 재고 응답이 아니라 객실 하나마다 묻는 별도 콜이다 (금액 조사, 2026-08-24)
+
+`calendarRooms` 엔트리에는 `rmAmt`와 `rentRmAmt`가 **있다.** 그런데 506엔트리 전부
+`"0"`이고, 옆에 `rmAmtCd:"O12"` / `rentRmAmtCd:"O20"`라는 요금 코드만 들어 있다.
+**필드가 있다고 값이 있는 게 아니다** — 이걸 그대로 읽으면 전 객실을 0원으로 발행한다.
+
+실제 요금은 `GET {apiBase}/roomReservation/stockPrice`가 답한다.
+
+```
+{"rmAmtCd":"O12","rmAmtList":[{"oprtYmd":"20260907","rmAmt":252000}],"totalRmAmt":252000,
+ "rentRmAmtCd":"O20","rentRmAmtList":[…],"totalRentRmAmt":316000,
+ "rmAmtStndNm":"기본","totalCmpnyRmAmt":0,"totalCmpnyRentRmAmt":0,"isPossible":true}
+```
+
+- **회원가다.** 화면이 이 값으로 "객실요금 / 회사지원금(`totalCmpnyRmAmt`) /
+  임직원 결제 금액(`rmAmt - totalCmpnyRmAmt`)"을 그린다. 다섯 곳 중 제휴 담당자가
+  안내할 값에 가장 가까운 숫자다.
+- **총액과 밤별 내역을 같이 준다** — `totalRmAmt` + `rmAmtList[]`. 우리가 합산할 필요가 없다.
+- **`isWait`와 `rentYn`이 필수다.** 둘 다 달력 엔트리에 없는 필드라, 빼면 400이 나면서
+  `"대기예약여부는 필수값입니다"`처럼 빠진 항목을 한국어로 알려준다.
+- **예약 가능한 숙박에만 값이 있다.** 같은 방을 2·3박으로 물으면 `isPossible:false`에
+  전 금액이 `null`이다. 즉 "요금 없음"과 "예약 불가"가 같은 응답으로 온다.
+- ⚠️ **비용이 이 발견의 핵심이다.** SPA는 사용자가 객실을 *클릭할 때* 이 콜을 한 번 한다
+  (`RoomReservationView`가 달력 엔트리를 통째로 복사해 `coYmd`만 다시 계산해 보낸다).
+  즉 행 하나에 콜 하나이고, 실측 0.2~1.8초다. 3지점 × 객실유형 11종 × 46일이면
+  **1,500콜**이라 30초 패스 예산에 들어갈 여지가 없다.
+  · 그래서 요금은 **사용자가 "최신화"로 지목한 (지점, 날짜)에만** 붙인다 — 아래 절.
+- 📌 **문서 정정**: `debug-resom.ts` 머리말이 번들에서 봤다고 적어둔 `room/price/list`는
+  **패키지 예약**(`Wt = "/package"`)의 요금이다. 회원 객실 예약(`ct = "/roomReservation"`)의
+  요금 콜은 이름이 아예 다르다(`stockPrice`). 접근자 이름은 양쪽 다 `selectRoomPrice`라
+  번들만 보고 고르면 **패키지 요금을 회원 객실 재고 옆에 붙이게 되고, 응답 어디에도
+  그렇다고 적혀 있지 않다.**
+
+### 요금 수집은 "최신화" 경로에만 있다 (2026-08-24 구현)
+
+정기 수집은 요금을 **한 번도 묻지 않는다.** 요금이 붙는 것은 조회 화면에서 지점 하나를
+고르고 최신화를 눌렀을 때뿐이고, 그때만 감당이 되는 이유는 그 순간이 구조적으로
+**지점 1곳 × 윈도우 1개**이기 때문이다(`refreshTarget`은 `sel.property`가 있을 때만
+대상을 준다). 실측: 그 날짜의 예약 가능한 행이 3~7개라 콜도 그만큼이다.
+
+- **게이트가 둘이다.** `refresh/route.ts`가 `branch`의 유무로 `SearchParams.withPrices`를
+  세우고(관리 화면 버튼은 본문 없이 호출하고 스케줄러는 날짜만 보내므로 이 하나가 세
+  경로를 정확히 가른다), `search.ts`가 `withPrices && branches.length === 1`을 다시 본다.
+  어긋났을 때의 증상이 항상 **"요금이 안 나옴"(안전)**이고 **"예산 초과"(위험)**가 될 수 없다.
+- **예산은 상수가 아니라 `ctx.deadlineAt`에서 유도한다.** `run.ts`가 `searchAvailability`
+  전체를 하나의 `withDeadline`으로 감싸므로, 넘기면 잃는 것은 요금이 아니라 **이미 모은
+  그 지점 45일치 행 전부와 SUCCESS 판정**이다. 한화·오크밸리의 `passBudgetMs`는 가용성을
+  가용성으로 지키니 추정이 허용되지만 여기는 가용성을 부가 정보로 걸게 되므로 안 된다.
+  콜당 타임아웃도 `timeouts.api`(30초)가 아니라 `timeouts.price`(5초)다 — 30초짜리 한 콜이
+  예산 전체를 무효화한다.
+- **요금을 붙이지 않는 조건**(전부 조용히 null, 절대 throw 없음):
+  `isPossible !== true` / `totalRmAmt`가 0 이하 / `rmAmtList`가 요청한 숙박과 불일치
+  (길이·첫 날짜·합계 3중 검증) / **`totalCmpnyRmAmt !== 0`**. 마지막 것이 중요하다 —
+  회사지원금이 붙는 순간 `totalRmAmt`는 직원이 낼 금액이 아니고(사이트는 "임직원 결제
+  금액 = 객실요금 − 지원금"을 따로 그린다) 우리는 지원금을 저장하지 않으므로 화면이
+  자기가 틀렸다는 걸 알 방법이 없다. 관측 계정은 0이라 이 가지는 지금 무동작이다.
+- **`available`인데 `isPossible:false`인 행 수를 로그로 낸다.** 리솜 가용성은 밤별 상태를
+  우리가 AND 한 추론이고 `isPossible`은 사이트가 그 숙박 전체에 대해 직접 답한 값이라,
+  이 프로젝트가 그 추론을 대조할 수 있는 **첫 기회**다(2박 버그가 두 번 났던 저장소다).
+- **요금은 행보다 낡을 수 없다.** upsert가 한 행의 모든 컬럼을 한 문장으로 쓰고
+  `DO UPDATE SET`에 `price`가 있으므로 **요금의 나이 = `synced_at`**이다. 그래서 요금
+  없이 도는 다음 크롤이 요금을 null로 덮고, 지워지지 않은 낡은 행은 조회 화면의
+  `showsPrice(tone)`가 그리지 않는다. **`COALESCE`로 보존하면 안 된다** — 그 순간 요금이
+  행보다 늙을 수 있게 되고 신선도 축이 요금에 대해 거짓말을 시작한다.
+  · 파급: 한 콜이 45일을 답하므로 `(지점 X, D, N박)` 최신화 한 번이 `지점 X`의
+    `[D, D+45)` × `N박` 행의 요금을 전부 null로 만든다. **요금은 최신화의 산물이지
+    재고의 속성이 아니다 — 지워지는 것이 정의고 남아 있는 것이 버그다.**
+
+실사이트 검증(2026-08-24):
+
+```
+prices 스텝 (포레스트 리솜, 2주 뒤 체크인)
+  1박 3행 3.2초 · 2박 2행 2.9초 · 3박 1행 1.8초
+  같은 방: 177,000 → 354,000 → 531,000  (정확히 ×N — coYmd가 반영된다는 증거)
+run-crawl RESOM "포레스트 리솜"  → 506행 15.4초, pricedRows 7
+run-crawl RESOM (전 지점)        → 2,116행 13.7초, pricedRows 0, 그리고 앞의 요금 7건이 null로 지워짐
+run-crawl RESOM hot              → 60/60 윈도우 58스킵 4,186행 19.0초, pricedRows 0 (기존 실측과 동일)
+run-crawl LOTTE                  → 75행 17.7초 (공용 upsert 회귀 없음)
+DB 불변식 위반 0건 (price>0 · price_kind 동반 · available=false에 요금 없음)
+```
+
+### 인원은 있다 — 그리고 **이름이 비슷한 죽은 칸이 바로 옆에 있다** (2026-08-31)
+
+`calendarRooms` 엔트리에 `initPersCnt`(기준인원)와 `maxPersCnt`(최대인원)가 있다.
+**이미 부르고 있는 응답 안이라 추가 호출이 0**이고, 그래서 롯데처럼 정기 수집에서 붙는다.
+
+실측(포레스트 리솜, 506엔트리): `initPersCnt {"2","5"}` · `maxPersCnt {"4","6","7"}`,
+결측 0건. 전 지점 크롤에서 2,116행 전부 부착, `max < std` 0건.
+
+⚠️ **`allCondos[].roomTypeList[]`에는 `initPersCount`/`maxPersCount`가 있고, 17엔트리
+전부 `0`이다.** `Count` ↔ `Cnt` 한 글자 차이이고 **정원의 1순위 후보로 지목돼 있던
+바로 그 배열**이다(`CLAUDE.md`가 그렇게 적고 있었다). 그쪽을 배선했다면 에러 없이
+전 객실이 0명으로 발행됐을 것이다 — `rmAmt`가 506엔트리 전부 `"0"`이던 것과 같은 함정이
+같은 리조트에서 두 번째다. 가드(`_shared/occupancy.ts`의 `< 1` 거르기)가 그걸 막는다.
+
+- 정원은 날짜가 아니라 **방**의 속성이라 `parse.ts`가 달력 밖의 `occupancies` 맵에 모으고,
+  같은 객실유형의 엔트리들이 **서로 다른 값을 주면 붙이지 않는다**(실측 불일치 0건).
+- 요금과 달리 `available`을 보지 않는다 — 계약(`InventoryRow.occupancy`)의 비대칭이다.
+
+## 로컬 검증
+
+```bash
+npx tsx scripts/debug-resom.ts main       # 진입점 · 아웃바운드 호스트
+npx tsx scripts/debug-resom.ts login      # 로그인 폼 인풋/클릭 후보
+npx tsx scripts/debug-resom.ts doLogin    # 실로그인 → /tmp/resom-debug-state.json + 토큰 응답 shape
+npx tsx scripts/debug-resom.ts net        # 예약 화면을 직접 몰며 JSON 전량 기록
+npx tsx scripts/debug-resom.ts api <url>  # 저장된 세션 + 인증 헤더로 GET
+npx tsx scripts/debug-resom.ts rows       # search+parse 단독 실행
+npx tsx scripts/debug-resom.ts span       # 한 콜이 덮는 범위 · nights 무영향 재확인
+npx tsx scripts/debug-resom.ts diff       # allCondos ↔ RESOM.branches 대조
+npx tsx scripts/debug-resom.ts keys       # 응답 키 전수 조사 + stockPrice (금액 조사)
+npx tsx scripts/debug-resom.ts prices ["지점명"]  # 요금 부착 단독 (1·2·3박 총액 대조)
+npx tsx scripts/run-crawl.ts RESOM        # run.ts 전체 경로 (전 지점 → 요금 없음)
+npx tsx scripts/run-crawl.ts RESOM "포레스트 리솜"   # 지점 하나 → 요금까지 (최신화 버튼과 같은 경로)
+npx tsx scripts/run-crawl.ts RESOM hot    # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
+```
+
+`doLogin`이 세션을 파일로 남기고 나머지 스텝이 재사용한다. `rows`/`span`은 그 세션에서
+크롤러용 쿠키를 만들어 심으므로(`seedCrawlerCookie`) 파서를 고칠 때마다 실계정에
+로그인이 쌓이지 않는다 — 반복 로그인 실패는 잠금 위험이라 그렇게 만들었다.
+
+# OAKVALLEY 크롤러 (reservation.oakvalley.co.kr 회원 콘도 예약)
+
+오크밸리(원주, HDC그룹)는 **호스트가 둘**이다. 로그인은 `oakvalley.co.kr`(Vite/React SPA,
+`api.oakvalley.co.kr/api/v1/users/sign-in`), 재고는 `reservation.oakvalley.co.kr`
+(2012년식 JSP·Tomcat `JSESSIONID`·jQuery 1.7.2)에 있다. 마케팅 사이트의
+`/api/v1/village`·`/api/v1/condo`는 공개지만 **재고가 없다** — 인벤토리 API로 착각하지 말 것.
+
+수집 대상은 **회원 콘도 예약(CONDO) 하나**다. 쿠폰·패키지(GRP1/GRP2)·성수기 추첨(rslot)은
+다른 상품이라 같은 테이블에 섞으면 "잔여 객실"의 의미가 리조트마다 달라진다(리솜과 같은 판단).
+
+엔드포인트 (2026-08-11 실계정 검증):
+
+```
+POST {apiBase}/users/sign-in                    로그인 (폼 조작으로 유발)
+GET  {rsvBase}/common.session.pns?sessionCheck  세션 검증 → session[0].session_yn
+POST {rsvBase}/frontoffice/condo/c_100.jsp      회원 콘도 예약 화면 (condo_flag=CONDO)
+POST {rsvBase}/condo.calendar.pns?getCalendar   잔여 객실 (월 달력)
+```
+
+롯데·소노·리솜과 갈리는 지점은 넷이다.
+
+- **브리지를 걸을 필요가 없다.** SPA가 로그인 도중 스스로
+  `POST reservation.oakvalley.co.kr/frontMember.pns?login-oak`을 부르고, 그 직후
+  네비게이션 없이 `sessionCheck`가 `session_yn:"Y"`를 답한다. 그래서 `login.ts`는 평범한
+  폼 로그인이고, JSP 페이지 로드는 로그인이 아니라 **검색**의 일이다(아래 `ptSignature`).
+  · 다만 `performLogin`은 sign-in 성공 후 `session_yn`이 `Y`가 될 때까지 **폴링한 뒤**
+    반환한다. `run.ts:181`이 `login()` resolve 즉시 `saveStorageState`를 부르므로, 한 박자
+    이른 반환은 `oak-token`은 있고 `JSESSIONID`는 없는 상태를 저장하게 되고, 그건 이후
+    모든 패스에서 검증 실패로 나타난다.
+  · 실패 메시지는 **"토큰을 못 받았다"와 "토큰은 받았는데 session_yn이 N"을 구분**한다.
+    후자가 사이트 쪽 핸드오프 문제이고, 구분하지 않으면 비밀번호 오류로 오진한다.
+- **`ptSignature` 때문에 요청을 URL로 조립할 수 없다.** JSP의 모든 `<form>`에 서버 생성
+  히든 필드가 있고 매 AJAX POST에 `serialize()`돼 들어간다. **실측: 한 번 수확한 서명으로
+  4연속 동일 성공** — 서명은 렌더가 아니라 세션+폼에 묶여 있다. 그래서 크롤러는
+  패스당 콘도 화면을 **한 번만** 열어 폼 필드를 수확하고, 이후는 평범한
+  `page.request.post`로 쏜다(DOM을 몰지 않는다).
+- **id와 name이 다르고, 그게 결정적이다.** `c_handler.js`는 필드를 **id**로 다루고
+  (`$("#V_T_MONTH")`) `serialize()`는 **name**으로 제출한다(`T_MONTH`). name으로 덮으면
+  id가 그대로 남아 폼이 렌더된 달을 계속 제출하고, 달력은 **어느 달을 물어도 8월을 답한다** —
+  그것도 `success:true`로, 에러 하나 없이. 조사 중 실제로 여기에 한 번 걸렸다.
+  `search.ts`는 오버라이드를 **id로 키잉**하고 전송 시점에 name으로 매핑한다.
+- **응답은 월 달력이고 월말 꼬리가 없다.** `entitys[] = {CD_DATE(일자만), AVA_YN,
+  RM_RMTYPE, RM_REF1, …}`. 실측: 08 요청 → 11~31일, 09 → 1~30, 10 → 1~31.
+  소노는 `nights-1`일 꼬리를 공짜로 받았지만 여기는 **매달 말일이 다음 달 없이는
+  판정 불가**다. 그래서 `search.ts`가 두 달을 받아 하나의 `NightMap`에 병합한 뒤에야
+  `parse.ts`가 행을 만든다(수집과 조립이 분리된 유일한 크롤러인 이유).
+- **`V_IN_BAKSU`(박수)는 재고에 아무 영향이 없다.** 1박·2박·3박 요청의 공통 84건이
+  상태까지 전부 동일했다. 그래서 `parse.ts`가 숙박 일수만큼 AND 한다 — 판정할 밤이
+  하나라도 없으면 행을 **안 만든다**. (`getCalendar_baksu_check`는 날짜를 클릭한 *뒤*
+  최대 연박을 재는 별도 서블릿이고 이것과 다르다. `c_handler.js`는 `V_IN_BAKSU`를
+  한 번도 설정하지 않는다.)
+
+그 밖에:
+
+- **`closingSoon`은 항상 false다. 버그가 아니다.** `AVA_YN`의 관측된 알파벳이 정확히
+  `{"Y","N"}`이고 페이로드 어디에도 잔여 수가 없다. 롯데는 실제 잔여 수를 임계값으로,
+  소노는 사이트의 `E` 코드를 쓰는데 오크밸리는 둘 다 없다 — 네 크롤러에서 이 필드의
+  **세 번째 서로 다른 출처**다. 대기(waitlist)는 "예약 불가인 방에 줄을 설 수 있다"는
+  다른 질문이라 매핑하면 `available=false` 행에 마감임박 칩이 붙는다.
+- **회원권(회원증) 축은 재고에 존재하지 않는다.** 이 계정은 회원권을 5개 보유하는데,
+  5개 전부 **그리고 회원권을 아예 안 보낸 경우까지** 두 빌리지 모두 동일한 달력을 답했다.
+  회원권 목록은 `<select>`가 아니라 `POST common.bungyangmember.pns?getRoomMember`로
+  오지만, 크롤러는 그걸 부를 필요조차 없다. **요청 수를 이 축으로 곱하지 말 것.**
+- 지점 2곳 — 밸리 빌리지(`1101`), 힐스 빌리지(`2101`), 둘 다 **강원**.
+  `/api/v1/village`의 세 번째 빌리지 `SEONGMUNAN`(성문안)은 전 필드가 `null`인 미출시
+  자리표시자라 제외했다.
+- **객실 유형의 평형은 실데이터가 정한다.** `RM_RMTYPE` → `RM_REF1`이 두 빌리지 모두
+  1:1이고(`{"AP":["031"],…}`), 이것이 유일하게 믿을 수 있는 출처다 —
+  `c_handler.js`는 자기 모순이다(`room_type_fx()`는 037→CE·045→DB인데 달력 렌더러는
+  CE를 room_45로, DB를 room_37로 그린다). **데이터는 렌더러 쪽이 맞다: DB=37평, CE=45평.**
+  1:1이라 `RM_REF1`을 `roomType`에 덧붙일 필요는 없다. 미등록 코드는 추측하지 않고
+  코드 그대로 저장하고, `debug-oakvalley.ts diff`가 보고한다.
+- 응답 charset은 UTF-8(`application/x-json;charset=UTF-8`), 깨짐 0.
+- **봇 보호가 없다**(넷퍼넬·Imperva·CAPTCHA·Cloudflare 흔적 0건). 롯데와 달리 실패하면
+  원인은 문지기가 아니라 요청 조립이거나 세션이다.
+- JSP는 네이티브 `alert()`를 남발한다. `bootCondo`가 페이지당 1회 다이얼로그 핸들러를
+  무장하지 않으면 이후 모든 네비게이션과 `evaluate`가 **영구히 멈추고**, 증상이
+  "출력 없이 정지"라 네트워크 지연으로 오독된다.
+
+실사이트 검증(2026-08-11):
+
+- 콜드 로그인 포함 전 지점 1윈도우 **459행 24.2초** — `/api/resorts/[slug]/refresh`의
+  50초 예산 안.
+- **핫 윈도우 60개 → 58스킵 · 검색 2회 · 달력 요청 4회 · 부팅 1회, 909행 23.2초**
+  (세션 재사용). 2박 패스는 `fetched: 0`으로 1박 패스가 받아둔 달력을 그대로 썼다.
+- 1박 51일(8/11~9/30) 구멍 0, 2박 50일 — **하루 적은 것이 정상**이다. 9/30의 둘째 밤이
+  없어 추측 대신 행을 만들지 않았다.
+- 과거 날짜 0행, "2박 가능인데 1박 불가" 모순 0행, `closing_soon` 0행,
+  지점·지역 카탈로그 완전 일치, 객실 유형 9종 각 101행.
+- 클라이언트 번들 유출 0건(`complexCd`/`ptSignature`/`V_T_MONTH`).
+
+### 요금은 없다 — 그리고 "키를 다 세어봤다"던 기록이 틀렸었다 (금액 조사, 2026-08-24)
+
+`getCalendar` 엔티티의 실제 키는 **14개**다:
+`AVA_YN CD_DATE DAYS IMSI_SORT ORI_RM_DATE RM_COMPLEX RM_DATE RM_REF1 RM_RMTYPE
+RMTYPE_DESC ROOM_TYPE_CODE ROOM_TYPE_NAME SEC_DIV WEEK_DAY`. 돈은 없고, `entitys2`는
+길이 0이며(파서가 `unknown[]`으로 열어두고 안 보던 자리), 콘도 화면이 부르는 다른 JSON은
+공지·이벤트·회원권 셋뿐이다.
+
+📌 **정정**: `debug-oakvalley.ts` 머리말은 엔티티 키를 `{CD_DATE, WEEK_DAY, DAYS, AVA_YN,
+RM_RMTYPE, RM_REF1}` **6개로 열거**하고 있었다. 결론("잔여 수도 요금도 없다")은 그대로
+유지되지만, 그 결론을 떠받치던 열거가 절반이었다. 다섯 리조트 중 유일하게 "전수 열거가
+있어서 단정 가능"하다고 믿었던 곳이 이곳이었다는 점이 이 조사의 교훈이다 —
+**세어본 적 없는 목록은 목록처럼 보여도 목록이 아니다.**
+(부수 소득: `RMTYPE_DESC`가 "31타입"·"노스48타입"을, `SEC_DIV`가 동을 이미 답하고 있다.
+`OAKVALLEY.roomTypes`의 하드코딩과 대조해볼 만한 자리다.)
+
+### 요금표는 공개돼 있다 — 막힌 것은 수집이 아니라 **어느 열인가**다 (`axes`, 2026-08-26)
+
+위 절은 "요금 없음"으로 닫혀 있었고 그건 **예약 API에 대해서** 사실이었다. 다른 문이 있다:
+
+`GET https://api.oakvalley.co.kr/api/v1/village` — **무인증**, 이 파일 머리말이 "재고가
+없다, 인벤토리 API로 착각하지 말 것"이라고만 적어둔 그 엔드포인트다. 재고는 정말 없다.
+그런데 각 빌리지 객체에 **`roomPriceTable`**이 있고, 그 안에 회원 요금표가 HTML로 들어 있다:
+
+```
+객실 타입 × 요금 구분(기명·무기명·회원대여가 + 정상가)
+        × 비수기 / 성수기(여름·겨울) / 스페셜 데이
+        × 주중(일~목) · 금요일 · 토요일
+```
+
+그리고 **힐스 빌리지의 표에는 시즌 달력 자체가 들어 있다** — 비수기·여름성수기·겨울성수기의
+날짜 범위, 스페셜 데이 6건(설날·어린이날·광복절·추석·크리스마스·신정), 그리고
+`※ 토요일 요금 적용 일자` 예외 목록까지. **시즌을 우리가 발명할 필요가 없다.**
+(밸리 빌리지 표에는 달력이 없다 — 두 빌리지에 같은 달력이 적용되는지는 표가 말하지 않는다.)
+
+**조인 키 실측** (`axes`, 로그인 상태):
+
+| | 우리 `roomType` | 요금표 줄 | 판정 |
+| --- | --- | --- | --- |
+| 힐스 CA·CC·DB·CE·DD | 25·35·37·45·48평 | `25평형 (취사불가)` `35평` `37평` `45평` `48평` | **5/5 1:1** |
+| 밸리 NA·SE | 48·52평 | `빌라 N 48평형` `빌라 S 52평형` | **1:1** — 잇는 것은 평형이 아니라 **동**(`SEC_DIV` "N동"·"S동") |
+| 밸리 AP·BU | 31·46평 | `31평 (일반)` / `31평 (노블)` 각 2줄 | **모호** |
+
+- `RM_RMTYPE` → (`RMTYPE_DESC`|`ROOM_TYPE_NAME`|`SEC_DIV`)는 **두 빌리지 모두 1:1**이다.
+  즉 사이트는 일반/노블을 **한 예약 단위로 접고 있다** — 우리 파서의 문제가 아니라
+  재고 자체에 그 축이 없다. 붙인다면 최저가로 접고 화면이 "부터"라고 말해야 한다.
+- ⚠️ `ROOM_TYPE_CODE`·`ROOM_TYPE_NAME`은 키 목록에는 있지만 **값이 전부 빈 문자열**이다
+  (밸리 24엔티티·힐스 30엔티티 전수). 키가 있다고 값이 있는 게 아니다 — 리솜 `rmAmt`와 같다.
+
+**막힌 곳: 요금표의 어느 열인가.** `getRoomMember`가 답하지 않는다 — 회원권 5개가 전부
+`guestType: "콘도회원"` / `complexCd: 2101`(힐스) / `roomTypeCd: 025` / `cdRef1: 10` /
+`cdRef5: 5`이고, **기명/무기명을 말하는 필드가 없다.** 밸리 31평 비수기 주중 기준
+기명 77,000 · 무기명 80,000 · 회원대여가 98,000으로 최대 **27% 차이**다.
+
+**운영자가 그 한 줄을 답했다: 기명** (2026-08-26). 그래서 붙인다 — `OAKVALLEY.rateFare`가
+그 답이고, 관측이 아니라 사람의 답이라는 것이 그 상수의 주석에 적혀 있다. 회원권 구성이
+바뀌면 거기를 같이 고쳐야 하고, 안 고치면 증상은 에러가 아니라 4~27% 틀린 금액이다.
+(`cdRef1`/`cdRef5`가 그걸 뜻할 수도 있지만 디코딩할 근거가 없고, 근거 없는 디코딩은
+27% 틀린 금액을 발행하는 길이다.)
+
+### 요금 수집 — 표를 읽고 밤마다 판정한다 (`rates.ts`, 2026-08-26)
+
+수집기는 `src/crawlers/oakvalley/rates.ts` 하나이고, 다른 넷과 성격이 다르다:
+**사이트에 묻지 않고 공표된 표로 계산한다.** 그래서 `price_kind`가 `member`가 아니라
+`memberTable`이다 — 견적과 계산은 신뢰 등급이 다르고, 숫자만으로는 구별되지 않는다.
+
+- **패스당 공개 API 한 번.** `ctx.page`로 키잉한 WeakMap 캐시(한화 `booted`와 같은 이유).
+  비용이 O(1)이라 **`withPrices` 게이트를 타지 않는다** — 그 게이트가 재는 것은 비용이고,
+  리솜처럼 행마다 콜인 경우를 위한 것이다.
+- **밤마다 따로 판정해 더한다.** 시즌도 요일도 밤마다 다르므로 한 밤 값에 박수를 곱하면
+  주말이 낀 숙박에서 틀린다. 판정할 수 없는 밤이 하나라도 있으면 그 행은 요금이 없다.
+- **비수기 목록은 읽지 않는다.** 성수기도 스페셜도 아닌 날이 비수기다. 세 목록을 다 읽으면
+  서로 모순될 수 있는 사본이 셋이 된다. 대신 **달력의 사정권**(성수기·스페셜 범위의
+  최소~최대) 밖 날짜는 비수기라고 부르지 않는다 — 아직 공표되지 않은 요금을 지어내는 일이다.
+- **`※ 토요일 요금 적용 일자`가 이 파일에서 가장 무른 부분이다.** 표 밖의 산문이고
+  (`2026년 3/1(일), 5/3(일)~5/4(월), …`), 놓치면 하필 사람이 가장 많이 예약하는 날만
+  조용히 싼 값이 나간다. 그래서 문구가 있는데 한 날짜도 못 읽으면 **요금 전체를 포기한다.**
+- **달력은 리조트 전체로 본다.** 실제로는 힐스 빌리지 표에만 실려 있다(밸리에는 없다).
+  두 빌리지가 서로 다른 달력을 공표하면 `buildRateBook`이 **요금을 0개 만든다** — 어느
+  쪽이 맞는지 알 수 없을 때 고르지 않기 위해서다.
+- 표의 형태가 기대와 다르면(줄 수, 셀 수, 숫자 파싱 어느 하나라도) 그 빌리지는 요금이
+  없다. 표는 개정되고 개정은 통보되지 않는다.
+
+실사이트 검증(2026-08-26): 핫 윈도우 60/60 · 639행 · 22.2초, **매핑된 6종은 `available`
+행 100%**에 요금(25평 65/65 · 35평 61/61 · 37평 63/63 · 45평 49/49 · 48평 111/111 ·
+52평 16/16), 31평·46평은 의도대로 0. 파서를 표와 직접 대조해 8/8 일치 — 힐스 25평
+수 69,000 / 금 90,000 / 토 104,000, 추석 스페셜 135,000, **일요일이지만 토요일 예외일인
+10/4에 104,000**, 밸리 빌라 N 48평형 금 161,000. 달력 밖(2028-06-01)은 `null`.
+DB 불변식 위반 0건.
+
+### 인원은 아무도 열어보지 않은 문 뒤에 있었다 (`api/v1/room`, 2026-08-31)
+
+예약 API(`getCalendar` 14키)에 정원이 없다는 것도, 공개 `api/v1/village` 전문에
+`인원`·`정원`이 0건이라는 것도 사실이었다. 그런데 **셋째 엔드포인트가 있다**:
+
+```
+GET api.oakvalley.co.kr/api/v1/condo                  ← 동(棟) 목록, 8건
+GET api.oakvalley.co.kr/api/v1/room?idCondo=<동 id>   ← 그 동의 객실, 정원 포함
+```
+
+둘 다 **무인증**이다. 객실 하나가 `name`("31평")과 함께 `standardCount`/`maxCount`를 준다.
+
+- ⚠️ **이 파일 머리말이 이 문을 가리고 있었다** — `/api/v1/village`와 `/api/v1/condo`를
+  "재고가 없다, 인벤토리 API로 착각하지 말 것"이라고만 적어둔 문장이다. 맞는 말이었고,
+  **재고가 없다는 것이 정원도 없다는 뜻은 아니었다.** `api/v1/room`은 그 문장에 이름조차
+  없었고 이 저장소가 한 번도 부른 적이 없다.
+- **파라미터 `idCondo`는 관측이다.** 마케팅 SPA 번들의 `getRoomTypeList`가
+  `xe.get("/api/v1/room",{params:t})`이고 호출부가 `{idCondo: t}`다. 추측으로는 못 찾는다 —
+  틀린 이름은 전부 같은 400(`"콘도 정보가 누락되었습니다"`)이라 **이름이 틀린 것과 값이
+  틀린 것이 구별되지 않는다.** (`api/v1/condo/{id}`는 404다. 상세는 `condo/detail/{id}`.)
+
+**조인은 평형 라벨이고, 9종이 전부 붙는다** (실측 2026-08-31):
+
+| | 우리 `RM_RMTYPE` | 매칭된 공개 객실명 | 기준/최대 |
+| --- | --- | --- | --- |
+| 밸리 | AP 31평 | `31평` · `노블 31평 · A` · `노블 31평·B` | **5/5 합의** |
+| 밸리 | BU 46평 | `46평` · `노블 46평` | **7/7 합의** |
+| 밸리 | NA 48평 / SE 52평 | `48평` / `52평` | 7/7 |
+| 힐스 | CA 25평 | `25평` · `25평 (원룸)` | **4/4 합의** |
+| 힐스 | CC 35평 / DB 37평 / CE 45평 | 각 1건 | 5/5 · 5/5 · 7/7 |
+| 힐스 | DD 48평 | `48평·A` · `48평·B` | **7/7 합의** |
+
+**요금에서 막힌 바로 그 축이 여기서는 뚫린다.** `config.rateRows`의 `AP`·`BU`가 비어 있는
+이유는 요금표의 `31평 (일반)`과 `31평 (노블)`이 ~20% 달라 고를 수 없어서인데, **정원은 그
+변형들이 같은 값이다.** 그래서 같은 크롤러에서 요금은 7종, 정원은 **9종**이 붙는다.
+규칙은 그래도 하나다 — **매칭된 이름들이 한 값에 합의할 때만 붙인다**(`occupancy.ts`의
+`record`). 실측에서 9종 전부 합의했고, 합의가 깨지면 그 종은 그냥 정원이 없다.
+
+수집기는 `src/crawlers/oakvalley/occupancy.ts`이고 `rates.ts`와 같은 모양이다 —
+`ctx.page`로 키잉한 WeakMap 캐시로 **패스당 한 번**, **절대 throw 하지 않는다**(부가 정보
+하나가 `withDeadline`을 넘기면 그 패스의 재고 행 전부를 잃는다). `withPrices` 게이트를
+타지 않는 이유도 같다: 그 게이트가 재는 것은 비용이고 여기는 O(1)이다.
+
+실사이트 검증(2026-08-31): 전 지점 1윈도우 **279행 전부 부착**(밸리 124 · 힐스 155),
+핫 윈도우 **60/60 · 549행 · 26.5초**, `max < std` 0건, 한쪽만 있는 행 0건,
+`available` 양쪽 모두 부착(요금과 다른 점), 요금 불변식 회귀 없음.
+
+## 로컬 검증
+
+```bash
+npx tsx scripts/debug-oakvalley.ts main        # 진입점 · 아웃바운드 호스트
+npx tsx scripts/debug-oakvalley.ts login       # 로그인 폼 (로그인하지 않음)
+npx tsx scripts/debug-oakvalley.ts doLogin     # 실로그인 → 토큰·쿠키 도메인·session_yn
+npx tsx scripts/debug-oakvalley.ts bridge      # SPA→JSP 홉별 session_yn · 폼 필드 · 회원권
+npx tsx scripts/debug-oakvalley.ts session     # JSESSIONID TTL 폴링
+npx tsx scripts/debug-oakvalley.ts cal         # getCalendar 2방식 대조 + 서명 재사용 ×3
+npx tsx scripts/debug-oakvalley.ts probe       # 어떤 오버라이드가 실제로 먹는가
+npx tsx scripts/debug-oakvalley.ts span        # 달 범위 · 박수 무영향 · 월 경계 연속성
+npx tsx scripts/debug-oakvalley.ts memberships # 회원권이 달력을 바꾸는가
+npx tsx scripts/debug-oakvalley.ts rows        # search+parse 단독 실행
+npx tsx scripts/debug-oakvalley.ts diff        # 지점·객실유형 ↔ OAKVALLEY config 대조
+npx tsx scripts/debug-oakvalley.ts keys        # 응답 키 전수 조사 (금액 조사)
+npx tsx scripts/debug-oakvalley.ts axes        # 공개 요금표 ↔ 우리 행의 조인 키 (금액 조사 Q4)
+npx tsx scripts/run-crawl.ts OAKVALLEY hot     # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
+```
+
+`doLogin`만 실계정을 쓰고 나머지는 `/tmp/oakvalley-debug-state.json`을 재사용한다.
+리솜의 `seedCrawlerCookie` 같은 변환은 필요 없다 — 오크밸리 인증은 평범한 컨텍스트
+쿠키라 저장된 상태가 그대로 크롤러가 원하는 것이다.
+
+**`probe` 스텝이 존재하는 이유**: `ptSignature`가 붙어 있으면 "요청이 성공했다"가
+"요청이 반영됐다"의 증거가 되지 못한다. 서명된 필드는 조용히 원래 값으로 되돌아갈 수
+있고, 그 결과는 에러가 아니라 **틀린 달의 정답**이다. 한 번에 한 필드씩 바꿔 무엇이
+움직이는지 보는 것이 유일한 판별법이다.
+
+# HANWHA 크롤러 (booking.hanwharesort.co.kr 회원 객실 예약)
+
+한화리조트는 **호스트가 둘**이다. 로그인은 `www.hanwharesort.co.kr`(JSP/JEUS,
+`/irsweb/resort3/**.do`), 재고는 `booking.hanwharesort.co.kr`(별개 JEUS 앱)에 있고
+예약 쪽 모든 질문이 **범용 게이트웨이 한 곳**을 통한다:
+`POST /rst/cmn/doExecute.mvc`에 `ds=<JSON>`을 urlencoded로 보내고, 어떤 서비스가
+도는지는 본문의 `serviceInfo.INTF_ID`가 정한다.
+
+수집 대상은 **회원 객실 예약 하나**다. 추첨·패키지·쿠폰·조식·테마파크는 다른 상품이라
+같은 테이블에 섞으면 "잔여 객실"의 의미가 리조트마다 달라진다(리솜·오크밸리와 같은 판단).
+
+엔드포인트 (2026-08-13 실계정 검증):
+
+```
+POST www…/irsweb/resort3/member/login.do                     로그인 1/2 (#id · #pwd)
+POST www…/irsweb/resort3/member/login_membership_password.do 로그인 2/2 (회원인증)
+POST www…/irsweb/resort3/sessionCheck.do                     세션 검증 → { resultCode }
+GET  booking…/rst/msi/0010/serviceM01.mvc                    예약 호스트 세션 부팅 → sCustNo
+POST booking…/rst/cmn/doExecute.mvc                          지점 목록 / 잔여 객실
+POST booking…/rst/cmn/getCmnCode.mvc                         공통코드(상태 코드표)
+```
+
+기존 넷과 갈리는 지점은 넷이다.
+
+- **로그인이 두 화면이고, 첫 화면만으로는 아무것도 서지 않는다.** 아이디/비밀번호를
+  넣으면 사이트가 스스로 `login_membership_password.do`로 넘어가 **회원권 비밀번호**를
+  요구한다. `sessionCheck.do`는 그 전까지 `resultCode: -1`, 통과 후 `0`이다.
+  · 그 두 번째 비밀값은 `ResortAccount.memo`에서 온다 — 이것 때문에
+    `CrawlerContext.credentials`에 `memo?: string`이 생겼고, 리조트를 세 번 늘리는
+    동안 무수정이던 `run.ts`·`types.ts`가 처음 바뀌었다. **`memo`는 암호화되지 않고
+    `/admin/accounts` 표에 그대로 렌더링된다** — `idEncrypted`/`pwEncrypted`와 등급이
+    다르다는 사실이 두 파일의 주석에 남아 있다.
+  · `performLogin`은 단발 확인이 아니라 **폴링**한다. 실측에서 1회차가 `-1`,
+    2회차가 `0`이었다 — `run.ts`가 `login()` resolve 즉시 `saveStorageState`를 부르므로
+    한 박자 이른 반환은 "화면 1은 통과, 화면 2는 아님"인 세션을 저장하고, 그건 이후
+    모든 패스에서 만료된 세션과 똑같이 보인다.
+  · 실패는 **네 갈래로 구분**한다 — 로그인 폼이 아예 안 뜸 / 회원인증 화면에 닿지도
+    못함(자격증명 또는 대기열) / 회원인증에서 거부(회원권 비밀번호) / 통과했는데
+    `resultCode`가 안 됨(사이트). 안 나누면 넷 다 "비밀번호 오류"로 읽힌다.
+  · ⚠️ **폼이 없다는 것은 실패가 아니다 — 이미 로그인돼 있으면 사이트가 로그인 화면을
+    그리지 않는다.** 그러면 `#id`는 영원히 나타나지 않고, 25초를 기다린 끝에 나오는
+    것은 자격증명 오류와 구별되지 않는 `locator.waitFor: Timeout 25000ms`다.
+    **2026-08-25 09:02:47과 08-26 09:03:04의 프로덕션 실패가 정확히 이것이다** —
+    둘 다 `checkLoggedIn`이 (사이트의 답이 아니라 전송 실패로) false를 냈고, `run.ts`가
+    그것을 만료로 읽어 로그인을 시켰고, **멀쩡한 세션 위에서** 로그인 화면을 기다리다
+    죽었다. 즉 이 크롤러는 자기가 이미 통과한 상태를 실패로 신고하고 있었다.
+    이제 폼이 없으면 `sessionCheck.do`를 먼저 물어보고, 이미 인증돼 있으면 조용히
+    반환한다. (`SESSION_LOST` 회복 경로도 같은 자리로 온다 — 거기서 필요한 것은 `www`
+    재인증이 아니라 `bootSession`의 재시도이고, 그건 이 함수가 반환한 **뒤**에 있다.)
+  · **`checkLoggedIn`은 "아니오"와 "모르겠다"를 구분한다.** `resultCode`를 받은 경우는
+    사이트의 확정 답이라 재시도하지 않는다(특히 `-1` = 화면1만 통과). 비2xx와 예외는
+    세션에 대해 **아무 말도 하지 않은 것**이라 1초 뒤 1회만 다시 묻는다. 이 구분이
+    필요한 이유는 값의 비대칭이다 — 여기서 false 하나의 값이 **2화면 콜드 로그인**이다.
+    (08-26에 09:05:13분 만든 세션이 이후 90초 넘게 세 패스를 버텼다. 70초 전 세션이
+    false를 받은 것은 만료가 아니었다.)
+  · 회원권 비밀번호가 **미설정인 계정은 화면 2가 아예 안 뜨고** 바로 로그인된다
+    (사이트 안내문 그대로). 그 경우도 성공으로 처리한다.
+  · **회원인증 페이지 HTML을 덤프하지 말 것.** 그 화면은 `cyber_id`와 `password`를
+    히든 필드로 되돌려 보낸다 — 저장하면 평문 자격증명을 디스크에 쓰는 것이다.
+    `login.ts`와 `debug-hanwha.ts` 둘 다 스크린샷만 남긴다.
+- **예약 호스트는 세션을 자동으로 물려받지 않는다.** 로그인한 채로 잔여객실조회로
+  곧장 가면 `sCustNo=""`, `sContYn="N"`으로 **익명**이고, 에러가 아니라 그냥 일반
+  뷰가 나온다. 예약 호스트 자기 페이지를 한 번 열어야 그 앱의 세션이 선다.
+  `search.ts`의 `bootSession`이 `msi/0010`을 열고 `sCustNo`를 읽는다 —
+  **`CUST_NO`는 계정마다 다르므로 config에 박지 않는다**(소노의 `memNo`와 같은 이유).
+  · **그래서 `validateSession`은 두 호스트를 둘 다 묻는다** (2026-08-26).
+    `checkLoggedIn`(`www`의 `sessionCheck.do`)만 보던 시절에는 그 통과가 크롤 가능을
+    뜻하지 않았다 — 세션을 잃는 쪽은 `booking`이고, 그 상실은 크롤 한복판에서야
+    `SessionLostError`로 드러났다. 이제 `index.ts`가 `bootSession`도 부른다.
+    · **공짜다.** `booted`가 `ctx.page`로 키잉된 WeakMap이라 검증에서 부팅한 결과를
+      같은 패스의 `performSearch`가 그대로 재사용한다 — 네비게이션이 **늘지 않고
+      앞당겨질 뿐**이다(실측: 부팅 로그가 패스당 한 번).
+    · 타임아웃은 `navigation`(25초)이 아니라 `timeouts.validateBoot`(10초)다.
+      예약 호스트가 넷퍼넬 대기열에 걸리면 증상이 에러가 아니라 **응답 없음**이라,
+      검증 하나가 패스 예산을 갉아먹는다. 검증이 실패하면 어차피 로그인으로 가고
+      로그인도 이 호스트를 다시 세우므로, 여기서 오래 기다려 얻는 것이 없다.
+    · 절대 throw하지 않는다 — `run.ts`가 이 호출을 deadline으로 감싸므로 새어 나간
+      예외는 로그인 시도조차 없이 패스를 죽인다.
+    · 오크밸리도 같은 모양(호스트 둘, 검사 하나)이지만 아직 손대지 않았다.
+  · `bootSession`이 던지는 것은 평범한 `Error`가 아니라 **`SessionLostError`**
+    (`_shared/errors.ts`)여야 한다. `run.ts`는 이 예외를 보고 캐시된 storageState를
+    버린다 — stage로만 판정하던 시절에는 이 실패가 `SEARCH`라 세션이 그대로 남았고,
+    다음 시도가 `validateSession`을 통과해 로그인을 건너뛰고 **똑같이 실패**했다.
+    2026-08-25 09:05:10과 09:05:45의 2연속 `SESSION_LOST`가 정확히 그것이다.
+- **`RSRV_CLDR_CL_CD`가 회원 뷰를 여는 유일한 축이다.** 설악 45일 실측:
+  `01`(회원) → 예약가능 422 / 대기예약 223 / 예약마감 45,
+  `02`(일반) → 회원우선 408 / 예약마감 268 / 예약가능 14. 631칸이 달라진다.
+  `CONT_NO`·`MEMB_MAST_NO`는 이 계정에서 빈 값이고 값을 넣어도 안 넣어도 같았다.
+  `RSRV_ROOM_CNT`도 재고에 **무영향**(1·2·3 요청의 690칸 전부 동일).
+- **`STRT_DATE`~`END_DATE`를 문자 그대로, 양끝 포함으로 지킨다.** +30/+31/+45/+60일
+  요청이 각각 31/32/46/61일로 돌아왔고 **월 경계 구멍 0**. 그래서 지점당 한 콜로
+  핫 윈도우 전체가 덮인다(리솜과 같은 모양). 캐시 키는 요청이 아니라 **덮은 범위**라,
+  첫 윈도우가 받아둔 달력을 이후 59개 윈도우가 그대로 쓴다.
+
+그 밖에:
+
+- **`available`은 상태 코드로, `closingSoon`은 잔여 수로 판정한다.** `RSRV_POSBL_CNT`는
+  예약가능 행에서 진짜 잔여 수지만 **불가 행에서는 음수**로 나온다(450행 중 68건).
+  실측 불변식: **예약가능(0101)이 아닌데 잔여>0인 행은 0건.** 그래서 가능 여부는
+  `RSRV_CLDR_RSLT_CD ∈ {0101, 0119}`로, 마감임박은 그 뒤에 잔여 ≤ 2로 본다 —
+  다섯 크롤러에서 이 필드의 **네 번째 서로 다른 출처**다.
+- 상태 코드표는 추측하지 않고 사이트에서 받는다(`getCmnCode.mvc`,
+  `GRP_CD=RSRV_CLDR_RSLT_CD`). `0102~0107`·`0118`은 **추첨**, `0108`은 **대기예약** —
+  둘 다 예약가능이 아니다. 대기를 가능으로 치면 못 자는 방을 보고 차를 몰게 된다.
+- **`BRCH_CD`와 `LOC_CD`는 다른 값이고 쌍으로 보내야 한다.** 조사 중 제주를
+  `1101/1101`(정답 `1100/1101`)로 물었더니 **에러 없이 200에 0행**이 돌아왔다.
+  그 침묵이 만실·크롤 실패와 구분되지 않아서 `search.ts`가 0행을 로그로 크게 남기고
+  `debug-hanwha.ts diff`가 16지점 전부를 매번 재확인한다.
+- 지점 16곳(리조트 12 + 호텔 4). `region`은 사이트 주소(`전라남도`/`강원특별자치도`
+  혼재)가 아니라 **2글자 광역**으로 정규화한다. **더플라자 호텔 때문에 `REGION_ORDER`에
+  `서울`이 추가됐다** — 네 리조트까지 이 목록은 전부 휴양지였다.
+- `roomType`은 응답의 `ROOM_TYPE_NM`. 이름이 없는 엔티티는 코드 그대로 저장하고
+  `diff`가 보고한다(추측하면 upsert 유니크 키가 갈라진다).
+- **봇 보호**: 로그인 호스트에는 없다. 예약 호스트가 넷퍼넬(`netfunnel.js`,
+  `POST /rst/cmn/netKeyChk.mvc`)을 싣고 두 호스트에 F5 BIG-IP ASM 쿠키(`TS*`)가 깔린다.
+  이번 조사에서 대기열에 걸린 적은 없다. 걸리면 증상은 에러가 아니라 **응답 없음**이다.
+  · **다만 한국 밖에서는 연결 자체가 거부된다.** Vercel `iad1`에서 로그인 호스트로
+    `page.goto` 하면 `net::ERR_CONNECTION_RESET`이다 — 봇 판정 이전, TCP 단계다.
+    이것 때문에 함수 리전을 `icn1`(서울)로 옮겼다(`CLAUDE.md`의 "배포" 절).
+
+## 패스 예산은 `ctx.deadlineAt`에서 온다 (상수가 아니다)
+
+`HANWHA.passBudgetMs`(30초)와 오크밸리의 같은 상수는 이제 **상한**일 뿐이고, 실제
+예산은 `min(passBudgetMs, ctx.deadlineAt - startedAt - RETURN_RESERVE_MS)`다
+(2026-08-26).
+
+상수 하나로 추정하면 시계가 둘이 되고, **둘이 어긋나는 방향이 나쁘다.** 내부 시계는
+30초까지 달릴 권한이 있다고 믿는데 `run.ts`는 검색 전체를 `withDeadline`으로 감싸고,
+그 한계는 콜드 로그인 패스에서 20초대까지 내려간다(브라우저 기동 + 2화면 로그인이
+같은 예산에서 먼저 나간다). 잘리면 `DeadlineExceeded`가 나고 — 이 루프가 부분 반환으로
+지키려던 — **행 전부와 SUCCESS 판정이 함께 버려진다.** 08-26까지 안 터진 건 운이다.
+
+`ctx.deadlineAt`은 **패스의 끝이 아니라 그 검색이 잘리는 시각**이고 윈도우마다
+갱신된다. 리솜 요금 수집이 쓰는 그 시계와 같은 것이다.
+
+## 지점은 4곳씩 동시에 묻는다 (2026-08-27)
+
+지점이 16곳이고 콜 하나가 ~2초라, 순차로 돌면 **첫 윈도우 하나가 ~32초**로 패스 예산을
+통째로 먹었다. 그래서 콜드 패스마다 아래의 "좁히기"가 발동해 120행만 남기고 브라우저
+한 벌을 다 썼다 — 2026-08-27 09:02와 09:04가 그것이다. 그 두 패스는 거의 아무것도
+수집하지 않으면서 워밍 인스턴스의 `/tmp`만 축냈다.
+
+이제 `mapPool`(`_shared/pool.ts`)로 `HANWHA.branchPool`(4)씩 나간다. 실측:
+**60/60 윈도우 · 13,104행 · 30.7초 · 단 1패스**(종전 6패스). 첫 윈도우가 더 이상 잘리지
+않으므로 아래 절의 좁히기는 이제 예외 경로다 — **없앤 것이 아니라 덜 일어나게 한 것이고,
+그 처리는 한 줄도 바뀌지 않았다.**
+
+바꾸면서 지킨 것 넷:
+
+- **예산 게이트는 배치 사이로 옮기고 척도를 `slowestBatchMs`로 바꾼다.** 지점 하나의
+  소요를 척도로 쓰면서 넷을 동시에 던지면 벽시계를 4배 과소평가하고, 넘겼을 때 잃는 것은
+  이 윈도우가 아니라 **패스가 모은 행 전부**다(`run.ts`가 검색 전체를 하나의
+  `withDeadline`으로 감싼다).
+- **콜 타임아웃은 `timeouts.api`(25초)가 아니라 남은 예산에서 유도한다.** 순차 루프에서는
+  게이트가 다음 지점 앞에서 멈춰 세웠지만 배치에는 "다음"이 없다 — 이미 넷이 날아가 있고
+  배치는 가장 느린 하나가 끝나야 끝난다. 낙오자 하나가 부분 반환을 `DeadlineExceeded`로
+  바꾼다.
+- **`attempted`는 실제로 디스패치한 지점 수.** "전부 실패는 매진이 아니다" 판정이 여기
+  걸려 있고, 예산 break로 시도조차 못 한 지점은 실패가 아니다.
+- **전부 실패했고 그 실패가 전부 `SessionLostError`면 그 타입을 보존해 던진다.** 평범한
+  `Error`는 `run.ts`에게 검색 실패로 읽혀 **죽은 storageState가 캐시에 남고**, 다음 시도가
+  `validateSession`을 통과해 로그인을 건너뛰고 같은 실패가 돌아온다. 그리고 지점 전부가
+  한꺼번에 죽는 것은 예약 호스트가 세션을 잃었을 때의 전형적인 모양이다 — 병렬화가 그
+  모양을 더 자주 만든다(배치가 통째로 같은 이유로 죽는다).
+
+순서 의존성은 없다. `session.calendars`는 `locCd`로 키잉되고 지점은 한 패스에 한 번씩만
+나오므로 경합이 없으며, `out`은 `mapPool`이 입력 순서를 보존한다.
+
+## 예산이 끊긴 윈도우는 `stay`를 지우는 게 아니라 **좁힌다**
+
+지점이 16곳이라 **첫 윈도우는 예산(30초)에 걸리는 것이 정상**이다. 실측: 13지점
+24초에서 중단. 이때의 처리가 이 크롤러가 새로 가져온 규칙이고, 처음 쓴 방식은 틀렸다.
+
+- `stay`가 붙은 행은 `run.ts`가 "이 범위를 전부 답했다"로 읽고 그 윈도우들을 패스 내내
+  스킵한다. 못 돈 지점이 있는데 그대로 두면 **루프 순서가 고정이라 매 패스 같은 지점이
+  영영 수집되지 않는다.**
+- 그렇다고 **`stay`를 지우면 안 된다.** 46개 체크인 날짜가 전부 요청 윈도우 아래로
+  들어가고, upsert 중복 제거 키(지점+객실유형+날짜)가 그걸 한 날짜로 뭉갠다.
+  실측으로 **5,520행이 120행이 되고, 남은 행은 미래 어느 날의 상태를 오늘 것이라고
+  주장**했다. 조용히 틀린 데이터다.
+- 정답은 **요청받은 숙박만 남기고 나머지를 버리는 것**. 영구 손실이 아니다 —
+  다음 윈도우가 캐시된 달력에서 공짜로 다시 만들어 온전히 스탬프한다.
+
+실사이트 검증(2026-08-13, `run-crawl.ts HANWHA hot`):
+
+```
+윈도우 1: 13지점 fetch → 예산 초과 → 5,520행 중 120행만(요청 숙박)
+윈도우 2: 16지점 (3 fetch + 13 cache) → 6,480행, 온전히 스탬프
+윈도우 3: 16지점 (0 fetch + 16 cache) → 6,624행
+결과: 60/60 윈도우 · 57스킵 · 요청 16번 · 13,224행 · 35.6초
+```
+
+- 콜드 로그인 포함 단일 윈도우 32.1초 — `/api/resorts/[slug]/refresh`의 50초 예산 안.
+- 1박 46일 / 2박 45일 — **하루 적은 것이 정상**(마지막 날의 둘째 밤이 범위 밖이라
+  추측 대신 행을 만들지 않았다). 과거 날짜 0행, "2박 가능인데 1박 불가" 모순 0행,
+  `closing_soon`이 `available=false`에 붙은 행 0건.
+- 지점 16곳·지역 9곳 카탈로그 완전 일치, 객실유형 107종, 지점명 충돌 0
+  (전체 5개 리조트 57지점에서도 0).
+- 클라이언트 번들 유출 0건(`brchCd`/`locCd`/`TFO00HBS`/`RSRV_CLDR`/`doExecute`).
+
+### 요금은 없다 — 시즌과 할인율만 있다 (금액 조사, 2026-08-24)
+
+`ds_result` 한 행은 키 **18개**이고 그중 금액은 없다:
+`ALLC_ROOM_CNT BRCH_CD LOC_CD MSG PP_DSCNT_RT ROOM_TYPE_CD ROOM_TYPE_NM RSRV_CLDR_RSLT_CD
+RSRV_LOC_DIV_CD RSRV_POSBL_CNT RSRV_POSBL_YN SESN_CD SESN_DATE SESN_NM SORT_SEQ
+USER_CALC_GRAD_CD WAIT_POSBL_CNT WAIT_SEQ`.
+
+가장 요금에 가까운 둘은 **요금이 아니다** — `PP_DSCNT_RT`는 할인율(관측 0·2·10)이고
+`SESN_NM`은 시즌 이름("가을 비수기 준주말")이다. 즉 사이트는 요금을 결정하는 축은
+알려주면서 결정된 값은 이 응답에 싣지 않는다.
+
+**이 사이트에서 Q2는 URL 문제가 아니다.** 모든 예약 질문이 `doExecute.mvc` 하나를 지나고
+`serviceInfo.INTF_ID`가 어느 서비스를 돌릴지 정하므로, 요금 서비스가 있다면 다른 URL이
+아니라 다른 INTF_ID로 나타난다. 잔여객실조회 화면이 실제로 부르는 서비스는 5개이고
+(`ITSCTM0160` `ITSCTM9000` `REMPRR0120` `SLESTA0604` `REMPRR0113`), **우리가 부르는
+`REMPRR0113`을 뺀 넷은 요청이 `CORP_CD`/`CUST_NO`뿐이다** — 날짜도 지점도 객실유형도 묻지
+않으므로 숙박 요금을 답할 수 있는 서비스가 아니다. 요금은 이 화면보다 뒤(실제 예약 단계)에
+있고, 거기는 수집 대상이 아니다.
+
+
+### 시즌은 사이트가 말해준다 — 그런데 요금표는 다른 코드 체계에 있다 (`axes`, 2026-08-26)
+
+오크밸리가 공표 요금표로 풀렸으므로 한화도 같은 각도로 쟀다. 여기는 **유리해 보인다** —
+달력 응답이 날짜마다 `SESN_CD`/`SESN_NM`을 직접 실어 주므로 시즌 달력이 아예 필요 없다.
+실제로 재보니 조인의 절반은 좋고 절반은 막힌다.
+
+**좋은 절반.** 45일 × 3지점 실측:
+
+| 키 | 종수 | 값 |
+| --- | --- | --- |
+| `SESN_CD` | 8 | `3102 3103 3114 3115 3116 3117 3118 3404` |
+| `SESN_NM` | 8 | 가을 비수기 {월요일·화요일·수요일·목요일·준주말·주말·일요일} · **가을 극성수기 연휴** |
+| `PP_DSCNT_RT` | 13 | `0 2 4 6 8 10 12 14 18 20 22 24 26` |
+| `USER_CALC_GRAD_CD` | 1 | `""` (빈 값) |
+| `RSRV_LOC_DIV_CD` | 1 | `"C"` |
+
+- `SESN_CD` ↔ `SESN_NM`은 **1:1**이다.
+- 시즌은 **날짜 단위**다(객실유형과 무관). 이건 기존 `keys`의 Q6 대조가 **구조적으로
+  답할 수 없던** 질문이다 — 그 대조는 `numericKeys`만 보고 `SESN_NM`은 숫자가 아니다.
+- 이름이 `{계절} {시즌등급} {요일구분}`이라 요일과 거의 1:1로 붙는다(금=준주말, 토=주말).
+- 📌 08-24 조사가 `SESN_NM` 예시 **한 개**만 남기고 알파벳을 적지 않아 다시 재야 했다.
+  이 표가 그 재측정이다.
+
+**막힌 절반.** 셋이고, 넘기 어려운 순서대로:
+
+1. **객실유형이 107종이다.** 오크밸리는 9종이라 손으로 지도를 만들 수 있었지만
+   (`OAKVALLEY.rateRows`) 107종은 다른 규모다. 게다가 `roomType`은 `ROOM_TYPE_NM`이고
+   이름이 없으면 **코드로 조용히 폴백**하므로(`parse.ts`), 이름으로 키잉한 표는 그 행에서
+   말없이 안 붙는다.
+2. **요금표가 다른 코드 체계에 있다.** 공개 페이지는 `rs_room.do?bp_cd=…`인데 `bp_cd`는
+   `BRCH_CD`/`LOC_CD`가 아니다 — 실측 `bp_cd=0100`은 **890바이트 빈 페이지**,
+   `bp_cd=1101`은 요금표가 든 90KB다. 16지점을 잇는 것부터가 별도 매핑이다.
+   (표는 JS 렌더라 `page.request`로는 `<table>` 0개다. 브라우저로 열어야 보인다.)
+3. **회원 등급을 사이트가 말해주지 않는다.** 요금표가
+   `일반요금 | 객실이용요금(무기명 · 기명 · 회원추천)` × `월-목 · 금-토 · 일요일 ·
+   준성수기 · 연휴/성수기`인데 `USER_CALC_GRAD_CD`는 빈 값이다. 오크밸리와 **같은 벽**이고,
+   거기서는 운영자의 답 한 줄로 풀렸다.
+
+**시즌 어휘 ↔ 요금표 열은 대응한다 — 다만 그 규칙은 우리가 만드는 것이다.**
+관측된 8종은 `월/화/수/목 → 월-목`, `준주말·주말 → 금-토`, `일요일 → 일요일`,
+`극성수기 연휴 → 연휴/성수기`로 깔끔히 떨어진다. 그러나 이건 **가을 45일**이 보여준
+전부이고, 여름·겨울·봄의 이름이 어떻게 오는지는 모른다("준성수기" 열에 해당하는 이름을
+아직 한 번도 못 봤다). 못 본 이름을 만나면 요금을 만들지 않는 것이 유일하게 안전한 기본값이다.
+
+**판정(2026-08-26): 한화는 여기서 멈춘다.** 불가능해서가 아니라 배선 하나가 아니라서다 —
+107종 객실유형 지도 + 16지점 `bp_cd` 지도 + 연간 시즌 어휘 + 회원 등급, 넷이 다 필요하다.
+오크밸리에서 같은 일을 9종·2지점·공개 달력으로 한 것과 규모가 다르다.
+
+### 인원 — 공개돼 있는데 **기준뿐이라** 붙이지 않는다 (2026-08-31)
+
+`ds_result` 18키에 정원이 없다는 것은 그대로다. 그런데 **공개 페이지에는 있다**:
+
+```
+GET www.hanwharesort.co.kr/irsweb/resort3/resort/rs_room.do?bp_cd=<지점>&rm_cd=<객실>
+→ <div class="type_info"><dl><dt>객실정원</dt><dd>4인</dd></dl> …
+```
+
+무인증이고 **서버 렌더**다(요금표는 JS 렌더라 `page.request`로 `<table>` 0개였는데,
+이건 그냥 HTML에 있다). 그리고 조인이 맞는다:
+
+- 같은 페이지의 `<select name="sel_rm_cd">`가 그 지점 객실코드를 전부 준다 —
+  설악(bp_cd 0101) `DMO FAM FTB FTL FSS HTL HTE TH1 TH2 TH3 RYL RMO RYE GLA PLT` **15종**.
+  같은 날 재고(`BRCH_CD 0100`/`LOC_CD 0101`)의 `ROOM_TYPE_CD`도 **정확히 그 15종**이다.
+  즉 `rm_cd ↔ ROOM_TYPE_CD`는 **1:1**이고, 요금 조사가 "107종을 어떻게 잇나"로 멈춰 선
+  1번 장벽이 여기서 풀린다.
+- 그 페이지의 내비가 **`bp_cd ↔ 지점명` 지도를 통째로** 준다(2101 거제 벨버디어 ·
+  0101 설악 쏘라노 · 1101 제주 …15개). 요금 조사의 2번 장벽도 같이 풀린다.
+  → 요금 쪽에 남은 것은 **회원 등급(무기명/기명/회원추천)** 하나뿐이고, 그건
+  오크밸리에서 운영자의 답 한 줄로 풀렸던 것과 같은 종류의 질문이다.
+
+**그런데 최대인원이 없다.** 있는 것은 `객실정원`(기준) 하나이고, 최대는 일부 지점의
+산문 각주뿐이다 — "객실정원 초과 시 추가비용이 발생하며, 정원 외 최대 2명까지 추가 입실이
+가능합니다". 4개 지점 표본에서 그 각주는 **2곳에만** 있었다. 지점마다 있다 없다 하는
+안내문은 방마다의 측정값이 아니다.
+
+⇒ **붙이지 않는다**(운영자 결정, 2026-08-31). 계약이 "기준·최대 둘 다이거나 둘 다 아니다"인
+이유가 정확히 이 경우다 — 기준만 써서 "4인"이라 그리면 6인이 잘 수 있는 방을 6인 가족을
+찾던 담당자가 후보에서 뺀다. **없는 정보보다 나쁜 것은 틀린 정보다.**
+최대인원 출처가 나오면 배선은 `parse.ts` 한 곳이고, 조인은 위에서 이미 확인됐다.
+(각주의 "최대 투숙인원 초과 시 입실이 제한됩니다"가 그 값의 존재를 암시한다. 예약
+호스트의 게이트웨이 서비스 5개 중 넷은 요청이 `CORP_CD`/`CUST_NO`뿐이라 객실별로 답할 수
+있는 것이 아니고, 남은 곳은 실제 예약 단계다 — 거기는 수집 대상이 아니다.)
+
+## 로컬 검증
+
+```bash
+npx tsx scripts/debug-hanwha.ts main       # 진입점 · 아웃바운드 호스트 · 예약 진입점
+npx tsx scripts/debug-hanwha.ts login      # 로그인 폼 (로그인하지 않음)
+npx tsx scripts/debug-hanwha.ts doLogin    # 실로그인 2단계 → 쿠키 · sessionCheck
+npx tsx scripts/debug-hanwha.ts bridge     # www→booking 홉별로 sCustNo가 언제 생기나
+npx tsx scripts/debug-hanwha.ts session    # 세션 TTL 폴링
+npx tsx scripts/debug-hanwha.ts cal        # 회원 화면의 실제 요청 ↔ 우리 config 필드 대조
+npx tsx scripts/debug-hanwha.ts span       # 범위 · 월 경계 · 객실수 무영향 · 회원/일반 분리
+npx tsx scripts/debug-hanwha.ts rows       # search+parse 단독 실행
+npx tsx scripts/debug-hanwha.ts diff       # 지점 16곳 · 지역 · 객실유형 ↔ config 대조
+npx tsx scripts/debug-hanwha.ts keys       # 응답 키 전수 조사 + 게이트웨이 서비스 목록 (금액 조사)
+npx tsx scripts/debug-hanwha.ts axes       # 시즌·객실유형 축이 요금표에 붙는가 (금액 조사 Q4)
+HANWHA_BP_CD=1101,1201 npx tsx scripts/debug-hanwha.ts axes   # 요금표를 다른 지점으로
+npx tsx scripts/run-crawl.ts HANWHA hot    # 핫 윈도우 60개 — 윈도우 스킵을 보는 유일한 방법
+CRAWL_BUDGET_MS=50000 npx tsx scripts/run-crawl.ts HANWHA hot   # 프로덕션 예산으로
+```
+
+**병렬화 이후 볼 것**: `[hanwha] window done`의 `truncated`가 첫 윈도우에서 `false`이고
+`[hanwha] partial window narrowed…`가 **안 나오는가**. 나온다면 좁혀진 행이 요청 숙박만
+남았는지 확인할 것 — 그 경로는 없어진 게 아니라 예외가 됐을 뿐이다. 그리고 뭉갬 검사:
+
+```sql
+SELECT checkin_date, count(*) FROM resort_inventory
+ WHERE resort_name LIKE '한화%' GROUP BY 1 ORDER BY 1;
+-- 체크인 날짜 46개에 고르게 분포해야 한다. 한 날짜만 뚱뚱하면 `stay`가 뭉개진 것이다.
+```
+
+`doLogin`만 실계정을 쓰고 나머지는 `/tmp/hanwha-debug-state.json`을 재사용한다.
+
+**`CRAWL_BUDGET_MS`가 필요한 이유**: `run-crawl.ts`의 `hot` 경로는 기본 300초를 쓴다.
+조사용으로는 옳지만, 그 아래에서는 **예산 산술이 한 번도 실행되지 않는다** — 검색/쓰기
+분리 예약도, 부분 반환도, `stay` 좁히기도 전부 안 도는 코드다. 프로덕션이 실제로 타는
+경로를 보려면 50,000으로 돌릴 것. 그때 볼 것은 행 수가 아니라 **패스별 `durationMs`가
+58초를 넘지 않는가**다(`maxDuration`이 60초이고, 넘으면 `crawl_logs` 행이 RUNNING으로
+남는다).
+
+**`cal` 스텝이 존재하는 이유**: 이 사이트는 틀린 요청에 에러로 답하지 않는다.
+`BRCH_CD`/`LOC_CD` 쌍이 어긋나면 **200에 0행**, `RSRV_CLDR_CL_CD`가 틀리면 **가득 찬,
+그럴듯한, 틀린 달력**이다. 그래서 "우리 요청이 성공했다"가 "사이트와 같은 질문을 했다"의
+증거가 되지 못한다. 유일한 판별법은 회원 화면이 스스로 쏘는 요청을 녹화해 필드 단위로
+대조하는 것이고, `cal`이 그걸 한다(2026-08-13 기준 `only theirs`·`only ours`·`differing`
+전부 0). 오크밸리 `probe`와 같은 이유에서 나온 다른 형태의 스텝이다.
+
 # 새 리조트 추가 (Phase F)
 
-1. `src/crawlers/<slug>/{config,login,search,parse,index}.ts` 작성 (lotte 복사 후 수정)
+1. `src/crawlers/<slug>/{config,login,search,parse,index}.ts` 작성.
+   가장 가까운 것을 복사한다 — 지점마다 한 콜이면 **lotte**, 한 콜에 여러 지점이면
+   **sono**, 응답이 날짜 달력이거나 API가 쿠키가 아니라 토큰을 요구하면 **resom**,
+   요청을 URL로 조립할 수 없거나(서명·토큰이 페이지에 있음) 응답이 월 단위라
+   여러 응답을 병합해야 하면 **oakvalley**, 로그인이 화면 여러 개거나 지점이 많아
+   한 패스에 다 못 도는 규모면 **hanwha**.
 2. `src/crawlers/registry.ts`에 lazy import 1줄 추가
 3. `src/lib/resort-catalog.ts`의 `CATALOG`에 `{ properties }` 1항목 추가 —
    지점의 `branchName`/`label`/`region`만 뽑는다. **`bizCd` 등 크롤 전용 필드는 넣지 않는다**
    (이 모듈은 `server-only`지만, 넣으면 서버 컴포넌트가 클라이언트로 내려보내게 된다).
 4. `/admin/accounts`에서 해당 리조트 자격증명 등록 (없으면 `run.ts`가 throw)
-5. Neon에서 `UPDATE resorts SET active = true WHERE slug = '<SLUG>'`
+5. `npx tsx scripts/set-active.ts <SLUG> true`
+
+새 리조트의 지점은 제외 행이 없으므로 **전부 기본 노출**이다. 제휴가 없는 지점은
+`/admin/properties`에서 뺀다(위 "지점 제외" 절). 지점 필터링은 크롤러가 아니라
+`_shared/branches.ts`의 `selectBranches`가 하므로, 새 크롤러도 `config.branches`를
+직접 순회하지 말고 그 헬퍼를 부를 것 — 안 부르면 제외가 그 리조트에만 적용되지 않고,
+증상은 에러가 아니라 "뺐는데 계속 수집된다"이다.
 
 핵심 코드(`run.ts`, `_shared/*`)는 물론 **Inngest 함수·조회 UI·`/api/inventory`도 무수정**이다.
 `crawl-resort`는 slug를 인자로 받는 단일 함수이고(리조트별 함수가 아니다),
 `scheduled-refresh`가 `listCrawlableResorts()`(= `active` ∩ 등록된 크롤러)로 팬아웃한다.
+
+**지점이 여럿이면 순차로 돌지 말 것.** 패스 하나가 브라우저 하나이고, 브라우저는
+이 프로젝트에서 가장 먼저 바닥나는 자원이다(`CLAUDE.md`의 "배포" 절). `_shared/pool.ts`의
+`mapPool`은 절대 reject하지 않고 결과를 **입력 순서대로** 주므로, "한 지점 실패가 나머지를
+죽이면 안 된다"는 이 저장소의 규칙을 그대로 지킬 수 있다. 다만 예산 게이트가 있는
+크롤러라면 게이트를 **배치 사이**로 옮기고 척도를 배치 단위로 바꿔야 하고, 콜 타임아웃은
+상수가 아니라 **남은 예산**에서 유도해야 한다 — 상세는 위 HANWHA 절.
+
+**`/tmp` 고갈은 `TmpExhaustedError`이고 크롤러가 던질 일은 없다.** `_shared/browser.ts`가
+launch 전에 판정한다. 크롤러가 알아야 할 것은 하나뿐 — 이 예외는 세션과 무관하므로
+`run.ts`가 저장된 storageState를 버리지 않는다.
+
+**세션이 죽은 것을 알아챘을 때는 `SessionLostError`(`_shared/errors.ts`)를 던질 것.**
+평범한 `Error`를 던지면 `run.ts`가 그것을 검색 실패로 읽어 **캐시된 storageState를
+그대로 남기고**, 다음 시도가 `validateSession`을 통과해 로그인을 건너뛰고 같은 실패를
+반복한다. 반대로 제대로 던지면 `run.ts`가 **그 패스 안에서 1회 회복**한다 — 세션 폐기
+→ 재로그인 → 같은 윈도우 재시도. 세션을 잃었을 때 필요한 것은 로그인 한 번이지
+브라우저 한 벌이 아니고, 재시도에 맡기면 그 브라우저를 **더 마른 `/tmp`에** 띄우게
+된다(2026-08-26 09:07이 그 청구서다). 다섯 크롤러 전부 그 자리가 있다 — 토큰이 없거나(리솜), 회원번호를 못 받거나
+(소노), 로그인 화면으로 튕기거나(오크밸리), 재고 호스트가 우리를 모르는(한화) 순간이다.
+**로그인 호스트와 재고 호스트가 다르면 이건 선택이 아니다**: `validateSession`이 보는
+호스트와 세션을 잃는 호스트가 달라서, 검증 통과가 크롤 가능을 뜻하지 않는다.
 
 추가 후 확인 — 지점 문자열이 카탈로그와 실제 수집 결과 사이에서 어긋나지 않았는지:
 
@@ -91,3 +1509,70 @@ SELECT DISTINCT resort_name, branch_name, region FROM resort_inventory ORDER BY 
 `branchName`은 크롤러 config의 `value`가 그대로 저장된 값이고 카탈로그도 같은 배열을
 읽으므로 자동으로 일치해야 한다. 어긋난다면 크롤러가 `config.branches`를 우회해
 지점명을 만들고 있다는 뜻이다 (증상은 "필터를 눌렀는데 0건").
+
+⚠️ **다만 지점이 빠져 있는 것은 이제 정상일 수 있다** (2026-08-29). 운영자가 제외한
+지점은 크롤이 돌지 않으므로 이 결과에 나오지 않는다. 어긋나 보이면 크롤러를 의심하기
+전에 `resort_branch_exclusions`를 먼저 볼 것 — 위 "지점 제외" 절.
+
+## 요청한 날짜보다 넓게 답하는 사이트 (`InventoryRow.stay`)
+
+기본값은 "크롤러가 돌려준 행 = 요청한 윈도우의 재고"이고, 롯데가 그렇다. 사이트가
+요청 날짜 하나에 **여러 날짜를 한꺼번에** 답한다면 행마다
+`stay: { checkin, checkout }`을 붙여라. 그러면
+
+- `run.ts`가 그 행을 요청 윈도우가 아니라 **행 자신의 날짜** 아래 upsert하고,
+- **그 패스에서 이미 답을 받은 윈도우를 건너뛴다.** 소노의 60개 핫 윈도우가
+  실제 요청 4번(2개월 × 2숙박길이)이 되는 게 이 스킵이다 — 실측 40초·17,914행.
+
+`stay`를 안 붙이면 동작은 종전과 완전히 동일하다.
+
+주의할 점 셋:
+
+- **`windows.ts`에 리조트별 상수를 두지 않는다.** 응답이 며칠을 덮는지는 크롤러만
+  관측할 수 있고, 스케줄러에 사본을 두면 어긋났을 때 증상이 "그 날짜만 조용히 빔"이다.
+  스킵은 실제로 받은 행에서 계산되므로 그런 사본이 없다.
+- **`checkin`/`checkout`은 둘 다이거나 둘 다 아니다.** 하나만 주면 나머지가 요청
+  윈도우에서 상속돼, 아무도 측정하지 않은 숙박 길이를 주장하게 된다.
+- **넓은 응답이 곧 "그 숙박이 가능하다"는 뜻은 아니다.** 소노처럼 날짜별 달력을 주는
+  사이트라면 숙박 일수만큼 AND 해야 한다(위 SONO 절). 판정할 밤이 없으면 행을
+  만들지 말 것 — 없는 행은 조회에서 "데이터 없음"이지만, 틀린 행은 헛걸음이다.
+- **예산이 끊겨 지점을 다 못 돌았으면 `stay`를 지우지 말고 요청 윈도우로 좁혀라.**
+  `stay`를 지우면 응답이 덮은 날짜가 전부 요청 윈도우 아래로 들어가고, upsert 중복
+  제거가 그걸 한 날짜로 뭉갠다 — 한화에서 5,520행이 120행이 되고 남은 행이 미래
+  날짜의 상태를 오늘 것으로 주장했다. 반대로 `stay`를 그대로 두면 못 돈 지점 몫까지
+  윈도우가 스킵되고, 루프 순서가 고정이라 같은 지점이 매번 빠진다. 상세는 위 HANWHA 절.
+
+행 수가 크게 늘 수 있다는 것도 염두에 둘 것. `upsertInventory`는 다중행 INSERT 한
+문장이라 Postgres의 바인드 파라미터 상한 65,535(행당 12개)에 걸린다 —
+`UPSERT_CHUNK_ROWS`로 1,000행씩 끊는다. 소노 한 콜이 ~3,900행이다.
+
+## 어제 있었고 오늘 응답에 없는 행
+
+위 절은 **행을 만들지 않는 규칙**만 말한다. 이미 있던 행이 어떻게 되는지는 오래 말하지
+않았고, 그 침묵이 13일짜리 유령을 만들었다 — 2026-08-24 롯데 속초 8/24→8/25에서 16행은
+그날 갱신됐는데 호텔 객실 3종만 08-11의 `available=true`를 단 채 남아 조회 화면 맨 위에
+초록 배지로 떠 있었다. 실제 사이트에는 그 방이 없었다.
+
+쓰기 경로가 순수 upsert(`ON CONFLICT DO UPDATE`)라서 **응답에 없던 키는 아무도 건드리지
+않는다.** 그래서 `run.ts`의 `removeVanishedRows`가 upsert 직후에 그것을 지운다.
+
+- 판정 단위는 `(지점, 체크인, 체크아웃)` 그룹. 규칙은 하나다 —
+  **그 그룹에서 1행 이상 받았다면 사이트가 그 지점·그 날짜에 대해 답한 것**이고,
+  그 답에 없는 객실은 지금 예약할 수 없다.
+- **0행 그룹은 절대 건드리지 않는다.** 그룹 목록을 방금 쓴 행에서 뽑으므로 자동으로
+  보장된다. 이게 이 함수의 전부다 — 지점 단위 실패는 조용히 0행이 되는데
+  (`lotte/search.ts`가 예외를 삼키고 계속한다) 그걸 "전부 마감"으로 읽으면 크롤 실패가
+  **"전 객실 매진"으로 발행**된다.
+- **새 크롤러가 지점 루프에서 예외를 삼킨다면 이 규칙에 기대고 있는 것이다.** 삼킨 지점이
+  0행이 되어 그룹에 오르지 않기 때문에 안전하다. 반대로 "실패한 지점도 빈 행 목록을
+  만들어 둔다"는 식의 구현을 하면 그 순간 크롤 실패가 매진이 된다.
+- 마킹이 아니라 삭제인 이유: 사라진 행에는 "예약 불가"와 "판정 못 함"이 섞여 있다
+  (소노·리솜·오크밸리·한화는 밤 하나가 결측이면 행을 만들지 않는다). 판정할 수 없으면
+  행을 만들지 않는다는 이 문서의 규약과 삭제가 같은 말이다. 지워진 자리는 조회에서
+  "데이터 없음"이고, 다음 크롤이 답을 받으면 그대로 복구된다.
+
+그리고 지워지지 않은 낡은 행은 **조회 화면이 등급을 낮춰서** 처리한다 —
+`src/lib/freshness.ts`가 나이를 판정하고 3일이 넘은 "예약 가능"은 `unverified`
+("N일 전 확인")로 내려간다. 즉 크롤러가 못 지운 유령은 화면이 한 번 더 거른다.
+새 크롤러를 붙일 때 이 두 층을 모두 신뢰해도 되지만, **아래층(삭제)을 무력화하는
+구현은 하지 말 것** — 위층은 나이만 알 뿐 "사이트가 뭐라 답했는지"는 모른다.

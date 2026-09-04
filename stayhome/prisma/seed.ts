@@ -51,15 +51,21 @@ const RESORTS: Array<{
     name: "한화리조트",
     region: "전국",
     baseUrl: "https://www.hanwharesort.co.kr",
-    loginUrl: "https://www.hanwharesort.co.kr/login",
+    // /login is the site's error page. Nothing reads this column at runtime
+    // (hanwha/config.ts is authoritative), but it is read as documentation.
+    loginUrl: "https://www.hanwharesort.co.kr/irsweb/resort3/member/login.do",
     active: false,
+    memo: "로그인 2단계 — ID/PW 뒤에 회원인증(회원권 비밀번호) 화면. 그 값은 계정 메모에 있다",
   },
   {
     slug: ResortSlug.OAKVALLEY,
     name: "오크밸리",
     region: "전국",
     baseUrl: "https://oakvalley.co.kr",
-    loginUrl: "https://oakvalley.co.kr/login",
+    // /login does not exist in the SPA's router — the real route is
+    // /account/login. Nothing reads this column at runtime (each crawler's own
+    // config.loginUrl is authoritative), but it is read as documentation.
+    loginUrl: "https://oakvalley.co.kr/account/login",
     active: false,
   },
   {
@@ -67,9 +73,9 @@ const RESORTS: Array<{
     name: "소노호텔앤리조트",
     region: "전국",
     baseUrl: "https://www.sonohotelsresorts.com",
-    loginUrl: "https://www.sonohotelsresorts.com/login",
+    loginUrl: "https://www.sonohotelsresorts.com/member/login",
     active: false,
-    memo: "구 대명리조트 (소노로 리브랜딩)",
+    memo: "구 대명리조트 (소노로 리브랜딩). 회원(제휴) 예약 경로 — 비로그인 조회 불가",
   },
 ];
 

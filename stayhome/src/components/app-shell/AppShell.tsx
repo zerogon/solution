@@ -6,6 +6,7 @@ import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AppSidebar } from "./AppSidebar";
 import { AccountMenu } from "./AccountMenu";
+import { DeadlineCalculator } from "./DeadlineCalculator";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { AppMark } from "@/components/app-mark";
 import { Button } from "@/components/ui/button";
@@ -108,6 +109,17 @@ export function AppShell({
         </div>
 
         <AppSidebar collapsed={collapsed} />
+
+        {/* 사이드바 전용 유틸리티 선반. 하단 탭바(NAV_ITEMS)에는 올리지 않는다 —
+            그 배열은 모바일과 공유라, 넣는 순간 탭바에 나타난다.
+
+            `shrink-0`이 아닌 유일한 선반이다 — 달력이 상시 렌더돼 ~430px를 차지하므로,
+            버티게 두면 짧은 뷰포트에서 아래 계정 선반을 화면 밖으로 민다(`<aside>`에는
+            스크롤 컨테이너가 없다). 순서는 nav(flex-1)가 먼저 줄고, 그다음 이 선반이
+            자기 안에서 스크롤하고, 계정 선반은 끝까지 남는다. */}
+        <div className="min-h-0 overflow-y-auto border-t border-sidebar-border p-2">
+          <DeadlineCalculator collapsed={collapsed} onExpand={toggle} />
+        </div>
 
         <div className="shrink-0 border-t border-sidebar-border p-2">
           <AccountMenu

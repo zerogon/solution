@@ -1,0 +1,26 @@
+# 로컬 개발용 Postgres. 운영은 Vercel Neon을 사용하며 이 컨테이너와 무관하다.
+#   npm run db:local:up      # 시작
+#   npm run db:local:down    # 정지 (데이터는 pgdata 볼륨에 유지)
+#   docker compose down -v   # 볼륨까지 삭제 (완전 초기화)
+# 포트 5434 — 5433은 형제 앱 pianoflow의 로컬 DB가 쓴다.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: safetopia-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: safetopia
+      POSTGRES_PASSWORD: safetopia
+      POSTGRES_DB: safetopia
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U safetopia -d safetopia"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

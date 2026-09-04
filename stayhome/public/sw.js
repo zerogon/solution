@@ -25,8 +25,12 @@
  */
 
 // v2: /api/inventory 행에 resortSlug가 추가돼 v1 본문은 새 코드에 대해 불완전하다.
-// 올리면 activate 핸들러가 welfarestay-*-v1 캐시를 지운다.
-const CACHE_VERSION = "v2";
+// v3: 행에 price가 추가됐다. 낡은 본문은 크래시하지 않고 요금만 안 보이므로 증상이
+//     "어떤 창에서만 요금이 안 뜬다"라 진단이 어렵다 — 그래서 더 올려야 한다.
+// v4: 행에 occupancy(기준·최대 인원)가 추가됐다. v3와 정확히 같은 이유 — 낡은 본문은
+//     크래시하지 않고 인원만 안 보인다.
+// 올리면 activate 핸들러가 이전 접두사 캐시를 지운다.
+const CACHE_VERSION = "v4";
 const STATIC_CACHE = `welfarestay-static-${CACHE_VERSION}`;
 const DATA_CACHE = `welfarestay-data-${CACHE_VERSION}`;
 const OFFLINE_CACHE = `welfarestay-offline-${CACHE_VERSION}`;
