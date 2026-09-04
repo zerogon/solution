@@ -44,7 +44,7 @@ export function PendingRequestCard({ r }: { r: PendingRequestView }) {
           </div>
           <HeadcountChip worst={r.worst} minStaff={r.user.branch?.minStaff ?? null} />
         </div>
-        <p className="text-sm text-foreground/80">{r.reason}</p>
+        {/* 연차 사유 비활성: <p className="text-sm text-foreground/80">{r.reason}</p> */}
         <div className="flex items-center justify-between gap-2">
           <span className="text-[11px] text-muted-foreground">신청 {formatKstDateTime(r.createdAt)}</span>
           <AdminRequestActions id={r.id} status={LeaveStatus.PENDING} />

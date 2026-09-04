@@ -9,7 +9,7 @@ import { DaysPreview } from "@/components/leave/DaysPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+// import { Textarea } from "@/components/ui/textarea"; // 연차 사유 비활성
 import { holidayOracle, type HolidayMap } from "@/lib/holidays-kr";
 import { computeLeaveDays } from "@/lib/leave-days";
 import { LEAVE_TYPE_LABEL } from "@/lib/labels";
@@ -46,13 +46,14 @@ export function LeaveRequestForm({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fd = new FormData(e.currentTarget);
     startTransition(async () => {
       const res = await createLeaveRequest({
         type,
         startDate: start,
         endDate: effectiveEnd,
-        reason: String(fd.get("reason") ?? ""),
+        // 연차 사유 기능 비활성 — 컬럼은 남아 있으므로 빈 문자열을 보낸다.
+        // reason: String(fd.get("reason") ?? ""),
+        reason: "",
       });
       if (res.ok) {
         toast.success("신청했습니다. 관리자 승인을 기다려주세요.");
@@ -126,10 +127,12 @@ export function LeaveRequestForm({
 
       <DaysPreview result={preview} available={available} />
 
+      {/* 연차 사유 기능 비활성(2026-09-04)
       <div className="space-y-2">
         <Label htmlFor="reason">사유</Label>
         <Textarea id="reason" name="reason" required maxLength={300} placeholder="예: 가족 행사 참석" />
       </div>
+      */}
 
       <Button type="submit" className="h-11 w-full text-base" disabled={!canSubmit || pending}>
         {pending ? "신청 중..." : "신청하기"}

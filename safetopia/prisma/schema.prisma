@@ -157,6 +157,7 @@ model LeaveRequest {
   endDate         DateTime    @map("end_date") @db.Date
   /// 신청 시점 계산값(지점 휴무·공휴일 제외). 0.5 단위.
   days            Float
+  /// 연차 사유 — 2026-09-04 UI에서 비활성(빈 문자열 저장). 컬럼은 마이그레이션 없이 유지.
   reason          String
   status          LeaveStatus @default(PENDING)
   rejectionReason String?     @map("rejection_reason")

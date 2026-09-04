@@ -84,7 +84,7 @@ export default async function DashboardPage() {
                       {formatKoRange(toIsoDate(r.startDate), toIsoDate(r.endDate))}
                     </div>
                     <div className="text-xs text-muted-foreground">
-                      {LEAVE_TYPE_LABEL[r.type]} · {r.reason}
+                      {LEAVE_TYPE_LABEL[r.type]}{/* 연차 사유 비활성: · {r.reason} */}
                     </div>
                   </CardContent>
                 </Card>

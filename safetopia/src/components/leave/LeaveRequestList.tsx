@@ -74,7 +74,7 @@ export function LeaveRequestList({
                   </div>
                   <LeaveStatusBadge status={r.status} />
                 </div>
-                <p className="text-sm text-foreground/80">{r.reason}</p>
+                {/* 연차 사유 비활성: <p className="text-sm text-foreground/80">{r.reason}</p> */}
                 {r.status === LeaveStatus.REJECTED && r.rejectionReason && (
                   <p className="text-xs text-destructive">반려 사유: {r.rejectionReason}</p>
                 )}
@@ -100,8 +100,9 @@ export function LeaveRequestList({
                 <TableHead>기간</TableHead>
                 <TableHead>유형</TableHead>
                 <TableHead className="text-right">일수</TableHead>
-                <TableHead>사유</TableHead>
+                {/* 연차 사유 비활성: <TableHead>사유</TableHead> */}
                 <TableHead>상태</TableHead>
+                <TableHead>비고</TableHead>
                 <TableHead>신청</TableHead>
                 <TableHead>처리</TableHead>
                 {renderAction && <TableHead className="w-0" />}
@@ -123,16 +124,21 @@ export function LeaveRequestList({
                     <LeaveTypeBadge type={r.type} />
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">{r.days}</TableCell>
+                  <TableCell>
+                    <LeaveStatusBadge status={r.status} />
+                  </TableCell>
+                  {/* 연차 사유 비활성 — 반려 사유만 상태 열 옆에 남긴다.
                   <TableCell className="max-w-64">
                     <div className="truncate" title={r.reason}>{r.reason}</div>
-                    {r.status === LeaveStatus.REJECTED && r.rejectionReason && (
+                  </TableCell> */}
+                  <TableCell className="max-w-64">
+                    {r.status === LeaveStatus.REJECTED && r.rejectionReason ? (
                       <div className="truncate text-xs text-destructive" title={r.rejectionReason}>
                         반려: {r.rejectionReason}
                       </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <LeaveStatusBadge status={r.status} />
                   </TableCell>
                   <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">{formatKstDateTime(r.createdAt)}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">

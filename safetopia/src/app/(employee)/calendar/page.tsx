@@ -24,7 +24,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const [days, branch, { oracle }] = await Promise.all([
     prisma.leaveRequestDay.findMany({
       where: { userId: user.id, date: { gte: parseDate(first), lte: parseDate(last) } },
-      include: { leaveRequest: { select: { status: true, reason: true } } },
+      include: { leaveRequest: { select: { status: true } } }, // reason 제외(연차 사유 비활성)
     }),
     user.branchId ? prisma.branch.findUnique({ where: { id: user.branchId }, select: { closedWeekdays: true } }) : null,
     getHolidayOracle(),
@@ -105,7 +105,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                           ? "bg-primary text-primary-foreground"
                           : "bg-amber-100 text-amber-800",
                       )}
-                      title={`${LEAVE_TYPE_LABEL[leave.type]} · ${leave.leaveRequest.reason}`}
+                      title={LEAVE_TYPE_LABEL[leave.type]}
                     >
                       {LEAVE_TYPE_LABEL[leave.type]}
                     </div>

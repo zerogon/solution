@@ -158,7 +158,9 @@ export const leaveRequestSchema = z
     type: z.enum(LeaveType),
     startDate: isoDateSchema,
     endDate: isoDateSchema,
-    reason: z.string().trim().min(1, "사유를 입력해주세요.").max(300, "사유는 300자 이내로 입력해주세요."),
+    // 연차 사유 기능 비활성(2026-09-04) — 되살리려면 아래 한 줄로 교체.
+    // reason: z.string().trim().min(1, "사유를 입력해주세요.").max(300, "사유는 300자 이내로 입력해주세요."),
+    reason: z.string().trim().max(300).optional().default(""),
   })
   .superRefine((d, ctx) => {
     if (d.type !== LeaveType.FULL_DAY && d.startDate !== d.endDate) {
