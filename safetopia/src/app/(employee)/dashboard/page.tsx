@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarPlus, CalendarRange, ChevronRight, Clock, Gift, Hourglass, PlaneTakeoff } from "lucide-react";
+import { CalendarPlus, CalendarRange, ChevronRight, Clock, Gift, PlaneTakeoff } from "lucide-react";
 
 import { requireActiveUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
@@ -26,7 +26,7 @@ export default async function DashboardPage() {
   const [summary, upcoming, recent] = await Promise.all([
     getBalanceSummary(user.id, year),
     prisma.leaveRequest.findMany({
-      where: { userId: user.id, status: LeaveStatus.APPROVED, endDate: { gte: parseDate(today) } },
+      where: { userId: user.id, status: LeaveStatus.CONFIRMED, endDate: { gte: parseDate(today) } },
       orderBy: { startDate: "asc" },
       take: 3,
     }),
@@ -34,7 +34,7 @@ export default async function DashboardPage() {
       where: { userId: user.id },
       orderBy: { createdAt: "desc" },
       take: 5,
-      include: { approvedBy: { select: { name: true } } },
+      include: { cancelledBy: { select: { name: true } } },
     }),
   ]);
 
@@ -52,11 +52,10 @@ export default async function DashboardPage() {
       />
 
       {summary ? (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatCard icon={PlaneTakeoff} label="신청 가능" value={summary.available} unit="일" valueClassName="text-primary" />
-          <StatCard icon={Gift} label="실제 잔여" value={summary.remaining} unit="일" />
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard icon={PlaneTakeoff} label="잔여" value={summary.remaining} unit="일" valueClassName="text-primary" />
           <StatCard icon={Clock} label="사용" value={summary.used} unit="일" />
-          <StatCard icon={Hourglass} label="승인 대기" value={summary.pending} unit="일" valueClassName={summary.pending > 0 ? "text-amber-700" : undefined} />
+          <StatCard icon={Gift} label="총 보유" value={summary.total} unit="일" />
         </div>
       ) : (
         <Alert variant="warning">
@@ -104,7 +103,9 @@ export default async function DashboardPage() {
         </div>
         <LeaveRequestList
           rows={recent}
-          renderAction={(r) => (r.status === LeaveStatus.PENDING ? <CancelRequestButton id={r.id} /> : null)}
+          renderAction={(r) =>
+            r.status === LeaveStatus.CONFIRMED && toIsoDate(r.startDate) >= today ? <CancelRequestButton id={r.id} /> : null
+          }
         />
       </section>
     </div>

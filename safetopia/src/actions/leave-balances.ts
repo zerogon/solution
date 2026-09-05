@@ -7,9 +7,8 @@ import { writeAudit } from "@/lib/audit";
 import { LeaveError, toActionError, type ActionResult } from "@/lib/errors";
 import { summarize } from "@/lib/leave-balance";
 import { formatDays } from "@/lib/labels";
-import { parseDate } from "@/lib/utils";
 import { leaveAdjustSchema, leaveGrantSchema } from "@/lib/validators";
-import { AuditAction, AuditTargetType, LeaveStatus } from "@/generated/prisma/enums";
+import { AuditAction, AuditTargetType } from "@/generated/prisma/enums";
 
 const UNAUTHORIZED = { ok: false, message: "관리자만 사용할 수 있습니다." } as const;
 
@@ -39,8 +38,8 @@ export async function grantLeave(input: unknown): Promise<ActionResult> {
         create: { userId: d.userId, year: d.year, totalDays: d.totalDays, carriedOverDays: d.carriedOverDays },
         update: { totalDays: d.totalDays, carriedOverDays: d.carriedOverDays },
       });
-      // 부여를 줄여서 이미 승인된 사용분보다 적어지면 잔여가 음수가 된다 — 원칙적 불허.
-      if (summarize(balance, 0).remaining < 0) {
+      // 부여를 줄여서 이미 사용한 분보다 적어지면 잔여가 음수가 된다 — 원칙적 불허.
+      if (summarize(balance).remaining < 0) {
         throw new LeaveError(`이미 사용한 ${formatDays(balance.usedDays)}보다 적게 부여할 수 없습니다.`);
       }
       await writeAudit(
@@ -80,15 +79,7 @@ export async function adjustLeave(input: unknown): Promise<ActionResult> {
       const balance = await tx.leaveBalance.findUnique({ where: { userId_year: { userId: d.userId, year: d.year } } });
       if (!balance) throw new LeaveError(`${d.year}년 연차가 아직 부여되지 않았습니다. 먼저 부여해주세요.`);
 
-      const pending = await tx.leaveRequest.aggregate({
-        _sum: { days: true },
-        where: {
-          userId: d.userId,
-          status: LeaveStatus.PENDING,
-          startDate: { gte: parseDate(`${d.year}-01-01`), lte: parseDate(`${d.year}-12-31`) },
-        },
-      });
-      const after = summarize({ ...balance, adjustedDays: balance.adjustedDays + d.amount }, pending._sum.days ?? 0);
+      const after = summarize({ ...balance, adjustedDays: balance.adjustedDays + d.amount });
       if (after.remaining < 0) {
         throw new LeaveError(`조정 후 잔여가 음수가 됩니다. (잔여 ${formatDays(after.remaining)})`);
       }

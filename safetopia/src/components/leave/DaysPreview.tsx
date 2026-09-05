@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils";
  */
 export function DaysPreview({
   result,
-  available,
+  remaining,
 }: {
   result: LeaveDaysResult | null;
-  available: number;
+  remaining: number;
 }) {
   if (!result) {
     return (
@@ -32,7 +32,7 @@ export function DaysPreview({
     );
   }
 
-  const after = available - result.days;
+  const after = remaining - result.days;
   const short = after < 0;
   return (
     <div
@@ -59,7 +59,7 @@ export function DaysPreview({
             .join(", ")}
         </p>
       )}
-      {short && <p className="text-xs text-destructive">신청 가능 연차를 초과합니다.</p>}
+      {short && <p className="text-xs text-destructive">잔여 연차를 초과합니다.</p>}
     </div>
   );
 }

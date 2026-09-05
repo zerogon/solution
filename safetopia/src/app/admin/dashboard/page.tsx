@@ -1,33 +1,45 @@
 import Link from "next/link";
-import { CalendarOff, ClipboardCheck, Inbox, Store, Users } from "lucide-react";
+import { CalendarOff, CalendarRange, ClipboardList, Store, Users } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
-import { getPendingRequests } from "@/lib/pending-requests";
-import { formatKoMd, parseDate, todayKstIso } from "@/lib/utils";
+import { addDaysIso, formatKoMd, parseDate, todayKstIso } from "@/lib/utils";
 import { LEAVE_TYPE_LABEL } from "@/lib/labels";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PendingRequestCard } from "@/components/admin/PendingRequestCard";
-import { BranchStatus, EmployeeStatus, LeaveStatus, Role } from "@/generated/prisma/enums";
+import { LeaveRequestList } from "@/components/leave/LeaveRequestList";
+import { AdminRequestActions } from "@/components/admin/AdminRequestActions";
+import { BranchStatus, EmployeeStatus, Role } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
 
+const RECENT_LIMIT = 10;
+
+/** 승인 절차가 없으므로 대시보드는 "처리할 것"이 아니라 "지금 상황"을 보여 준다. */
 export default async function AdminDashboardPage() {
   const today = todayKstIso();
+  const weekEnd = addDaysIso(today, 6);
 
-  const [pendingCount, todayOff, activeEmployees, activeBranches, pending] = await Promise.all([
-    prisma.leaveRequest.count({ where: { status: LeaveStatus.PENDING } }),
+  const [todayOff, weekOffCount, activeEmployees, activeBranches, recent] = await Promise.all([
+    // LeaveRequestDay는 확정 건만 갖고 있으므로 상태 조건이 필요 없다.
     prisma.leaveRequestDay.findMany({
-      where: { date: parseDate(today), leaveRequest: { status: LeaveStatus.APPROVED } },
+      where: { date: parseDate(today) },
       include: { user: { select: { name: true, branch: { select: { name: true } } } } },
       orderBy: { user: { branch: { name: "asc" } } },
     }),
+    prisma.leaveRequestDay.count({ where: { date: { gte: parseDate(today), lte: parseDate(weekEnd) } } }),
     prisma.user.count({ where: { role: Role.EMPLOYEE, status: EmployeeStatus.ACTIVE } }),
     prisma.branch.count({ where: { status: BranchStatus.ACTIVE } }),
-    getPendingRequests(10),
+    prisma.leaveRequest.findMany({
+      orderBy: { createdAt: "desc" },
+      take: RECENT_LIMIT,
+      include: {
+        user: { select: { name: true, branch: { select: { name: true } } } },
+        cancelledBy: { select: { name: true } },
+      },
+    }),
   ]);
 
   const offByBranch = new Map<string, { name: string; type: string }[]>();
@@ -42,8 +54,8 @@ export default async function AdminDashboardPage() {
       <PageHeader title="관리자 대시보드" description={`${formatKoMd(today)} 기준`} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard icon={Inbox} label="승인 대기" value={pendingCount} unit="건" valueClassName={pendingCount > 0 ? "text-amber-700" : undefined} />
         <StatCard icon={CalendarOff} label="오늘 휴가자" value={todayOff.length} unit="명" />
+        <StatCard icon={CalendarRange} label="이번 주 휴가" value={weekOffCount} unit="건" />
         <StatCard icon={Users} label="재직 직원" value={activeEmployees} unit="명" />
         <StatCard icon={Store} label="운영 지점" value={activeBranches} unit="곳" />
       </div>
@@ -51,27 +63,23 @@ export default async function AdminDashboardPage() {
       <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="font-heading text-lg font-semibold">승인 대기</h2>
-            {pendingCount > pending.length && (
-              <Button variant="ghost" size="sm" render={<Link href="/admin/leaves?status=PENDING" />} nativeButton={false}>
-                전체 {pendingCount}건 보기
-              </Button>
-            )}
+            <h2 className="font-heading text-lg font-semibold">최근 신청</h2>
+            <Button variant="ghost" size="sm" render={<Link href="/admin/leaves" />} nativeButton={false}>
+              전체 보기
+            </Button>
           </div>
-          {pending.length === 0 ? (
+          {recent.length === 0 ? (
             <Card>
               <CardContent>
-                <EmptyState icon={ClipboardCheck} title="처리할 신청이 없습니다" description="새 신청이 들어오면 여기에 오래된 순으로 표시됩니다." />
+                <EmptyState icon={ClipboardList} title="아직 신청이 없습니다" description="직원이 신청하면 최신순으로 여기에 표시됩니다." />
               </CardContent>
             </Card>
           ) : (
-            <ul className="space-y-2">
-              {pending.map((r) => (
-                <li key={r.id}>
-                  <PendingRequestCard r={r} />
-                </li>
-              ))}
-            </ul>
+            <LeaveRequestList
+              rows={recent}
+              showUser
+              renderAction={(r) => <AdminRequestActions id={r.id} status={r.status} compact />}
+            />
           )}
         </section>
 

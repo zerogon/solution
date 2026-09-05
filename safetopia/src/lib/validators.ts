@@ -176,11 +176,6 @@ export const leaveRequestSchema = z
 
 export const requestIdSchema = z.object({ id: z.uuid() });
 
-export const rejectSchema = z.object({
-  id: z.uuid(),
-  reason: z.string().trim().min(1, "반려 사유를 입력해주세요.").max(300),
-});
-
 export const adminCancelSchema = z.object({
   id: z.uuid(),
   reason: optionalText(300),

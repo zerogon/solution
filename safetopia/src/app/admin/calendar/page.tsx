@@ -9,15 +9,15 @@ import { LEAVE_TYPE_LABEL, WEEKDAY_LABEL } from "@/lib/labels";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { LeaveStatus, LeaveType } from "@/generated/prisma/enums";
+import { LeaveType } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
 
-type SP = { m?: string; branch?: string; status?: string };
+type SP = { m?: string; branch?: string };
 
 /**
- * 전체 연차 캘린더(Phase 2). `LeaveRequestDay`(PENDING/APPROVED)를 지점·상태로 거른다.
- * 반려/취소는 자식 행이 없으므로 여기 나오지 않는다 — 그건 `/admin/leaves` 목록의 몫.
+ * 전체 연차 캘린더(Phase 2). `LeaveRequestDay`(확정 건만 존재)를 지점으로 거른다.
+ * 취소는 자식 행이 없으므로 여기 나오지 않는다 — 그건 `/admin/leaves` 목록의 몫.
  */
 export default async function AdminCalendarPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
@@ -25,18 +25,15 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
   const ym = resolveMonthParam(sp.m, today);
   const { first, last } = monthBounds(ym);
   const branch = sp.branch || "";
-  const status = sp.status === "APPROVED" || sp.status === "PENDING" ? sp.status : "";
 
   const [rows, branches, { oracle }] = await Promise.all([
     prisma.leaveRequestDay.findMany({
       where: {
         date: { gte: parseDate(first), lte: parseDate(last) },
         user: branch ? { branchId: branch } : undefined,
-        leaveRequest: status ? { status: status as LeaveStatus } : undefined,
       },
       include: {
         user: { select: { name: true, branch: { select: { name: true } } } },
-        leaveRequest: { select: { status: true } },
       },
       orderBy: [{ user: { branch: { name: "asc" } } }, { user: { name: "asc" } }],
     }),
@@ -53,12 +50,11 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
   const grid = monthGrid(ym);
   const [y, mo] = ym.split("-").map(Number);
 
-  const href = (over: Partial<{ m: string; branch: string; status: string }>) => {
+  const href = (over: Partial<{ m: string; branch: string }>) => {
     const q = new URLSearchParams();
-    const v = { m: ym, branch, status, ...over };
+    const v = { m: ym, branch, ...over };
     if (v.m !== today.slice(0, 7)) q.set("m", v.m);
     if (v.branch) q.set("branch", v.branch);
-    if (v.status) q.set("status", v.status);
     const s = q.toString();
     return `/admin/calendar${s ? `?${s}` : ""}`;
   };
@@ -72,7 +68,7 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
     <div className="space-y-6">
       <PageHeader
         title="전체 캘린더"
-        description="지점·상태로 걸러 누가 언제 쉬는지 한눈에 봅니다."
+        description="지점별로 누가 언제 쉬는지 한눈에 봅니다."
         action={
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon-sm" render={<Link href={href({ m: shiftMonth(ym, -1) })} />} nativeButton={false} aria-label="이전 달">
@@ -96,11 +92,6 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
               {b.name}
             </Link>
           ))}
-        </div>
-        <div className="flex gap-1.5">
-          <Link href={href({ status: "" })} className={chip(!status)}>전체</Link>
-          <Link href={href({ status: "APPROVED" })} className={chip(status === "APPROVED")}>승인</Link>
-          <Link href={href({ status: "PENDING" })} className={chip(status === "PENDING")}>대기</Link>
         </div>
       </div>
 
@@ -138,10 +129,7 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
                       {items.slice(0, 4).map((r) => (
                         <li
                           key={r.id}
-                          className={cn(
-                            "truncate rounded px-1 text-[10px] leading-4 sm:text-[11px]",
-                            r.leaveRequest.status === LeaveStatus.APPROVED ? "bg-primary/15 text-primary" : "bg-amber-100 text-amber-800",
-                          )}
+                          className="truncate rounded bg-primary/15 px-1 text-[10px] leading-4 text-primary sm:text-[11px]"
                           title={`${r.user.name} · ${r.user.branch?.name ?? ""} · ${LEAVE_TYPE_LABEL[r.type]}`}
                         >
                           {r.user.name}

@@ -4,7 +4,7 @@ import { ChevronRight, Plus, Users } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { EMPLOYEE_STATUS_LABEL, ROLE_LABEL, formatDays } from "@/lib/labels";
 import { summarize } from "@/lib/leave-balance";
-import { cn, parseDate, toIsoDate } from "@/lib/utils";
+import { cn, toIsoDate } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmployeeFormDialog } from "@/components/admin/EmployeeFormDialog";
-import { BranchStatus, EmployeeStatus, LeaveStatus, Role } from "@/generated/prisma/enums";
+import { BranchStatus, EmployeeStatus, Role } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ export default async function EmployeesPage({
       : EmployeeStatus.ACTIVE;
   const year = new Date().getUTCFullYear();
 
-  const [users, branches, pendingRows] = await Promise.all([
+  const [users, branches] = await Promise.all([
     prisma.user.findMany({
       where: statusFilter ? { status: statusFilter } : undefined,
       orderBy: [{ role: "asc" }, { branch: { name: "asc" } }, { name: "asc" }],
@@ -45,20 +45,11 @@ export default async function EmployeesPage({
       },
     }),
     prisma.branch.findMany({ where: { status: BranchStatus.ACTIVE }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.leaveRequest.groupBy({
-      by: ["userId"],
-      where: {
-        status: LeaveStatus.PENDING,
-        startDate: { gte: parseDate(`${year}-01-01`), lte: parseDate(`${year}-12-31`) },
-      },
-      _sum: { days: true },
-    }),
   ]);
-  const pendingByUser = new Map(pendingRows.map((r) => [r.userId, r._sum.days ?? 0]));
 
   const rows = users.map((u) => {
     const balance = u.leaveBalances[0];
-    const summary = balance ? summarize(balance, pendingByUser.get(u.id) ?? 0) : null;
+    const summary = balance ? summarize(balance) : null;
     return { ...u, summary };
   });
 
@@ -128,9 +119,9 @@ export default async function EmployeesPage({
                         </p>
                       </div>
                       <div className="text-right">
-                        <div className="text-[11px] text-muted-foreground">신청 가능</div>
+                        <div className="text-[11px] text-muted-foreground">잔여</div>
                         <div className="font-mono text-base font-semibold tabular-nums">
-                          {u.summary ? formatDays(u.summary.available) : "—"}
+                          {u.summary ? formatDays(u.summary.remaining) : "—"}
                         </div>
                       </div>
                       <ChevronRight className="size-4 text-muted-foreground" />
@@ -155,8 +146,7 @@ export default async function EmployeesPage({
                     <TableHead>상태</TableHead>
                     <TableHead className="text-right">{year} 총</TableHead>
                     <TableHead className="text-right">사용</TableHead>
-                    <TableHead className="text-right">대기</TableHead>
-                    <TableHead className="text-right">신청 가능</TableHead>
+                    <TableHead className="text-right">잔여</TableHead>
                     <TableHead className="w-0" />
                   </TableRow>
                 </TableHeader>
@@ -179,8 +169,7 @@ export default async function EmployeesPage({
                       </TableCell>
                       <TableCell className="text-right font-mono tabular-nums">{u.summary ? u.summary.total : "—"}</TableCell>
                       <TableCell className="text-right font-mono tabular-nums">{u.summary ? u.summary.used : "—"}</TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">{u.summary ? u.summary.pending : "—"}</TableCell>
-                      <TableCell className="text-right font-mono font-semibold tabular-nums">{u.summary ? u.summary.available : "—"}</TableCell>
+                      <TableCell className="text-right font-mono font-semibold tabular-nums">{u.summary ? u.summary.remaining : "—"}</TableCell>
                       <TableCell>
                         <Button variant="ghost" size="icon-sm" render={<Link href={`/admin/employees/${u.id}`} />} nativeButton={false} aria-label="상세">
                           <ChevronRight />

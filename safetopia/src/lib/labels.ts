@@ -31,9 +31,7 @@ export const LEAVE_TYPE_LABEL: Record<LeaveType, string> = {
 };
 
 export const LEAVE_STATUS_LABEL: Record<LeaveStatus, string> = {
-  [LeaveStatus.PENDING]: "승인 대기",
-  [LeaveStatus.APPROVED]: "승인",
-  [LeaveStatus.REJECTED]: "반려",
+  [LeaveStatus.CONFIRMED]: "확정",
   [LeaveStatus.CANCELLED]: "취소",
 };
 

@@ -46,8 +46,8 @@ export default async function LeaveRequestPage() {
                 : " · 휴무 없음"}
               {summary && (
                 <>
-                  {" · 신청 가능 "}
-                  <span className="font-mono font-semibold text-foreground tabular-nums">{formatDays(summary.available)}</span>
+                  {" · 잔여 "}
+                  <span className="font-mono font-semibold text-foreground tabular-nums">{formatDays(summary.remaining)}</span>
                 </>
               )}
             </>
@@ -82,7 +82,7 @@ export default async function LeaveRequestPage() {
               <LeaveRequestForm
                 closedWeekdays={branch!.closedWeekdays}
                 holidays={{ covered: payload?.covered ?? [], years: payload?.years ?? {} }}
-                available={summary!.available}
+                remaining={summary!.remaining}
                 todayIso={today}
               />
             </CardContent>

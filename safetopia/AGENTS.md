@@ -16,7 +16,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Base UI 주의**: `asChild` 없음 → `render={<Link/>}`. `Select.onValueChange`는 `(value: string | null)`. 메뉴 항목에 `<button type=submit>`을 넘길 땐 `nativeButton`.
 
 ## 디자인
-- `src/app/globals.css` OKLCH 토큰. 형제와 구조·L/C 동일, **hue만 150(세이지 그린)**. 새 색은 150 계열 안에서; 상태색(대기 amber/반려 destructive)만 예외.
+- `src/app/globals.css` OKLCH 토큰. 형제와 구조·L/C 동일, **hue만 150(세이지 그린)**. 새 색은 150 계열 안에서; 상태색은 취소(muted)뿐이다.
 - 라이트 고정(`layout.tsx`가 `colorScheme: light`). `.dark` 블록은 **가드로 남긴다** — 지우면 `dark:` 유틸이 OS 다크에서 되살아난다.
 - 숫자는 `font-mono tabular-nums`. 페이지는 `<div className="space-y-6"><PageHeader/>…</div>`.
 - 셸 지오메트리 `--app-sidebar-w`(16rem) + `--app-content-w`(88rem) = 1664px 고정 쌍.
@@ -29,9 +29,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## 도메인 핵심
 - 일수 계산 `src/lib/leave-days.ts`(순수, 서버·클라이언트 공유, vitest). **주말 자동 제외 없음** — 지점 휴무 요일 + 공휴일만 뺀다. 공휴일 데이터 없는 연도는 `uncovered`로 신청 차단(적게 세면 직원 손해 방향이라 fail-closed).
 - 공휴일 `src/lib/holidays-server.ts` — Google iCal 피드, 12h 메모리 캐시, stale 폴백. `/api/holidays`는 얇은 래퍼.
-- 상태 전이는 전부 `src/lib/leave-service.ts`, 전부 `$transaction`. balance 행 `FOR UPDATE`로 같은 직원 동시 신청을 직렬화하고, `leave_request_days(user_id, date)` 유니크가 최후 방어선. `npm run race-test`로 검증(기대: 성공 1 / 차단 9).
-- `LeaveRequestDay`는 PENDING/APPROVED 동안만 존재. 반려/취소 시 **삭제**(그래야 그 날 재신청 가능). 부모 `LeaveRequest`는 이력으로 남는다.
-- 잔여 산식 `src/lib/leave-balance.ts`: total = 부여+이월+조정, remaining = total - used, available = remaining - pending(집계). `usedDays`만 컬럼, `pendingDays`는 SUM.
+- **승인 절차 없음**(2026-09-05 제거). 신청 = 확정(`CONFIRMED`). `LeaveStatus`는 `CONFIRMED | CANCELLED` 둘뿐.
+- 상태 전이는 전부 `src/lib/leave-service.ts`, 전부 `$transaction`. 신청 트랜잭션이 `usedDays`를 더하고, 취소가 되돌린다. balance 행 `FOR UPDATE`로 같은 직원 동시 신청을 직렬화하고, `leave_request_days(user_id, date)` 유니크가 최후 방어선. `npm run race-test`로 검증(기대: 성공 1 / 차단 9).
+- 취소 두 경로: 직원 본인은 **시작일이 오늘(KST) 이후**인 건만(`cancelOwnRequest`), 관리자는 언제든 사유 선택(`adminCancelRequest`, 감사 로그). 둘 다 `cancelledBy/At`, 관리자 사유는 `cancelReason`.
+- `LeaveRequestDay`는 CONFIRMED 동안만 존재. 취소 시 **삭제**(그래야 그 날 재신청 가능). 부모 `LeaveRequest`는 이력으로 남는다. 캘린더·오늘 휴가자는 이 표를 상태 조건 없이 읽는다.
+- 잔여 산식 `src/lib/leave-balance.ts`: total = 부여+이월+조정, remaining = total - used. 대기/신청 가능 개념 없음.
 
 ## 인증
 - `src/auth.config.ts` `ROLE_PREFIX`: `/admin`만 ADMIN. 나머지는 세션만 있으면 접근(관리자도 직원 화면 사용 가능).

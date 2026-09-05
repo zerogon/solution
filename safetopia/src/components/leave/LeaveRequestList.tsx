@@ -17,17 +17,17 @@ export interface LeaveRequestRow {
   days: number;
   reason: string;
   status: LeaveStatus;
-  rejectionReason: string | null;
+  cancelReason: string | null;
   createdAt: Date;
-  approvedAt: Date | null;
-  approvedBy?: { name: string } | null;
+  cancelledAt: Date | null;
+  cancelledBy?: { name: string } | null;
   /** 관리자 목록에서만 채운다. */
   user?: { name: string; branch: { name: string } | null } | null;
 }
 
 /**
  * 신청 목록 — 모바일 카드 / 데스크톱 테이블. 직원 이력·관리자 목록·직원 상세가 공유한다.
- * `renderAction`으로 행별 버튼(취소/승인/반려)을 끼운다.
+ * `renderAction`으로 행별 버튼(취소)을 끼운다.
  */
 export function LeaveRequestList({
   rows,
@@ -49,6 +49,11 @@ export function LeaveRequestList({
       </Card>
     );
   }
+
+  const cancelInfo = (r: LeaveRequestRow) =>
+    r.status === LeaveStatus.CANCELLED && r.cancelledAt
+      ? `${formatKstDateTime(r.cancelledAt)}${r.cancelledBy ? ` ${r.cancelledBy.name}` : ""}`
+      : null;
 
   return (
     <>
@@ -75,13 +80,13 @@ export function LeaveRequestList({
                   <LeaveStatusBadge status={r.status} />
                 </div>
                 {/* 연차 사유 비활성: <p className="text-sm text-foreground/80">{r.reason}</p> */}
-                {r.status === LeaveStatus.REJECTED && r.rejectionReason && (
-                  <p className="text-xs text-destructive">반려 사유: {r.rejectionReason}</p>
+                {r.status === LeaveStatus.CANCELLED && r.cancelReason && (
+                  <p className="text-xs text-muted-foreground">취소 사유: {r.cancelReason}</p>
                 )}
                 <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
                   <span>
                     신청 {formatKstDateTime(r.createdAt)}
-                    {r.approvedAt && r.approvedBy && ` · 처리 ${formatKstDateTime(r.approvedAt)} ${r.approvedBy.name}`}
+                    {cancelInfo(r) && ` · 취소 ${cancelInfo(r)}`}
                   </span>
                   {renderAction && <span>{renderAction(r)}</span>}
                 </div>
@@ -102,9 +107,8 @@ export function LeaveRequestList({
                 <TableHead className="text-right">일수</TableHead>
                 {/* 연차 사유 비활성: <TableHead>사유</TableHead> */}
                 <TableHead>상태</TableHead>
-                <TableHead>비고</TableHead>
                 <TableHead>신청</TableHead>
-                <TableHead>처리</TableHead>
+                <TableHead>취소</TableHead>
                 {renderAction && <TableHead className="w-0" />}
               </TableRow>
             </TableHeader>
@@ -127,25 +131,20 @@ export function LeaveRequestList({
                   <TableCell>
                     <LeaveStatusBadge status={r.status} />
                   </TableCell>
-                  {/* 연차 사유 비활성 — 반려 사유만 상태 열 옆에 남긴다.
+                  {/* 연차 사유 비활성:
                   <TableCell className="max-w-64">
                     <div className="truncate" title={r.reason}>{r.reason}</div>
                   </TableCell> */}
-                  <TableCell className="max-w-64">
-                    {r.status === LeaveStatus.REJECTED && r.rejectionReason ? (
-                      <div className="truncate text-xs text-destructive" title={r.rejectionReason}>
-                        반려: {r.rejectionReason}
-                      </div>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
                   <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">{formatKstDateTime(r.createdAt)}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {r.approvedAt ? (
+                  <TableCell className="max-w-64 text-xs text-muted-foreground">
+                    {cancelInfo(r) ? (
                       <>
-                        <span className="font-mono tabular-nums">{formatKstDateTime(r.approvedAt)}</span>
-                        {r.approvedBy && ` ${r.approvedBy.name}`}
+                        <span className="font-mono tabular-nums">{cancelInfo(r)}</span>
+                        {r.cancelReason && (
+                          <div className="truncate" title={r.cancelReason}>
+                            {r.cancelReason}
+                          </div>
+                        )}
                       </>
                     ) : (
                       "—"

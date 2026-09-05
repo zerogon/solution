@@ -12,23 +12,26 @@ import { LEAVE_DAYS_ERROR_MESSAGE, computeLeaveDays } from "@/lib/leave-days";
 import { summarize } from "@/lib/leave-balance";
 import { writeAudit } from "@/lib/audit";
 import { formatDays } from "@/lib/labels";
-import { parseDate } from "@/lib/utils";
+import { parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
 
 /**
- * 연차 신청/승인/반려/취소의 상태 전이 — 전부 여기서, 전부 트랜잭션 안에서.
+ * 연차 신청/취소의 상태 전이 — 전부 여기서, 전부 트랜잭션 안에서.
+ *
+ * 승인 절차는 없다(2026-09-05). 신청이 곧 확정(CONFIRMED)이고 같은 트랜잭션에서
+ * `usedDays`를 더한다. 취소(본인/관리자)는 `usedDays`를 되돌린다.
  *
  * 액션(`src/actions/leave-requests.ts`)과 동시성 검증 스크립트(`scripts/race-test.ts`)가
  * **같은 함수**를 부른다. 그래서 `db`를 인자로 받는다.
  *
  * ## 동시성
  * 같은 직원의 동시 신청은 `leave_balances` 행 `FOR UPDATE`가 직렬화한다 — 두 번째
- * 트랜잭션은 첫 번째가 커밋될 때까지 기다렸다가 갱신된 pending 합을 본다.
+ * 트랜잭션은 첫 번째가 커밋될 때까지 기다렸다가 갱신된 usedDays를 본다.
  * 그 잠금을 우회하는 어떤 경로(예: 다른 연도 balance)든 `leave_request_days(user_id, date)`
  * 유니크가 최후 방어선으로 막는다(P2002 → 액션이 메시지로 번역).
  *
  * ## 자식 행(LeaveRequestDay)
- * PENDING/APPROVED 동안만 존재한다. REJECTED/CANCELLED로 가면 같은 트랜잭션에서 지운다 —
- * 그래야 반려된 날짜에 다시 신청할 수 있다. 부모 행은 이력으로 남는다.
+ * CONFIRMED 동안만 존재한다. CANCELLED로 가면 같은 트랜잭션에서 지운다 —
+ * 그래야 취소한 날짜에 다시 신청할 수 있다. 부모 행은 이력으로 남는다.
  */
 
 type Actor = { id: string; name: string };
@@ -43,20 +46,8 @@ async function lockBalance(tx: TxClient, userId: string, year: number) {
   return balance;
 }
 
-async function pendingSum(tx: TxClient, userId: string, year: number) {
-  const agg = await tx.leaveRequest.aggregate({
-    _sum: { days: true },
-    where: {
-      userId,
-      status: LeaveStatus.PENDING,
-      startDate: { gte: parseDate(`${year}-01-01`), lte: parseDate(`${year}-12-31`) },
-    },
-  });
-  return agg._sum.days ?? 0;
-}
-
 async function lockRequest(tx: TxClient, requestId: string) {
-  // 상태 전이 경쟁(승인 vs 취소가 동시에)을 막기 위해 행을 잠근 뒤 읽는다.
+  // 상태 전이 경쟁(본인 취소 vs 관리자 취소가 동시에)을 막기 위해 행을 잠근 뒤 읽는다.
   await tx.$queryRaw`SELECT id FROM leave_requests WHERE id = ${requestId} FOR UPDATE`;
   const req = await tx.leaveRequest.findUnique({
     where: { id: requestId },
@@ -66,9 +57,32 @@ async function lockRequest(tx: TxClient, requestId: string) {
   return req;
 }
 
+/** 확정 건을 취소 상태로 옮기고 차감분을 되돌린다. 호출자가 권한·조건 검사를 끝낸 뒤 부른다. */
+async function cancelConfirmed(
+  tx: TxClient,
+  req: Awaited<ReturnType<typeof lockRequest>>,
+  by: { id: string; reason: string | null },
+) {
+  const balance = await lockBalance(tx, req.userId, req.startDate.getUTCFullYear());
+  await tx.leaveBalance.update({
+    where: { id: balance.id },
+    data: { usedDays: { decrement: req.days } },
+  });
+  await tx.leaveRequestDay.deleteMany({ where: { leaveRequestId: req.id } });
+  return tx.leaveRequest.update({
+    where: { id: req.id },
+    data: {
+      status: LeaveStatus.CANCELLED,
+      cancelledById: by.id,
+      cancelledAt: new Date(),
+      cancelReason: by.reason,
+    },
+  });
+}
+
 type TxClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
-// ───────────────────────── 신청 ─────────────────────────
+// ───────────────────────── 신청(= 확정) ─────────────────────────
 
 export async function createLeaveRequest(
   db: PrismaClient,
@@ -95,11 +109,10 @@ export async function createLeaveRequest(
 
   return db.$transaction(async (tx) => {
     const balance = await lockBalance(tx, input.userId, year);
-    const pending = await pendingSum(tx, input.userId, year);
-    const { available } = summarize(balance, pending);
-    if (calc.days > available) {
+    const { remaining } = summarize(balance);
+    if (calc.days > remaining) {
       throw new LeaveError(
-        `신청 가능 연차가 부족합니다. (신청 ${formatDays(calc.days)} / 가능 ${formatDays(Math.max(available, 0))})`,
+        `잔여 연차가 부족합니다. (신청 ${formatDays(calc.days)} / 잔여 ${formatDays(Math.max(remaining, 0))})`,
       );
     }
 
@@ -110,10 +123,10 @@ export async function createLeaveRequest(
       select: { date: true },
     });
     if (clash) {
-      throw new LeaveError("이미 신청(대기/승인)된 날짜가 포함되어 있습니다.");
+      throw new LeaveError("이미 신청된 날짜가 포함되어 있습니다.");
     }
 
-    return tx.leaveRequest.create({
+    const created = await tx.leaveRequest.create({
       data: {
         userId: input.userId,
         type: input.type,
@@ -130,129 +143,42 @@ export async function createLeaveRequest(
         },
       },
     });
+    // 신청 = 확정. 같은 트랜잭션에서 차감해야 잔여와 신청이 어긋나지 않는다.
+    await tx.leaveBalance.update({
+      where: { id: balance.id },
+      data: { usedDays: { increment: calc.days } },
+    });
+    return created;
   });
 }
 
 // ───────────────────────── 직원 본인 취소 ─────────────────────────
 
-export async function cancelOwnPendingRequest(db: PrismaClient, input: { requestId: string; userId: string }) {
+/** 시작일이 오늘(KST) 이후인 확정 건만 본인이 취소할 수 있다. 지난 휴가는 관리자 몫. */
+export async function cancelOwnRequest(db: PrismaClient, input: { requestId: string; userId: string }) {
   return db.$transaction(async (tx) => {
     const req = await lockRequest(tx, input.requestId);
     if (req.userId !== input.userId) throw new LeaveError("본인의 신청만 취소할 수 있습니다.");
-    if (req.status !== LeaveStatus.PENDING) {
-      throw new LeaveError("승인 대기 중인 신청만 취소할 수 있습니다. 승인된 연차는 관리자에게 요청하세요.");
+    if (req.status !== LeaveStatus.CONFIRMED) throw new LeaveError("이미 취소된 신청입니다.");
+    if (toIsoDate(req.startDate) < todayKstIso()) {
+      throw new LeaveError("이미 시작된 휴가는 직접 취소할 수 없습니다. 관리자에게 요청하세요.");
     }
-    await tx.leaveRequestDay.deleteMany({ where: { leaveRequestId: req.id } });
-    return tx.leaveRequest.update({
-      where: { id: req.id },
-      data: { status: LeaveStatus.CANCELLED, cancelledById: input.userId, cancelledAt: new Date() },
-    });
+    return cancelConfirmed(tx, req, { id: input.userId, reason: null });
   });
 }
 
-// ───────────────────────── 관리자 승인/반려/취소 ─────────────────────────
+// ───────────────────────── 관리자 취소 ─────────────────────────
 
-export async function approveLeaveRequest(db: PrismaClient, input: { requestId: string; actor: Actor }) {
-  return db.$transaction(async (tx) => {
-    const req = await lockRequest(tx, input.requestId);
-    if (req.status !== LeaveStatus.PENDING) throw new LeaveError("이미 처리된 신청입니다.");
-
-    const year = req.startDate.getUTCFullYear();
-    const balance = await lockBalance(tx, req.userId, year);
-    // 승인 시점의 실제 잔여(대기분 제외)만 본다 — 대기 중인 다른 신청은 아직 차감 전이다.
-    const { remaining } = summarize(balance, 0);
-    if (req.days > remaining) {
-      throw new LeaveError(
-        `잔여 연차가 부족해 승인할 수 없습니다. (신청 ${formatDays(req.days)} / 잔여 ${formatDays(remaining)})`,
-      );
-    }
-
-    const updated = await tx.leaveRequest.update({
-      where: { id: req.id },
-      data: { status: LeaveStatus.APPROVED, approvedById: input.actor.id, approvedAt: new Date() },
-    });
-    await tx.leaveBalance.update({
-      where: { id: balance.id },
-      data: { usedDays: { increment: req.days } },
-    });
-    await writeAudit(
-      {
-        actorId: input.actor.id,
-        actorName: input.actor.name,
-        action: AuditAction.APPROVE_REQUEST,
-        targetType: AuditTargetType.LEAVE_REQUEST,
-        targetId: req.id,
-        description: `${req.user.name} ${formatDays(req.days)} 승인`,
-        metadata: { userId: req.userId, days: req.days, startDate: req.startDate, endDate: req.endDate },
-      },
-      tx,
-    );
-    return updated;
-  });
-}
-
-export async function rejectLeaveRequest(
-  db: PrismaClient,
-  input: { requestId: string; reason: string; actor: Actor },
-) {
-  return db.$transaction(async (tx) => {
-    const req = await lockRequest(tx, input.requestId);
-    if (req.status !== LeaveStatus.PENDING) throw new LeaveError("이미 처리된 신청입니다.");
-
-    await tx.leaveRequestDay.deleteMany({ where: { leaveRequestId: req.id } });
-    const updated = await tx.leaveRequest.update({
-      where: { id: req.id },
-      data: {
-        status: LeaveStatus.REJECTED,
-        rejectionReason: input.reason,
-        approvedById: input.actor.id,
-        approvedAt: new Date(),
-      },
-    });
-    await writeAudit(
-      {
-        actorId: input.actor.id,
-        actorName: input.actor.name,
-        action: AuditAction.REJECT_REQUEST,
-        targetType: AuditTargetType.LEAVE_REQUEST,
-        targetId: req.id,
-        description: `${req.user.name} ${formatDays(req.days)} 반려 — ${input.reason}`,
-        metadata: { userId: req.userId, reason: input.reason },
-      },
-      tx,
-    );
-    return updated;
-  });
-}
-
-/** 승인된 연차의 관리자 취소. usedDays를 되돌리고 자식 행을 지워 그 날짜를 다시 열어 준다. */
+/** 확정된 연차의 관리자 취소. 날짜 제한 없음, 사유 선택, 감사 로그 기록. */
 export async function adminCancelRequest(
   db: PrismaClient,
   input: { requestId: string; reason: string | null; actor: Actor },
 ) {
   return db.$transaction(async (tx) => {
     const req = await lockRequest(tx, input.requestId);
-    if (req.status !== LeaveStatus.APPROVED && req.status !== LeaveStatus.PENDING) {
-      throw new LeaveError("이미 종료된 신청입니다.");
-    }
+    if (req.status !== LeaveStatus.CONFIRMED) throw new LeaveError("이미 취소된 신청입니다.");
 
-    if (req.status === LeaveStatus.APPROVED) {
-      const balance = await lockBalance(tx, req.userId, req.startDate.getUTCFullYear());
-      await tx.leaveBalance.update({
-        where: { id: balance.id },
-        data: { usedDays: { decrement: req.days } },
-      });
-    }
-    await tx.leaveRequestDay.deleteMany({ where: { leaveRequestId: req.id } });
-    const updated = await tx.leaveRequest.update({
-      where: { id: req.id },
-      data: {
-        status: LeaveStatus.CANCELLED,
-        cancelledById: input.actor.id,
-        cancelledAt: new Date(),
-        rejectionReason: input.reason,
-      },
-    });
+    const updated = await cancelConfirmed(tx, req, { id: input.actor.id, reason: input.reason });
     await writeAudit(
       {
         actorId: input.actor.id,
@@ -260,8 +186,8 @@ export async function adminCancelRequest(
         action: AuditAction.CANCEL_REQUEST_ADMIN,
         targetType: AuditTargetType.LEAVE_REQUEST,
         targetId: req.id,
-        description: `${req.user.name} ${formatDays(req.days)} 취소(${req.status === LeaveStatus.APPROVED ? "승인분 복원" : "대기분"})${input.reason ? ` — ${input.reason}` : ""}`,
-        metadata: { userId: req.userId, days: req.days, previousStatus: req.status },
+        description: `${req.user.name} ${formatDays(req.days)} 취소(연차 복원)${input.reason ? ` — ${input.reason}` : ""}`,
+        metadata: { userId: req.userId, days: req.days, startDate: req.startDate, endDate: req.endDate },
       },
       tx,
     );

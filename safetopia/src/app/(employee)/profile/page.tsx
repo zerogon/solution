@@ -71,12 +71,11 @@ export default async function ProfilePage() {
         </CardHeader>
         <CardContent>
           {summary ? (
-            <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <dl className="grid grid-cols-3 gap-2">
               {[
                 ["총 보유", summary.total],
                 ["사용", summary.used],
-                ["승인 대기", summary.pending],
-                ["신청 가능", summary.available],
+                ["잔여", summary.remaining],
               ].map(([label, v]) => (
                 <div key={label as string} className="rounded-md bg-muted/50 px-3 py-2">
                   <dt className="text-[11px] text-muted-foreground">{label}</dt>

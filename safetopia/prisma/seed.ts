@@ -128,7 +128,7 @@ async function main() {
     endIso: string,
     reason: string,
     status: LeaveStatus,
-    opts: { rejection?: string } = {},
+    opts: { cancelReason?: string } = {},
   ) {
     const dates: string[] = [];
     if (type === LeaveType.FULL_DAY) {
@@ -137,7 +137,8 @@ async function main() {
       dates.push(startIso);
     }
     const days = type === LeaveType.FULL_DAY ? dates.length : 0.5;
-    const keepDays = status === LeaveStatus.PENDING || status === LeaveStatus.APPROVED;
+    // 확정 건만 날짜 행을 갖고 잔액을 차감한다. 취소 건은 이력만 남는다(leave-service.ts 규칙과 동일).
+    const confirmed = status === LeaveStatus.CONFIRMED;
     const req = await prisma.leaveRequest.create({
       data: {
         userId: user.id,
@@ -147,15 +148,15 @@ async function main() {
         days,
         reason,
         status,
-        rejectionReason: opts.rejection ?? null,
-        approvedById: status === LeaveStatus.PENDING ? null : admin.id,
-        approvedAt: status === LeaveStatus.PENDING ? null : new Date(),
-        dayRows: keepDays
+        cancelReason: opts.cancelReason ?? null,
+        cancelledById: confirmed ? null : admin.id,
+        cancelledAt: confirmed ? null : new Date(),
+        dayRows: confirmed
           ? { create: dates.map((iso) => ({ userId: user.id, date: parseDate(iso), type })) }
           : undefined,
       },
     });
-    if (status === LeaveStatus.APPROVED) {
+    if (confirmed) {
       await prisma.leaveBalance.update({
         where: { userId_year: { userId: user.id, year } },
         data: { usedDays: { increment: days } },
@@ -164,18 +165,18 @@ async function main() {
     return req;
   }
 
-  // 승인 완료 2건(과거)
-  await request(e1, LeaveType.FULL_DAY, addDays(today, -20), addDays(today, -19), "가족 여행", LeaveStatus.APPROVED);
-  await request(e4, LeaveType.PM_HALF, addDays(today, -7), addDays(today, -7), "병원 진료", LeaveStatus.APPROVED);
-  // 오늘 휴가자 1건(승인)
-  await request(e7, LeaveType.FULL_DAY, today, today, "개인 사정", LeaveStatus.APPROVED);
-  // 승인 대기 3건(미래)
-  await request(e2, LeaveType.FULL_DAY, addDays(today, 5), addDays(today, 6), "이사", LeaveStatus.PENDING);
-  await request(e5, LeaveType.AM_HALF, addDays(today, 3), addDays(today, 3), "관공서 방문", LeaveStatus.PENDING);
-  await request(e1, LeaveType.FULL_DAY, addDays(today, 12), addDays(today, 12), "결혼식 참석", LeaveStatus.PENDING);
-  // 반려 1건
-  await request(e2, LeaveType.FULL_DAY, addDays(today, -3), addDays(today, -3), "휴식", LeaveStatus.REJECTED, {
-    rejection: "당일 지점 인원 부족",
+  // 확정 — 과거 2건(본인 취소 불가, 관리자만)
+  await request(e1, LeaveType.FULL_DAY, addDays(today, -20), addDays(today, -19), "가족 여행", LeaveStatus.CONFIRMED);
+  await request(e4, LeaveType.PM_HALF, addDays(today, -7), addDays(today, -7), "병원 진료", LeaveStatus.CONFIRMED);
+  // 확정 — 오늘 휴가자 1건
+  await request(e7, LeaveType.FULL_DAY, today, today, "개인 사정", LeaveStatus.CONFIRMED);
+  // 확정 — 미래 3건(직원 화면에서 "신청 취소" 버튼 확인용)
+  await request(e2, LeaveType.FULL_DAY, addDays(today, 5), addDays(today, 6), "이사", LeaveStatus.CONFIRMED);
+  await request(e5, LeaveType.AM_HALF, addDays(today, 3), addDays(today, 3), "관공서 방문", LeaveStatus.CONFIRMED);
+  await request(e1, LeaveType.FULL_DAY, addDays(today, 12), addDays(today, 12), "결혼식 참석", LeaveStatus.CONFIRMED);
+  // 관리자 취소 1건
+  await request(e2, LeaveType.FULL_DAY, addDays(today, -3), addDays(today, -3), "휴식", LeaveStatus.CANCELLED, {
+    cancelReason: "직원 요청으로 취소",
   });
 
   console.log("\n✅ 시드 완료");

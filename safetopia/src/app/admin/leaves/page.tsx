@@ -43,7 +43,7 @@ export default async function AdminLeavesPage({ searchParams }: { searchParams: 
 
   return (
     <div className="space-y-6">
-      <PageHeader title="연차 관리" description="전체 신청을 처리하고 직원별 연차 현황을 확인합니다." />
+      <PageHeader title="연차 관리" description="전체 신청 내역과 직원별 연차 현황을 확인합니다." />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-lg bg-muted p-[3px]">
@@ -82,11 +82,11 @@ async function RequestsTab({ year, branch, status }: { year: { gte: Date; lte: D
       status,
       user: branch ? { branchId: branch } : undefined,
     },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    orderBy: [{ createdAt: "desc" }],
     take: 200,
     include: {
       user: { select: { name: true, branch: { select: { name: true } } } },
-      approvedBy: { select: { name: true } },
+      cancelledBy: { select: { name: true } },
     },
   });
   return (
@@ -127,9 +127,9 @@ async function SummaryTab({ year, branch }: { year: number; branch: string }) {
                     {s ? (
                       <div className="text-right text-xs text-muted-foreground">
                         <div>
-                          총 {s.total} · 사용 {s.used} · 대기 {s.pending}
+                          총 {s.total} · 사용 {s.used}
                         </div>
-                        <div className="font-mono text-base font-semibold text-foreground tabular-nums">{formatDays(s.available)}</div>
+                        <div className="font-mono text-base font-semibold text-foreground tabular-nums">{formatDays(s.remaining)}</div>
                       </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">미부여</span>
@@ -150,9 +150,7 @@ async function SummaryTab({ year, branch }: { year: number; branch: string }) {
                 <TableHead>지점</TableHead>
                 <TableHead className="text-right">총 보유</TableHead>
                 <TableHead className="text-right">사용</TableHead>
-                <TableHead className="text-right">대기</TableHead>
-                <TableHead className="text-right">실제 잔여</TableHead>
-                <TableHead className="text-right">신청 가능</TableHead>
+                <TableHead className="text-right">잔여</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -170,12 +168,10 @@ async function SummaryTab({ year, branch }: { year: number; branch: string }) {
                       <>
                         <TableCell className="text-right font-mono tabular-nums">{s.total}</TableCell>
                         <TableCell className="text-right font-mono tabular-nums">{s.used}</TableCell>
-                        <TableCell className="text-right font-mono tabular-nums">{s.pending}</TableCell>
-                        <TableCell className="text-right font-mono tabular-nums">{s.remaining}</TableCell>
-                        <TableCell className="text-right font-mono font-semibold tabular-nums">{s.available}</TableCell>
+                        <TableCell className="text-right font-mono font-semibold tabular-nums">{s.remaining}</TableCell>
                       </>
                     ) : (
-                      <TableCell colSpan={5} className="text-right text-xs text-muted-foreground">
+                      <TableCell colSpan={3} className="text-right text-xs text-muted-foreground">
                         {year}년 미부여
                       </TableCell>
                     )}

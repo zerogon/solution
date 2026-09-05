@@ -34,10 +34,9 @@ enum LeaveType {
   PM_HALF
 }
 
+/// 승인 절차 없음(2026-09-05). 신청 즉시 CONFIRMED로 확정·차감되고, 취소만 남는다.
 enum LeaveStatus {
-  PENDING
-  APPROVED
-  REJECTED
+  CONFIRMED
   CANCELLED
 }
 
@@ -54,8 +53,6 @@ enum AuditAction {
   GRANT_LEAVE
   ADJUST_LEAVE
   CARRY_OVER_LEAVE
-  APPROVE_REQUEST
-  REJECT_REQUEST
   CANCEL_REQUEST_ADMIN
 }
 
@@ -69,8 +66,6 @@ enum AuditTargetType {
 /// Phase 2 — 인앱 알림.
 enum NotificationType {
   REQUEST_CREATED
-  REQUEST_APPROVED
-  REQUEST_REJECTED
   REQUEST_CANCELLED
   LEAVE_ADJUSTED
 }
@@ -97,7 +92,6 @@ model User {
   leaveBalances     LeaveBalance[]
   leaveRequests     LeaveRequest[]    @relation("RequestOwner")
   leaveDays         LeaveRequestDay[]
-  approvedRequests  LeaveRequest[]    @relation("RequestApprover")
   cancelledRequests LeaveRequest[]    @relation("RequestCanceller")
   adjustments       LeaveAdjustment[] @relation("AdjustmentTarget")
   adjustmentsMade   LeaveAdjustment[] @relation("AdjustmentActor")
@@ -137,8 +131,7 @@ model LeaveBalance {
   totalDays       Float    @default(0) @map("total_days")
   carriedOverDays Float    @default(0) @map("carried_over_days")
   adjustedDays    Float    @default(0) @map("adjusted_days")
-  /// 승인 완료 누계. approve / adminCancelApproved 에서만 변경한다.
-  /// pendingDays는 저장하지 않고 PENDING 신청의 days 합으로 집계한다.
+  /// 확정된 사용 누계. 신청 시 증가, 취소(본인/관리자) 시 감소 — 전부 leave-service.ts 트랜잭션 안에서.
   usedDays        Float    @default(0) @map("used_days")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -150,26 +143,24 @@ model LeaveBalance {
 }
 
 model LeaveRequest {
-  id              String      @id @default(uuid())
-  userId          String      @map("user_id")
-  type            LeaveType
-  startDate       DateTime    @map("start_date") @db.Date
-  endDate         DateTime    @map("end_date") @db.Date
+  id            String      @id @default(uuid())
+  userId        String      @map("user_id")
+  type          LeaveType
+  startDate     DateTime    @map("start_date") @db.Date
+  endDate       DateTime    @map("end_date") @db.Date
   /// 신청 시점 계산값(지점 휴무·공휴일 제외). 0.5 단위.
-  days            Float
+  days          Float
   /// 연차 사유 — 2026-09-04 UI에서 비활성(빈 문자열 저장). 컬럼은 마이그레이션 없이 유지.
-  reason          String
-  status          LeaveStatus @default(PENDING)
-  rejectionReason String?     @map("rejection_reason")
-  approvedById    String?     @map("approved_by_id")
-  approvedAt      DateTime?   @map("approved_at")
-  cancelledById   String?     @map("cancelled_by_id")
-  cancelledAt     DateTime?   @map("cancelled_at")
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  reason        String
+  status        LeaveStatus @default(CONFIRMED)
+  /// 관리자 취소 사유(선택). 본인 취소는 null.
+  cancelReason  String?     @map("cancel_reason")
+  cancelledById String?     @map("cancelled_by_id")
+  cancelledAt   DateTime?   @map("cancelled_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
 
   user        User              @relation("RequestOwner", fields: [userId], references: [id])
-  approvedBy  User?             @relation("RequestApprover", fields: [approvedById], references: [id])
   cancelledBy User?             @relation("RequestCanceller", fields: [cancelledById], references: [id])
   dayRows     LeaveRequestDay[]
 
@@ -180,7 +171,7 @@ model LeaveRequest {
 }
 
 /// 신청이 실제로 차감하는 날짜 1개 = 행 1개.
-/// PENDING/APPROVED 동안만 존재하며 REJECTED/CANCELLED 전이 시 같은 트랜잭션에서 삭제한다.
+/// CONFIRMED 동안만 존재하며 CANCELLED 전이 시 같은 트랜잭션에서 삭제한다.
 /// 그래서 (user_id, date) 단순 유니크가 "같은 직원·같은 날짜 중복 신청"을 DB 층에서 막고,
 /// 캘린더와 지점 근무 인원 집계도 이 표에서 읽는다.
 model LeaveRequestDay {

@@ -19,12 +19,12 @@ import { LeaveType } from "@/generated/prisma/enums";
 export function LeaveRequestForm({
   closedWeekdays,
   holidays,
-  available,
+  remaining,
   todayIso,
 }: {
   closedWeekdays: number[];
   holidays: { covered: number[]; years: Record<string, HolidayMap> };
-  available: number;
+  remaining: number;
   todayIso: string;
 }) {
   const router = useRouter();
@@ -42,7 +42,7 @@ export function LeaveRequestForm({
     return computeLeaveDays({ type, startIso: start, endIso: effectiveEnd, closedWeekdays, oracle });
   }, [type, start, effectiveEnd, closedWeekdays, oracle]);
 
-  const canSubmit = Boolean(preview?.ok) && (preview?.ok ? preview.days <= available : false);
+  const canSubmit = Boolean(preview?.ok) && (preview?.ok ? preview.days <= remaining : false);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -56,7 +56,7 @@ export function LeaveRequestForm({
         reason: "",
       });
       if (res.ok) {
-        toast.success("신청했습니다. 관리자 승인을 기다려주세요.");
+        toast.success("신청했습니다. 연차가 차감되었습니다.");
         router.push("/dashboard");
         router.refresh();
       } else {
@@ -125,7 +125,7 @@ export function LeaveRequestForm({
         )}
       </div>
 
-      <DaysPreview result={preview} available={available} />
+      <DaysPreview result={preview} remaining={remaining} />
 
       {/* 연차 사유 기능 비활성(2026-09-04)
       <div className="space-y-2">

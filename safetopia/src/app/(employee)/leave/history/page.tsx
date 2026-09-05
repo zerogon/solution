@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { requireActiveUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { cn, parseDate, todayKstIso } from "@/lib/utils";
+import { cn, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
 import { LEAVE_STATUS_LABEL } from "@/lib/labels";
 import { PageHeader } from "@/components/page-header";
 import { LeaveRequestList } from "@/components/leave/LeaveRequestList";
@@ -18,7 +18,8 @@ export default async function LeaveHistoryPage({
 }) {
   const { user } = await requireActiveUser();
   const sp = await searchParams;
-  const thisYear = Number(todayKstIso().slice(0, 4));
+  const today = todayKstIso();
+  const thisYear = Number(today.slice(0, 4));
   const year = /^\d{4}$/.test(sp.year ?? "") ? Number(sp.year) : thisYear;
   const status = (Object.values(LeaveStatus) as string[]).includes(sp.status ?? "") ? (sp.status as LeaveStatus) : undefined;
 
@@ -30,7 +31,7 @@ export default async function LeaveHistoryPage({
         startDate: { gte: parseDate(`${year}-01-01`), lte: parseDate(`${year}-12-31`) },
       },
       orderBy: { startDate: "desc" },
-      include: { approvedBy: { select: { name: true } } },
+      include: { cancelledBy: { select: { name: true } } },
     }),
     prisma.leaveBalance.findMany({ where: { userId: user.id }, select: { year: true }, orderBy: { year: "desc" } }),
   ]);
@@ -45,7 +46,7 @@ export default async function LeaveHistoryPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="연차 사용 내역" description="신청·승인·반려·취소 이력을 모두 볼 수 있습니다." />
+      <PageHeader title="연차 사용 내역" description="신청·취소 이력을 모두 볼 수 있습니다." />
 
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1.5">
@@ -69,7 +70,9 @@ export default async function LeaveHistoryPage({
 
       <LeaveRequestList
         rows={rows}
-        renderAction={(r) => (r.status === LeaveStatus.PENDING ? <CancelRequestButton id={r.id} /> : null)}
+        renderAction={(r) =>
+          r.status === LeaveStatus.CONFIRMED && toIsoDate(r.startDate) >= today ? <CancelRequestButton id={r.id} /> : null
+        }
       />
     </div>
   );

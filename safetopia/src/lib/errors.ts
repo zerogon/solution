@@ -26,7 +26,7 @@ export function isPrismaUniqueViolation(err: unknown): boolean {
 export function toActionError(err: unknown, tag: string, fallback = "처리 중 오류가 발생했습니다."): { ok: false; message: string } {
   if (err instanceof LeaveError) return { ok: false, message: err.message };
   if (isPrismaUniqueViolation(err)) {
-    return { ok: false, message: "이미 신청(대기/승인)된 날짜가 포함되어 있습니다." };
+    return { ok: false, message: "이미 신청된 날짜가 포함되어 있습니다." };
   }
   console.error(`[${tag}]`, err);
   return { ok: false, message: fallback };

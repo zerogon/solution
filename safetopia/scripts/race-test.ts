@@ -29,14 +29,16 @@ async function main() {
   while (user.branch.closedWeekdays.includes(d.getUTCDay())) d.setUTCDate(d.getUTCDate() + 1);
   const iso = d.toISOString().slice(0, 10);
 
-  // 그 날짜의 기존 활성 신청 정리
+  // 그 날짜의 기존 확정 신청 정리 — 신청이 곧 차감이므로 usedDays도 같이 되돌린다.
+  const year = Number(iso.slice(0, 4));
   const stale = await prisma.leaveRequestDay.findMany({
     where: { userId: user.id, date: new Date(`${iso}T00:00:00.000Z`) },
-    select: { leaveRequestId: true },
+    select: { leaveRequest: { select: { id: true, days: true } } },
   });
-  for (const s of stale) {
-    await prisma.leaveRequestDay.deleteMany({ where: { leaveRequestId: s.leaveRequestId } });
-    await prisma.leaveRequest.update({ where: { id: s.leaveRequestId }, data: { status: LeaveStatus.CANCELLED } });
+  for (const { leaveRequest: r } of stale) {
+    await prisma.leaveRequestDay.deleteMany({ where: { leaveRequestId: r.id } });
+    await prisma.leaveRequest.update({ where: { id: r.id }, data: { status: LeaveStatus.CANCELLED, cancelledAt: new Date() } });
+    await prisma.leaveBalance.update({ where: { userId_year: { userId: user.id, year } }, data: { usedDays: { decrement: r.days } } });
   }
 
   console.log(`🏁 ${user.name}(${user.branch.name}) / ${iso} 에 10건 동시 신청`);
@@ -54,11 +56,11 @@ async function main() {
   );
 
   let success = 0, domain = 0, unique = 0, other = 0;
-  const created: string[] = [];
+  const created: { id: string; days: number }[] = [];
   for (const r of results) {
     if (r.status === "fulfilled") {
       success += 1;
-      created.push(r.value.id);
+      created.push({ id: r.value.id, days: r.value.days });
     } else if (r.reason instanceof LeaveError) domain += 1;
     else if (isPrismaUniqueViolation(r.reason)) unique += 1;
     else {
@@ -77,10 +79,11 @@ async function main() {
   console.log(`⚠️  기타: ${other}`);
   console.log(`📦 leave_request_days 행 수: ${rows}`);
 
-  // 정리
-  for (const id of created) {
+  // 정리 — 생성 건 삭제 + 차감분 원복(로컬 잔액이 흐르지 않게).
+  for (const { id, days } of created) {
     await prisma.leaveRequestDay.deleteMany({ where: { leaveRequestId: id } });
     await prisma.leaveRequest.delete({ where: { id } });
+    await prisma.leaveBalance.update({ where: { userId_year: { userId: user.id, year } }, data: { usedDays: { decrement: days } } });
   }
 
   const ok = success === 1 && rows === 1 && other === 0;

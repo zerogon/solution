@@ -10,7 +10,6 @@ import { LEAVE_TYPE_LABEL, WEEKDAY_LABEL } from "@/lib/labels";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { LeaveStatus } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +23,6 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const [days, branch, { oracle }] = await Promise.all([
     prisma.leaveRequestDay.findMany({
       where: { userId: user.id, date: { gte: parseDate(first), lte: parseDate(last) } },
-      include: { leaveRequest: { select: { status: true } } }, // reason 제외(연차 사유 비활성)
     }),
     user.branchId ? prisma.branch.findUnique({ where: { id: user.branchId }, select: { closedWeekdays: true } }) : null,
     getHolidayOracle(),
@@ -38,7 +36,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
     <div className="space-y-6">
       <PageHeader
         title="내 캘린더"
-        description="승인된 연차는 진한 색, 승인 대기는 노란색으로 표시됩니다."
+        description="확정된 연차가 진한 색으로 표시됩니다."
         action={
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon-sm" render={<Link href={`/calendar?m=${shiftMonth(ym, -1)}`} />} nativeButton={false} aria-label="이전 달">
@@ -99,12 +97,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   )}
                   {leave && inMonth && (
                     <div
-                      className={cn(
-                        "mt-0.5 truncate rounded px-1 py-0.5 text-[10px] font-medium sm:text-[11px]",
-                        leave.leaveRequest.status === LeaveStatus.APPROVED
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-amber-100 text-amber-800",
-                      )}
+                      className="mt-0.5 truncate rounded bg-primary px-1 py-0.5 text-[10px] font-medium text-primary-foreground sm:text-[11px]"
                       title={LEAVE_TYPE_LABEL[leave.type]}
                     >
                       {LEAVE_TYPE_LABEL[leave.type]}
@@ -115,8 +108,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             })}
           </div>
           <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-primary" />승인</span>
-            <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-amber-300" />승인 대기</span>
+            <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-primary" />연차</span>
             <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-muted-foreground/30" />지점 휴무</span>
             <span className="inline-flex items-center gap-1"><span className="text-destructive">●</span>공휴일</span>
           </div>

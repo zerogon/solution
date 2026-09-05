@@ -7,12 +7,10 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { toActionError, type ActionResult } from "@/lib/errors";
 import {
   adminCancelRequest,
-  approveLeaveRequest as approveSvc,
-  cancelOwnPendingRequest as cancelOwnSvc,
+  cancelOwnRequest as cancelOwnSvc,
   createLeaveRequest as createSvc,
-  rejectLeaveRequest as rejectSvc,
 } from "@/lib/leave-service";
-import { adminCancelSchema, leaveRequestSchema, rejectSchema, requestIdSchema } from "@/lib/validators";
+import { adminCancelSchema, leaveRequestSchema, requestIdSchema } from "@/lib/validators";
 
 const UNAUTHORIZED = { ok: false, message: "관리자만 사용할 수 있습니다." } as const;
 const LOGIN_REQUIRED = { ok: false, message: "로그인이 필요합니다." } as const;
@@ -46,7 +44,7 @@ export async function createLeaveRequest(input: unknown): Promise<ActionResult<{
   }
 }
 
-export async function cancelOwnPendingRequest(input: unknown): Promise<ActionResult> {
+export async function cancelOwnLeaveRequest(input: unknown): Promise<ActionResult> {
   const session = await auth();
   if (!session?.user) return LOGIN_REQUIRED;
   const parsed = requestIdSchema.safeParse(input);
@@ -57,41 +55,7 @@ export async function cancelOwnPendingRequest(input: unknown): Promise<ActionRes
     revalidate(session.user.id);
     return { ok: true };
   } catch (err) {
-    return toActionError(err, "cancelOwnPendingRequest");
-  }
-}
-
-export async function approveLeaveRequest(input: unknown): Promise<ActionResult> {
-  const session = await requireAdmin();
-  if (!session) return UNAUTHORIZED;
-  const parsed = requestIdSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
-
-  try {
-    const req = await approveSvc(prisma, { requestId: parsed.data.id, actor: { id: session.user.id, name: session.user.name } });
-    revalidate(req.userId);
-    return { ok: true };
-  } catch (err) {
-    return toActionError(err, "approveLeaveRequest");
-  }
-}
-
-export async function rejectLeaveRequest(input: unknown): Promise<ActionResult> {
-  const session = await requireAdmin();
-  if (!session) return UNAUTHORIZED;
-  const parsed = rejectSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
-
-  try {
-    const req = await rejectSvc(prisma, {
-      requestId: parsed.data.id,
-      reason: parsed.data.reason,
-      actor: { id: session.user.id, name: session.user.name },
-    });
-    revalidate(req.userId);
-    return { ok: true };
-  } catch (err) {
-    return toActionError(err, "rejectLeaveRequest");
+    return toActionError(err, "cancelOwnLeaveRequest");
   }
 }
 

@@ -34,8 +34,8 @@ npx -y playwright screenshot --channel=chrome --load-storage=storage.json \
 ```
 
 ## 확인할 만한 화면
-- 직원: `/dashboard`(KPI 4 + 다가오는 휴가 + 최근 신청), `/leave/request`(DaysPreview 제외 내역), `/leave/history`, `/calendar`, `/profile`
-- 관리자: `/admin/dashboard`(승인 대기 + 근무 예정 인원), `/admin/employees`, `/admin/employees/[id]`, `/admin/branches`, `/admin/leaves`
+- 직원: `/dashboard`(KPI 3 + 다가오는 휴가 + 최근 신청, 미래 확정 건엔 신청 취소 버튼), `/leave/request`(DaysPreview 제외 내역), `/leave/history`, `/calendar`, `/profile`
+- 관리자: `/admin/dashboard`(오늘·이번 주 휴가 + 최근 신청, 행별 취소), `/admin/employees`, `/admin/employees/[id]`, `/admin/branches`, `/admin/leaves`
 - 모바일 390px: 하단 탭 4개(직원)/5개(관리자), 카드 UI
 
 ## 주의

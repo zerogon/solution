@@ -17,7 +17,7 @@ import { BranchChangeDialog, EmployeeStatusSelect, ResetPasswordButton } from "@
 import { AdjustLeaveDialog, GrantLeaveDialog } from "@/components/admin/BalanceDialogs";
 import { LeaveRequestList } from "@/components/leave/LeaveRequestList";
 import { AdminRequestActions } from "@/components/admin/AdminRequestActions";
-import { BranchStatus, LeaveStatus } from "@/generated/prisma/enums";
+import { BranchStatus } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
 
@@ -40,21 +40,13 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         leaveRequests: {
           orderBy: { createdAt: "desc" },
           take: 30,
-          include: { approvedBy: { select: { name: true } } },
+          include: { cancelledBy: { select: { name: true } } },
         },
       },
     }),
     prisma.branch.findMany({ where: { status: BranchStatus.ACTIVE }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   if (!user) notFound();
-
-  // 연도별 pending은 startDate 연도 기준. 연도 경계 신청은 거부되므로 startDate만 보면 된다.
-  const pendingByYear = new Map<number, number>();
-  for (const r of user.leaveRequests) {
-    if (r.status !== LeaveStatus.PENDING) continue;
-    const y = r.startDate.getUTCFullYear();
-    pendingByYear.set(y, (pendingByYear.get(y) ?? 0) + r.days);
-  }
 
   const hasThisYear = user.leaveBalances.some((b) => b.year === thisYear);
   const isSelf = session?.user.id === user.id;
@@ -120,7 +112,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
                 <p className="text-sm text-muted-foreground">아직 부여된 연차가 없습니다.</p>
               )}
               {user.leaveBalances.map((b) => {
-                const s = summarize(b, pendingByYear.get(b.year) ?? 0);
+                const s = summarize(b);
                 return (
                   <div key={b.id} className="rounded-lg border p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -130,14 +122,13 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
                         <AdjustLeaveDialog userId={user.id} year={b.year} />
                       </div>
                     </div>
-                    <dl className="mt-2 grid grid-cols-3 gap-2 text-center sm:grid-cols-6">
+                    <dl className="mt-2 grid grid-cols-3 gap-2 text-center sm:grid-cols-5">
                       {[
                         ["부여", b.totalDays],
                         ["이월", b.carriedOverDays],
                         ["조정", b.adjustedDays],
                         ["사용", s.used],
-                        ["대기", s.pending],
-                        ["신청 가능", s.available],
+                        ["잔여", s.remaining],
                       ].map(([label, v]) => (
                         <div key={label as string} className="rounded-md bg-muted/50 py-1.5">
                           <dt className="text-[11px] text-muted-foreground">{label}</dt>

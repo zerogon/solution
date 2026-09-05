@@ -3,14 +3,9 @@ import { cn } from "@/lib/utils";
 import { LEAVE_STATUS_LABEL, LEAVE_TYPE_LABEL } from "@/lib/labels";
 import { LeaveStatus, LeaveType } from "@/generated/prisma/enums";
 
-/**
- * 상태색은 primary(세이지)와 부딪히지 않도록 Tailwind 리터럴 팔레트를 쓴다 —
- * 형제 앱과 같은 예외 규칙(대기 amber / 반려 destructive / 취소 muted).
- */
+/** 확정은 primary(세이지), 취소는 muted. 승인 절차가 없어 상태색 예외는 이 둘뿐이다. */
 const STATUS_CLASS: Record<LeaveStatus, string> = {
-  [LeaveStatus.PENDING]: "bg-amber-100 text-amber-800",
-  [LeaveStatus.APPROVED]: "bg-primary/10 text-primary",
-  [LeaveStatus.REJECTED]: "bg-destructive/10 text-destructive",
+  [LeaveStatus.CONFIRMED]: "bg-primary/10 text-primary",
   [LeaveStatus.CANCELLED]: "bg-muted text-muted-foreground",
 };
 
