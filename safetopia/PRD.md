@@ -189,7 +189,7 @@
 * `/calendar` - 개인 캘린더
 
 ### 6.3 관리자 화면
-* `/admin/dashboard` - 관리자 대시보드 (KPI 카드, 최근 신청 목록, 오늘 휴가자)
+* `/admin/dashboard` - 관리자 대시보드 (KPI 카드, 지점별 2주 휴가 스케줄 보드 + 잔여, 최근 신청 목록)
 * `/admin/employees` - 직원 관리
 * `/admin/branches` - 지점 관리
 * `/admin/leaves` - 연차 관리 및 조정
