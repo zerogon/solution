@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { monthBounds, monthGrid, resolveMonthParam, shiftMonth } from "@/lib/calendar";
+import { isShadedDay, monthBounds, monthGrid, resolveMonthParam, shiftMonth } from "@/lib/calendar";
 
 describe("monthBounds", () => {
   it("달마다 말일이 다르다", () => {
@@ -39,5 +39,31 @@ describe("monthGrid", () => {
     expect(g).toHaveLength(42);
     expect(g[0].iso).toBe("2026-08-30"); // 2026-09-01은 화요일
     expect(g.filter((c) => c.inMonth)).toHaveLength(30);
+  });
+});
+
+describe("isShadedDay", () => {
+  // 2026-09-05 토, 09-06 일, 09-07 월, 09-08 화
+  it("주말은 휴무 지정이 없어도 칠한다", () => {
+    expect(isShadedDay("2026-09-05", [], null)).toBe(true);
+    expect(isShadedDay("2026-09-06", [], null)).toBe(true);
+  });
+  it("평일은 지정이 없으면 안 칠한다", () => {
+    expect(isShadedDay("2026-09-07", [], null)).toBe(false);
+    expect(isShadedDay("2026-09-08", [], null)).toBe(false);
+  });
+  it("지점 휴무 요일을 칠한다", () => {
+    expect(isShadedDay("2026-09-07", [1], null)).toBe(true);
+    expect(isShadedDay("2026-09-08", [1], null)).toBe(false);
+  });
+  it("공휴일을 칠한다", () => {
+    expect(isShadedDay("2026-09-07", [], "추석")).toBe(true);
+  });
+  it("주말이면서 지점 휴무여도 한 번만 참이다", () => {
+    expect(isShadedDay("2026-09-06", [0], "추석")).toBe(true);
+  });
+  it("차감 규칙이 아니다 — 주말 근무 지점의 토요일도 칠해진다", () => {
+    // 강남점은 closedWeekdays: [] 라 토요일 연차가 차감되지만 음영은 들어간다.
+    expect(isShadedDay("2026-09-05", [], null)).toBe(true);
   });
 });

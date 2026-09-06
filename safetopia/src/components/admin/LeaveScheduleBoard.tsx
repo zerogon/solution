@@ -2,6 +2,7 @@ import { Users } from "lucide-react";
 
 import { LeaveType } from "@/generated/prisma/enums";
 import type { BoardGroup } from "@/lib/schedule-board";
+import { SHADED_DAY_CLASS, isShadedDay } from "@/lib/calendar";
 import { LEAVE_TYPE_LABEL, WEEKDAY_LABEL, formatDays } from "@/lib/labels";
 import { cn, parseDate } from "@/lib/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,7 +26,8 @@ const STICKY_TOTAL = "sticky z-10 bg-[color-mix(in_oklab,var(--muted)_20%,var(--
 
 /**
  * 직원×날짜 스케줄 격자(지점별 카드). 서버 컴포넌트 — 훅 없음, props는 평면 객체만.
- * 색은 primary(휴가)·muted(휴무/공휴일 열)·destructive(일·공휴일 헤더)만 쓴다.
+ * 색은 primary(휴가)·음영 열(주말·지점 휴무·공휴일)·destructive(일·공휴일 헤더)만 쓴다.
+ * 열 음영은 표시 전용이다 — 주말 연차는 그대로 차감된다(`isShadedDay` 주석).
  * 한 달이 한 화면에 안 들어가면 표 안에서 가로로 스크롤하고, 이름·잔여 열은 양끝에 고정된다.
  */
 export function LeaveScheduleBoard({
@@ -53,8 +55,8 @@ export function LeaveScheduleBoard({
   return (
     <div className="space-y-3">
       {groups.map((g) => {
-        const closed = new Set(g.branch?.closedWeekdays ?? []);
-        const isOffDay = (iso: string) => closed.has(parseDate(iso).getUTCDay()) || holidays[iso] != null;
+        const closed = g.branch?.closedWeekdays ?? [];
+        const isShaded = (iso: string) => isShadedDay(iso, closed, holidays[iso] ?? null);
         return (
           <Card key={g.branch?.id ?? "none"}>
             <CardContent className="p-0">
@@ -74,7 +76,7 @@ export function LeaveScheduleBoard({
                       return (
                         <TableHead
                           key={iso}
-                          className={cn(DAY_COL, "h-auto py-1.5 align-top", isOffDay(iso) && "bg-muted/40")}
+                          className={cn(DAY_COL, "h-auto py-1.5 align-top", isShaded(iso) && SHADED_DAY_CLASS)}
                           title={holiday ?? undefined}
                         >
                           <div
@@ -102,7 +104,7 @@ export function LeaveScheduleBoard({
                       {days.map((iso) => {
                         const type = m.cells[iso];
                         return (
-                          <TableCell key={iso} className={cn(DAY_COL, "py-1.5", isOffDay(iso) && "bg-muted/40")}>
+                          <TableCell key={iso} className={cn(DAY_COL, "py-1.5", isShaded(iso) && SHADED_DAY_CLASS)}>
                             {type ? (
                               <LeaveCell type={type} title={`${m.name} · ${LEAVE_TYPE_LABEL[type]}`} />
                             ) : (
@@ -123,7 +125,7 @@ export function LeaveScheduleBoard({
                       return (
                         <TableCell
                           key={iso}
-                          className={cn(DAY_COL, "py-1.5 font-mono text-xs tabular-nums", isOffDay(iso) && "bg-muted/40")}
+                          className={cn(DAY_COL, "py-1.5 font-mono text-xs tabular-nums", isShaded(iso) && SHADED_DAY_CLASS)}
                         >
                           {n ? <span className="text-foreground">{n}</span> : <span className="text-muted-foreground/40">·</span>}
                         </TableCell>

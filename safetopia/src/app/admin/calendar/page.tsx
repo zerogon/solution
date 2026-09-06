@@ -3,13 +3,13 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
 import { getHolidayOracle } from "@/lib/holidays-server";
-import { monthBounds, monthGrid, resolveMonthParam, shiftMonth } from "@/lib/calendar";
+import { monthBounds, resolveMonthParam, shiftMonth } from "@/lib/calendar";
 import { cn, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
-import { LEAVE_TYPE_LABEL, WEEKDAY_LABEL } from "@/lib/labels";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { LeaveType } from "@/generated/prisma/enums";
+import { MonthGrid } from "@/components/month-grid";
+import { DayLeaveList } from "@/components/leave/DayLeaveList";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +47,6 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
     if (!byDate.has(k)) byDate.set(k, []);
     byDate.get(k)!.push(r);
   }
-  const grid = monthGrid(ym);
   const [y, mo] = ym.split("-").map(Number);
 
   const href = (over: Partial<{ m: string; branch: string }>) => {
@@ -97,52 +96,25 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
 
       <Card>
         <CardContent className="p-2 sm:p-4">
-          <div className="grid grid-cols-7 text-center text-[11px] font-medium text-muted-foreground">
-            {WEEKDAY_LABEL.map((w, i) => (
-              <div key={w} className={cn("py-1", i === 0 && "text-destructive/70")}>{w}</div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border bg-border">
-            {grid.map(({ iso, inMonth }) => {
-              const d = parseDate(iso);
-              const holiday = oracle.covers(iso) && oracle.isHoliday(iso) ? oracle.nameOf(iso) : null;
-              const items = byDate.get(iso) ?? [];
-              return (
-                <div key={iso} className={cn("min-h-20 bg-background p-1 sm:min-h-28 sm:p-1.5", !inMonth && "bg-muted/40 text-muted-foreground/50")}>
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={cn(
-                        "inline-flex size-6 items-center justify-center rounded-full font-mono text-xs tabular-nums",
-                        iso === today && "bg-foreground text-background font-semibold",
-                        iso !== today && (d.getUTCDay() === 0 || holiday) && inMonth && "text-destructive",
-                      )}
-                    >
-                      {d.getUTCDate()}
-                    </span>
-                    {items.length > 0 && inMonth && (
-                      <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{items.length}</span>
-                    )}
-                  </div>
-                  {holiday && inMonth && <div className="truncate text-[10px] text-destructive/80">{holiday}</div>}
-                  {inMonth && (
-                    <ul className="mt-0.5 space-y-0.5">
-                      {items.slice(0, 4).map((r) => (
-                        <li
-                          key={r.id}
-                          className="truncate rounded bg-primary/15 px-1 text-[10px] leading-4 text-primary sm:text-[11px]"
-                          title={`${r.user.name} · ${r.user.branch?.name ?? ""} · ${LEAVE_TYPE_LABEL[r.type]}`}
-                        >
-                          {r.user.name}
-                          {r.type !== LeaveType.FULL_DAY && <span className="opacity-70">{r.type === LeaveType.AM_HALF ? "·오전" : "·오후"}</span>}
-                        </li>
-                      ))}
-                      {items.length > 4 && <li className="text-[10px] text-muted-foreground">+{items.length - 4}</li>}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <MonthGrid
+            ym={ym}
+            today={today}
+            oracle={oracle}
+            renderBadge={(iso) => {
+              const n = byDate.get(iso)?.length ?? 0;
+              return n > 0 ? <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{n}</span> : null;
+            }}
+            renderDay={(iso) => (
+              <DayLeaveList
+                items={(byDate.get(iso) ?? []).map((r) => ({
+                  id: r.id,
+                  name: r.user.name,
+                  branchName: r.user.branch?.name ?? null,
+                  type: r.type,
+                }))}
+              />
+            )}
+          />
         </CardContent>
       </Card>
     </div>

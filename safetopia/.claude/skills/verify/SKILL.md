@@ -35,10 +35,11 @@ npx -y playwright screenshot --channel=chrome --load-storage=storage.json \
 
 ## 확인할 만한 화면
 - 직원: `/dashboard`(KPI 3 + 다가오는 휴가 + 최근 신청, 미래 확정 건엔 신청 취소 버튼), `/leave/request`(DaysPreview 제외 내역), `/leave/history`, `/calendar`, `/profile`
-- 관리자: `/admin/dashboard`(KPI + 지점별 직원×날짜 월간 스케줄 보드, 헤더 달 이동, 행 끝 잔여 막대, 좁은 화면은 가로 스크롤 + 이름·잔여 열 고정 + 최근 신청 5건, 행별 취소), `/admin/employees`, `/admin/employees/[id]`, `/admin/branches`, `/admin/leaves`
+- 관리자: `/admin/dashboard`(KPI + 헤더 달 이동 + 최근 신청 5건·행별 취소. md 이상은 지점별 직원×날짜 월간 보드 + 행 끝 잔여 막대 + 이름·잔여 열 고정, md 미만은 월 캘린더에 휴가자 이름), `/admin/employees`, `/admin/employees/[id]`, `/admin/branches`, `/admin/leaves`
 - 모바일 390px: 하단 탭 4개(직원)/5개(관리자), 카드 UI
 
 ## 주의
 - SSR HTML에서 텍스트 카운트 시 RSC flight payload 때문에 **약 2배로 중복** 집계된다
 - 날짜는 UTC 자정 규약 — 화면에서 하루 밀리면 `new Date(y,m,d)`류 로컬 생성이 끼어든 것
+- 음영(주말·지점 휴무·공휴일)은 **표시 전용**이다. 주말 연차는 그대로 차감된다 — 음영을 보고 차감 로직을 고치지 말 것
 - 공휴일은 Google iCal 라이브 피드 — 오프라인이면 신청 폼이 "공휴일 정보를 확인할 수 없음"으로 막힌다(의도)

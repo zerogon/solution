@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { LeaveType } from "@/generated/prisma/enums";
 import { diffDaysIso } from "@/lib/utils";
-import { buildScheduleBoard, rangeDays } from "@/lib/schedule-board";
+import { buildDayRoster, buildScheduleBoard, rangeDays } from "@/lib/schedule-board";
 
 const gangnam = { id: "b1", name: "강남점", closedWeekdays: [1] };
 const hongdae = { id: "b2", name: "홍대점", closedWeekdays: [] };
@@ -62,5 +62,38 @@ describe("buildScheduleBoard", () => {
 
   it("직원이 없으면 빈 배열", () => {
     expect(buildScheduleBoard({ users: [], dayRows: [{ userId: "x", date: "2026-09-05", type: LeaveType.FULL_DAY }], days })).toEqual([]);
+  });
+});
+
+describe("buildDayRoster", () => {
+  const days = rangeDays("2026-09-05", 3);
+  const groups = buildScheduleBoard({
+    users: [
+      { id: "u1", name: "가", branch: gangnam, summary },
+      { id: "u2", name: "나", branch: hongdae, summary },
+      { id: "u3", name: "다", branch: null, summary: null },
+    ],
+    dayRows: [
+      { userId: "u2", date: "2026-09-05", type: LeaveType.AM_HALF },
+      { userId: "u1", date: "2026-09-05", type: LeaveType.FULL_DAY },
+      { userId: "u3", date: "2026-09-06", type: LeaveType.PM_HALF },
+    ],
+    days,
+  });
+  const roster = buildDayRoster(groups);
+
+  it("보드 순서(지점명 → 이름)를 그대로 물려받는다", () => {
+    expect(roster["2026-09-05"]).toEqual([
+      { userId: "u1", name: "가", branchName: "강남점", type: LeaveType.FULL_DAY },
+      { userId: "u2", name: "나", branchName: "홍대점", type: LeaveType.AM_HALF },
+    ]);
+  });
+  it("소속 없음은 branchName이 null", () => {
+    expect(roster["2026-09-06"]).toEqual([
+      { userId: "u3", name: "다", branchName: null, type: LeaveType.PM_HALF },
+    ]);
+  });
+  it("휴가가 없는 날은 키를 만들지 않는다", () => {
+    expect("2026-09-07" in roster).toBe(false);
   });
 });

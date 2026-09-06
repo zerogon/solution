@@ -86,3 +86,30 @@ export function buildScheduleBoard(input: { users: BoardUserInput[]; dayRows: Bo
     return a.branch.name.localeCompare(b.branch.name, "ko");
   });
 }
+
+export interface DayRosterEntry {
+  userId: string;
+  name: string;
+  branchName: string | null;
+  type: LeaveType;
+}
+
+/**
+ * 날짜별 휴가자 명단 — 모바일 월 캘린더용.
+ *
+ * 새로 조회하지 않고 `buildScheduleBoard`의 결과에서 파생시킨다. 그래야 데스크톱 보드와
+ * 모바일 캘린더가 같은 데이터를 본다는 게 구조로 보장된다. `groups`가 이미 지점명순이고
+ * 그 안의 `members`가 이름순이라 결과 배열도 그 순서를 그대로 물려받는다.
+ * 휴가가 없는 날은 키를 만들지 않는다.
+ */
+export function buildDayRoster(groups: BoardGroup[]): Record<string, DayRosterEntry[]> {
+  const out: Record<string, DayRosterEntry[]> = {};
+  for (const g of groups) {
+    for (const m of g.members) {
+      for (const [date, type] of Object.entries(m.cells)) {
+        (out[date] ??= []).push({ userId: m.id, name: m.name, branchName: g.branch?.name ?? null, type });
+      }
+    }
+  }
+  return out;
+}

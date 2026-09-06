@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getHolidayOracle } from "@/lib/holidays-server";
 import { monthBounds, resolveMonthParam, shiftMonth } from "@/lib/calendar";
 import { summarize } from "@/lib/leave-balance";
-import { buildScheduleBoard, rangeDays } from "@/lib/schedule-board";
+import { buildDayRoster, buildScheduleBoard, rangeDays } from "@/lib/schedule-board";
 import { addDaysIso, diffDaysIso, formatKoMd, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -15,6 +15,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { LeaveRequestList } from "@/components/leave/LeaveRequestList";
 import { AdminRequestActions } from "@/components/admin/AdminRequestActions";
 import { LeaveScheduleBoard } from "@/components/admin/LeaveScheduleBoard";
+import { MonthGrid } from "@/components/month-grid";
+import { DayLeaveList } from "@/components/leave/DayLeaveList";
 import { BranchStatus, EmployeeStatus, Role } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
@@ -81,6 +83,8 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const holidays = Object.fromEntries(
     days.map((iso) => [iso, oracle.covers(iso) && oracle.isHoliday(iso) ? oracle.nameOf(iso) : null]),
   );
+  // 모바일 캘린더는 새로 조회하지 않고 보드 데이터에서 파생한다 — 두 화면이 같은 것을 본다.
+  const roster = buildDayRoster(groups);
 
   const [y, mo] = ym.split("-").map(Number);
   /** 이번 달이면 쿼리를 생략해 기본 주소를 유지한다. */
@@ -118,9 +122,38 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
         <StatCard icon={Store} label="운영 지점" value={activeBranches} unit="곳" />
       </div>
 
+      {/* 넓은 화면은 지점별 보드(잔여 막대 포함), 좁은 화면은 같은 달의 월 캘린더.
+          31열 가로 스크롤이 모바일에서 쓰기 나빠서 갈랐다 — 저장소의 md 이중 렌더 관용구. */}
       <section className="space-y-3">
-        <h2 className="font-heading text-lg font-semibold">지점별 휴가 일정</h2>
-        <LeaveScheduleBoard days={days} today={today} groups={groups} holidays={holidays} />
+        <h2 className="font-heading text-lg font-semibold">이달의 휴가 일정</h2>
+        <div className="hidden md:block">
+          <LeaveScheduleBoard days={days} today={today} groups={groups} holidays={holidays} />
+        </div>
+        <Card className="md:hidden">
+          <CardContent className="p-2">
+            <MonthGrid
+              ym={ym}
+              today={today}
+              oracle={oracle}
+              cellClassName="min-h-20"
+              renderBadge={(iso) => {
+                const n = roster[iso]?.length ?? 0;
+                return n > 0 ? <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{n}</span> : null;
+              }}
+              renderDay={(iso) => (
+                <DayLeaveList
+                  max={3}
+                  items={(roster[iso] ?? []).map((e) => ({
+                    id: e.userId,
+                    name: e.name,
+                    branchName: e.branchName,
+                    type: e.type,
+                  }))}
+                />
+              )}
+            />
+          </CardContent>
+        </Card>
       </section>
 
       <section className="space-y-3">
