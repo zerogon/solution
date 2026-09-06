@@ -130,7 +130,8 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
           <LeaveScheduleBoard days={days} today={today} groups={groups} holidays={holidays} />
         </div>
         <Card className="md:hidden">
-          <CardContent className="p-2">
+          {/* 360px에서도 세 글자 이름이 칩에 들어가도록 좌우 여백을 아낀다. */}
+          <CardContent className="p-1 sm:p-2">
             <MonthGrid
               ym={ym}
               today={today}

@@ -37,7 +37,7 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
       },
       orderBy: [{ user: { branch: { name: "asc" } } }, { user: { name: "asc" } }],
     }),
-    prisma.branch.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.branch.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, closedWeekdays: true } }),
     getHolidayOracle(),
   ]);
 
@@ -100,6 +100,8 @@ export default async function AdminCalendarPage({ searchParams }: { searchParams
             ym={ym}
             today={today}
             oracle={oracle}
+            // 전체 지점을 볼 땐 공통 휴무 요일이라는 게 없다 — 지점을 고른 경우에만 반영한다.
+            closedWeekdays={branches.find((b) => b.id === branch)?.closedWeekdays ?? []}
             renderBadge={(iso) => {
               const n = byDate.get(iso)?.length ?? 0;
               return n > 0 ? <span className="font-mono text-[10px] text-muted-foreground tabular-nums">{n}</span> : null;

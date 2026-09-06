@@ -19,7 +19,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `src/app/globals.css` OKLCH 토큰. 형제와 구조·L/C 동일, **hue만 150(세이지 그린)**. 새 색은 150 계열 안에서; 상태색은 취소(muted)뿐이다.
 - 라이트 고정(`layout.tsx`가 `colorScheme: light`). `.dark` 블록은 **가드로 남긴다** — 지우면 `dark:` 유틸이 OS 다크에서 되살아난다.
 - 숫자는 `font-mono tabular-nums`. 페이지는 `<div className="space-y-6"><PageHeader/>…</div>`.
-- 날짜 음영은 `isShadedDay`(`src/lib/calendar.ts`) 하나 — 주말+지점 휴무+공휴일, `SHADED_DAY_CLASS`. **표시 전용이라 `leave-days.ts`의 `dayOff`(차감 판정)와 일부러 다르다.** 합치지 말 것.
+- 날짜 음영은 `isShadedDay`(`src/lib/calendar.ts`) 하나 — 주말+지점 휴무+공휴일. **표시 전용이라 `leave-days.ts`의 `dayOff`(차감 판정)와 일부러 다르다.** 합치지 말 것.
+- 음영 클래스는 색은 같고 **바탕이 달라 둘**이다: 표 셀은 `SHADED_DAY_CLASS`(반투명 — hover·합계 행 틴트가 비쳐야 한다), 월 그리드 칸은 `SHADED_DAY_CELL`/`OUT_OF_MONTH_CELL`(불투명 — `gap-px bg-border` 위라 반투명이면 격자선보다 어두워진다).
 - 월 캘린더는 `MonthGrid`(`src/components/month-grid.tsx`, 서버 컴포넌트) 하나를 직원/관리자 캘린더와 관리자 대시보드 모바일이 공유한다. 셀 본문은 `renderDay` 슬롯.
 - 셸 지오메트리 `--app-sidebar-w`(16rem) + `--app-content-w`(88rem) = 1664px 고정 쌍.
 

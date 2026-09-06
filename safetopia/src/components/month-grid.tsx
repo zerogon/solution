@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import type { HolidayOracle } from "@/lib/holidays-kr";
-import { SHADED_DAY_CLASS, isShadedDay, monthGrid } from "@/lib/calendar";
+import { OUT_OF_MONTH_CELL, SHADED_DAY_CELL, isShadedDay, monthGrid } from "@/lib/calendar";
 import { WEEKDAY_LABEL } from "@/lib/labels";
 import { cn, parseDate } from "@/lib/utils";
 
@@ -10,7 +10,11 @@ export interface DayCtx {
   inMonth: boolean;
   /** 공휴일명. 아니거나 커버리지 밖 연도면 null. */
   holiday: string | null;
-  /** 주말·지점 휴무·공휴일 중 하나라도 해당. 표시 전용 — `calendar.ts` 주석 참고. */
+  /** 토·일. 지점 문맥과 무관하다. */
+  weekend: boolean;
+  /** `closedWeekdays`에 든 요일. 소비처가 요일 규약을 다시 구현하지 않게 내려 준다. */
+  closed: boolean;
+  /** weekend || closed || holiday. 표시 전용 — `calendar.ts` 주석 참고. */
   shaded: boolean;
 }
 
@@ -55,7 +59,14 @@ export function MonthGrid({
         {monthGrid(ym).map(({ iso, inMonth }) => {
           const d = parseDate(iso);
           const holiday = oracle.covers(iso) && oracle.isHoliday(iso) ? oracle.nameOf(iso) : null;
-          const ctx: DayCtx = { inMonth, holiday, shaded: isShadedDay(iso, closedWeekdays, holiday) };
+          const dow = d.getUTCDay();
+          const ctx: DayCtx = {
+            inMonth,
+            holiday,
+            weekend: dow === 0 || dow === 6,
+            closed: closedWeekdays.includes(dow),
+            shaded: isShadedDay(iso, closedWeekdays, holiday),
+          };
           const isToday = iso === today;
           return (
             <div
@@ -65,8 +76,8 @@ export function MonthGrid({
                 cellClassName,
                 // 순서가 곧 우선순위다 — tailwind-merge는 같은 속성에서 뒤엣것만 남긴다.
                 // 달 밖 칸은 맥락일 뿐이라 음영보다 항상 뒤에 와서 이겨야 한다.
-                ctx.shaded && inMonth && SHADED_DAY_CLASS,
-                !inMonth && "bg-muted/40 text-muted-foreground/50",
+                ctx.shaded && inMonth && SHADED_DAY_CELL,
+                !inMonth && OUT_OF_MONTH_CELL,
               )}
             >
               <div className="flex items-center justify-between gap-1">
@@ -74,7 +85,7 @@ export function MonthGrid({
                   className={cn(
                     "inline-flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-xs tabular-nums",
                     isToday && "bg-foreground font-semibold text-background",
-                    !isToday && (d.getUTCDay() === 0 || holiday) && inMonth && "text-destructive",
+                    !isToday && (dow === 0 || holiday) && inMonth && "text-destructive",
                   )}
                 >
                   {d.getUTCDate()}

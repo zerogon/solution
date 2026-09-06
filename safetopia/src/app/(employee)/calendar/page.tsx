@@ -4,8 +4,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { requireActiveUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { getHolidayOracle } from "@/lib/holidays-server";
-import { monthBounds, resolveMonthParam, shiftMonth } from "@/lib/calendar";
-import { parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
+import { SHADED_DAY_CELL, monthBounds, resolveMonthParam, shiftMonth } from "@/lib/calendar";
+import { cn, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
 import { LEAVE_TYPE_LABEL } from "@/lib/labels";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -60,10 +60,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             oracle={oracle}
             closedWeekdays={closed}
             cellClassName="min-h-16 sm:min-h-20"
-            renderBadge={(iso, { holiday }) =>
-              closed.includes(parseDate(iso).getUTCDay()) && !holiday ? (
-                <span className="text-[10px] text-muted-foreground">휴무</span>
-              ) : null
+            renderBadge={(_iso, { closed, holiday }) =>
+              closed && !holiday ? <span className="text-[10px] text-muted-foreground">휴무</span> : null
             }
             renderDay={(iso) => {
               const leave = byDate.get(iso);
@@ -80,7 +78,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           />
           <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
             <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-primary" />연차</span>
-            <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-muted-foreground/30" />주말·지점 휴무·공휴일</span>
+            <span className="inline-flex items-center gap-1"><span className={cn("size-2.5 rounded-sm ring-1 ring-border", SHADED_DAY_CELL)} />주말·지점 휴무·공휴일</span>
             <span className="inline-flex items-center gap-1"><span className="text-destructive">●</span>공휴일</span>
           </div>
         </CardContent>

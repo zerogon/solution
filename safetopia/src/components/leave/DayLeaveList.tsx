@@ -1,4 +1,5 @@
 import { LeaveType } from "@/generated/prisma/enums";
+import { cn } from "@/lib/utils";
 import { LEAVE_TYPE_LABEL } from "@/lib/labels";
 
 export interface DayLeaveItem {
@@ -20,11 +21,15 @@ export function DayLeaveList({ items, max = 4 }: { items: DayLeaveItem[]; max?: 
       {items.slice(0, max).map((it) => (
         <li
           key={it.id}
-          className="truncate rounded bg-primary/15 px-1 text-[10px] leading-4 text-primary sm:text-[11px]"
+          className={cn(
+            "truncate rounded bg-primary/15 px-0.5 text-[10px] leading-4 text-primary sm:px-1 sm:text-[11px]",
+            // 좁은 화면에선 "·오전"이 통째로 잘려 사라지므로 테두리로 반차를 표시한다.
+            it.type !== LeaveType.FULL_DAY && "ring-1 ring-inset ring-primary/40",
+          )}
           title={[it.name, it.branchName, LEAVE_TYPE_LABEL[it.type]].filter(Boolean).join(" · ")}
         >
           {it.name}
-          {/* 390px에서 칸 안쪽이 40px뿐이라 접미사까지 넣으면 이름이 잘린다. 이름이 우선. */}
+          {/* 360px에선 칩 안쪽이 33px뿐이라 접미사까지 넣으면 세 글자 이름이 잘린다. 이름이 우선. */}
           {it.type !== LeaveType.FULL_DAY && (
             <span className="hidden opacity-70 sm:inline">{it.type === LeaveType.AM_HALF ? "·오전" : "·오후"}</span>
           )}

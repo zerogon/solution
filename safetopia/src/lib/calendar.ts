@@ -50,5 +50,26 @@ export function isShadedDay(iso: string, closedWeekdays: readonly number[], holi
   return dow === 0 || dow === 6 || closedWeekdays.includes(dow) || holiday != null;
 }
 
-/** 음영 한 단계. `bg-muted/*`는 이미 달 밖 칸·합계 행·hover가 점유했고 muted 토큰 자체가 너무 옅다. */
+/*
+ * 음영은 **한 가지 회색**(최종 L≈0.953)인데 클래스가 둘인 이유는 바탕이 다르기 때문이다.
+ * 둘 다 문자열 리터럴이어야 한다 — Tailwind는 조합해서 만든 클래스명을 스캔하지 못한다.
+ */
+
+/**
+ * 표(`LeaveScheduleBoard`)의 `<td>`용. 바탕이 불투명한 카드라 반투명이 예측대로 섞이고,
+ * 그래야 행 hover(`hover:bg-muted/50`)와 합계 행(`bg-muted/20`) 틴트가 음영 칸에서도 비쳐 보인다.
+ * 여기서 불투명을 쓰면 음영 열에서 hover 피드백이 구멍 난다.
+ */
 export const SHADED_DAY_CLASS = "bg-muted-foreground/10";
+
+/**
+ * `MonthGrid` 칸용 — 반드시 **불투명**이어야 한다.
+ * 그리드는 `gap-px bg-border` 컨테이너 위에 칸을 얹고, twMerge가 칸의 `bg-background`를 지우므로
+ * 반투명이면 `--border` 위에 섞여 rgb(210,213,214)까지 내려간다. 격자선보다 어둡고 달 밖 칸보다도
+ * 진해져 위계가 뒤집힌다(실측 확인). 배경 위에 미리 섞어 표 쪽과 같은 회색을 만든다.
+ */
+export const SHADED_DAY_CELL = "bg-[color-mix(in_oklab,var(--muted-foreground)_8%,var(--background))]";
+
+/** 달 밖 칸. 같은 이유로 불투명하고, 맥락일 뿐이라 음영보다 **연해야** 한다. */
+export const OUT_OF_MONTH_CELL =
+  "bg-[color-mix(in_oklab,var(--muted)_60%,var(--background))] text-muted-foreground/50";
