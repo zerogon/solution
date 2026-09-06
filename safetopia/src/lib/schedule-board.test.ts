@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { LeaveType } from "@/generated/prisma/enums";
+import { diffDaysIso } from "@/lib/utils";
 import { buildScheduleBoard, rangeDays } from "@/lib/schedule-board";
 
 const gangnam = { id: "b1", name: "강남점", closedWeekdays: [1] };
@@ -12,6 +13,14 @@ describe("rangeDays", () => {
   });
   it("0개면 빈 배열", () => {
     expect(rangeDays("2026-09-05", 0)).toEqual([]);
+  });
+  it("월 경계로 호출하면 그 달의 날 수만큼 나온다(대시보드 보드 기간)", () => {
+    const span = (first: string, last: string) => rangeDays(first, diffDaysIso(first, last) + 1);
+    expect(span("2028-02-01", "2028-02-29")).toHaveLength(29);
+    expect(span("2026-09-01", "2026-09-30")).toHaveLength(30);
+    const oct = span("2026-10-01", "2026-10-31");
+    expect(oct).toHaveLength(31);
+    expect(oct.at(-1)).toBe("2026-10-31");
   });
 });
 

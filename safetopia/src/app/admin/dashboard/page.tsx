@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { CalendarDays, CalendarOff, CalendarRange, ClipboardList, Store, Users } from "lucide-react";
+import { CalendarDays, CalendarOff, CalendarRange, ChevronLeft, ChevronRight, ClipboardList, Store, Users } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
 import { getHolidayOracle } from "@/lib/holidays-server";
+import { monthBounds, resolveMonthParam, shiftMonth } from "@/lib/calendar";
 import { summarize } from "@/lib/leave-balance";
 import { buildScheduleBoard, rangeDays } from "@/lib/schedule-board";
-import { addDaysIso, formatKoMd, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
+import { addDaysIso, diffDaysIso, formatKoMd, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { EmptyState } from "@/components/empty-state";
@@ -18,19 +19,24 @@ import { BranchStatus, EmployeeStatus, Role } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
 
-/** 보드 기간. 모바일은 앞 7일만 열로 보인다(`LeaveScheduleBoard`). */
-const BOARD_DAYS = 14;
 const RECENT_LIMIT = 5;
+
+type SP = { m?: string };
 
 /**
  * 승인 절차가 없으므로 대시보드는 "처리할 것"이 아니라 "지금 상황"을 보여 준다 —
- * 본문은 지점별 직원×날짜 스케줄 보드(2주)이고 행 끝에 잔여 연차가 붙는다.
+ * 본문은 지점별 직원×날짜 스케줄 보드(한 달 전체)이고 행 끝에 잔여 연차가 붙는다.
+ * 기간은 `?m=YYYY-MM`으로 이동한다(`/admin/calendar`와 같은 규약).
  */
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({ searchParams }: { searchParams: Promise<SP> }) {
+  const sp = await searchParams;
   const today = todayKstIso();
+  const ym = resolveMonthParam(sp.m, today);
+  const { first, last } = monthBounds(ym);
+  const days = rangeDays(first, diffDaysIso(first, last) + 1);
   const weekEnd = addDaysIso(today, 6);
-  const days = rangeDays(today, BOARD_DAYS);
-  const year = Number(today.slice(0, 4));
+  // 보드에 보이는 달의 연도. `today` 기준으로 두면 달을 넘겼을 때 헤더 날짜와 잔여가 어긋난다.
+  const year = Number(ym.slice(0, 4));
 
   const [users, dayRows, todayOffCount, weekOffCount, activeBranches, recent, { oracle }] = await Promise.all([
     prisma.user.findMany({
@@ -76,16 +82,32 @@ export default async function AdminDashboardPage() {
     days.map((iso) => [iso, oracle.covers(iso) && oracle.isHoliday(iso) ? oracle.nameOf(iso) : null]),
   );
 
+  const [y, mo] = ym.split("-").map(Number);
+  /** 이번 달이면 쿼리를 생략해 기본 주소를 유지한다. */
+  const href = (target: string) => (target === today.slice(0, 7) ? "/admin/dashboard" : `/admin/dashboard?m=${target}`);
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="관리자 대시보드"
-        description={`${formatKoMd(today)} 기준 · 앞으로 ${BOARD_DAYS}일`}
+        description={`${formatKoMd(today)} 기준 · ${mo}월 전체`}
         action={
-          <Button variant="outline" size="sm" render={<Link href="/admin/calendar" />} nativeButton={false}>
-            <CalendarDays data-icon="inline-start" />
-            전체 캘린더
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon-sm" render={<Link href={href(shiftMonth(ym, -1))} />} nativeButton={false} aria-label="이전 달">
+              <ChevronLeft />
+            </Button>
+            <span className="min-w-24 text-center font-mono text-sm font-semibold tabular-nums">
+              {y}.{String(mo).padStart(2, "0")}
+            </span>
+            <Button variant="outline" size="icon-sm" render={<Link href={href(shiftMonth(ym, 1))} />} nativeButton={false} aria-label="다음 달">
+              <ChevronRight />
+            </Button>
+            {/* 좁은 화면에선 하단 탭에 캘린더가 이미 있다 — 제목이 밀려 3줄로 깨지는 걸 막는다. */}
+            <Button variant="outline" size="sm" className="ml-2 hidden sm:inline-flex" render={<Link href="/admin/calendar" />} nativeButton={false}>
+              <CalendarDays data-icon="inline-start" />
+              전체 캘린더
+            </Button>
+          </div>
         }
       />
 
