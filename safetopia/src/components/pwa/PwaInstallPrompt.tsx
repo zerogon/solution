@@ -31,11 +31,20 @@ if (typeof window !== "undefined") {
   });
 }
 
-const DISMISS_DATE_KEY = "safetopia:install-dismissed-date";
+// 키에 v2를 붙여 이전 키에 남아 있던 "오늘 하루 보지 않기" 플래그를 무효화한다.
+// 시트가 안 뜨던 기간에 체크해 둔 기기들이 고친 뒤에도 계속 막혀 있으면 안 된다.
+const DISMISS_DATE_KEY = "safetopia:install-dismissed-date-v2";
 
-/** PC는 시트 자체를 띄우지 않으므로 데스크톱 전용 모드는 없다(`isTouchDevice` 참고). */
+/**
+ * PC는 시트 자체를 띄우지 않으므로 데스크톱 전용 모드는 없다(`isDesktop` 참고).
+ *
+ * `chrome`은 `beforeinstallprompt`를 손에 쥔 상태 — "지금 설치" 원클릭이 가능하다.
+ * `chromeManual`은 같은 Chromium인데 그 이벤트가 오지 않은 상태다. 이 경우에도
+ * 시트는 뜨고 메뉴 경로를 안내한다.
+ */
 type InstallMode =
   | "chrome"
+  | "chromeManual"
   | "ios"
   | "firefoxAndroid"
   | "inAppAndroid"
@@ -164,22 +173,24 @@ export function PwaInstallPrompt() {
       return;
     }
 
-    // 모듈 스코프 리스너가 이미 잡아둔 이벤트가 있으면 그것을 쓴다.
+    // Chromium. 여기서 `beforeinstallprompt`를 **기다리지 않는다** — 이미 설치돼
+    // 있거나 Chrome이 설치 조건을 아직 인정하지 않으면 그 이벤트는 영영 오지 않고,
+    // 기다리는 동안 시트는 한 번도 뜨지 않는다. 원클릭이 안 되면 메뉴 경로라도 안내한다.
     if (deferredPrompt) {
       setEvent(deferredPrompt);
       setInstallMode("chrome");
-      setOpen(true);
-      return;
+    } else {
+      setInstallMode("chromeManual");
     }
+    setOpen(true);
 
+    // 이벤트가 늦게 도착하면 안내를 "지금 설치" 버튼으로 승격시킨다. 시트는 이미 떠 있다.
     const handler = (e: Event) => {
       e.preventDefault();
       const evt = e as BeforeInstallPromptEvent;
       deferredPrompt = evt;
-      if (!forced && isDismissedToday()) return;
       setEvent(evt);
       setInstallMode("chrome");
-      setOpen(true);
     };
     window.addEventListener("beforeinstallprompt", handler);
     return () => window.removeEventListener("beforeinstallprompt", handler);
@@ -360,6 +371,19 @@ function InstallHint({ mode }: { mode: InstallMode }) {
           우측 메뉴(<strong className="text-foreground">⋯</strong>)에서{" "}
           <strong className="text-foreground">다른 브라우저로 열기</strong>를
           선택하세요.
+        </>
+      ),
+    },
+    chromeManual: {
+      icon: <Share className="size-3.5" />,
+      title: "브라우저 메뉴에서 홈 화면에 추가",
+      body: (
+        <>
+          우측 상단의 <strong className="text-foreground">메뉴(⋮)</strong>를 열고{" "}
+          <strong className="text-foreground">앱 설치</strong> 또는{" "}
+          <strong className="text-foreground">홈 화면에 추가</strong>를 눌러주세요.
+          <br />
+          항목이 보이지 않는다면 이미 설치돼 있는 것입니다.
         </>
       ),
     },
