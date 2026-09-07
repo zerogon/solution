@@ -18,7 +18,8 @@
     "db:local:reset": "tsx scripts/assert-local-db.ts && prisma migrate reset --force",
     "db:studio": "prisma studio",
     "race-test": "tsx scripts/assert-local-db.ts && tsx scripts/race-test.ts",
-    "icons:generate": "tsx scripts/generate-icons.ts"
+    "icons:generate": "tsx scripts/generate-icons.ts",
+    "admin:create": "tsx scripts/create-admin.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",

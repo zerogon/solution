@@ -48,6 +48,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `npm run db:local:up`(Docker Postgres **5434**, 5433은 pianoflow) → `db:local:dev`(migrate dev) → `db:local:seed`. 파괴적 명령은 전부 `assert-local-db` 가드 뒤.
 - 시드 계정: `admin/admin1234`, `emp01~08/1234`(emp03~은 첫 로그인 비번 변경 강제), `retired01`(차단).
 - 검증: `npm run typecheck`, `npm run lint`, `npm test`(vitest — 순수 함수만), `npm run race-test`, 수동 절차는 `.claude/skills/verify/SKILL.md`.
+
+## 배포 (Vercel + Neon)
+- `build`는 `prisma generate && next build` — **마이그레이션도 시드도 돌지 않는다**. 스키마를 바꿔 배포할 땐
+  Neon을 가리킨 채 `npx prisma migrate deploy`를 수동으로 돌린다(`prisma.config.ts`가 `DIRECT_URL`을 본다).
+- `prisma/seed.ts`는 모든 표를 지우고 다시 만드는 **로컬 전용**이다(`assert-local-db` 가드). 운영에는 절대 쓰지 않는다.
+- 배포 후 첫 로그인 수단은 `npm run admin:create`(`scripts/create-admin.ts`) — 지우는 것 없이 관리자 하나만 upsert.
+  `scripts/load-env.ts`가 `.env.local`을 `.env`보다 먼저 읽으므로 **대상 DB를 반드시 확인**하고 `--yes`를 붙인다.
 - PWA는 dev에서 SW를 등록하지 않는다(개발 청크 cache-first 사고 방지). `next build && next start`로 확인.
 
 ## 커밋

@@ -111,7 +111,12 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-muted/40 px-4 py-10">
       <Card className="w-full max-w-sm rounded-2xl shadow-sm">
-        <CardHeader className="items-center gap-3 px-6 pt-8 pb-2 text-center">
+        {/* CardHeader는 flex가 아니라 grid다 — `items-center`는 세로 정렬이라 로고가
+            왼쪽에 붙는다. 가로 중앙은 `justify-items-center`로 잡는다. */}
+        <CardHeader className="justify-items-center px-6 pt-8 pb-2">
+          {/* 브랜드명은 로고 이미지가 보여 준다. 제목 시맨틱만 남긴다.
+              sr-only는 absolute라 그리드 트랙을 만들지 않는다. */}
+          <h1 className="sr-only">Safetopia</h1>
           {/* 로그인은 워드마크까지 있는 전체 로고를 쓴다(셸 안에서는 엠블럼만).
               `unoptimized`는 AppMark와 같은 이유 — 서비스워커가 `/icons/` 경로로 다룬다. */}
           <Image
@@ -123,11 +128,6 @@ export default function LoginPage() {
             priority
             className="w-40"
           />
-          <div>
-            {/* 브랜드명은 위 로고 이미지가 이미 보여 준다. 제목 시맨틱만 남긴다. */}
-            <h1 className="sr-only">Safetopia</h1>
-            <p className="text-sm text-muted-foreground">카페 연차 관리</p>
-          </div>
         </CardHeader>
         <CardContent className="px-6 pt-4 pb-8">
           <Suspense fallback={<div className="h-40 animate-pulse rounded-md bg-muted" />}>
