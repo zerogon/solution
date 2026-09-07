@@ -196,7 +196,7 @@ export function PwaInstallPrompt() {
         className="gap-0 pb-4 sm:mx-auto sm:max-w-md sm:rounded-t-2xl"
       >
         <SheetHeader className="flex flex-row items-start gap-3 pr-10">
-          <AppMark className="size-12 rounded-2xl" />
+          <AppMark className="size-12" />
           <div className="flex flex-1 flex-col gap-0.5">
             <SheetTitle>홈 화면에 추가</SheetTitle>
             <SheetDescription>연차 신청과 확인을 더 빠르게.</SheetDescription>

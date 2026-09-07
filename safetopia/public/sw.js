@@ -25,7 +25,7 @@
  */
 
 // 캐시된 API 응답 형태가 바뀌면 올린다. 올리면 activate 핸들러가 이전 접두사 캐시를 지운다.
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const STATIC_CACHE = `safetopia-static-${CACHE_VERSION}`;
 const DATA_CACHE = `safetopia-data-${CACHE_VERSION}`;
 const OFFLINE_CACHE = `safetopia-offline-${CACHE_VERSION}`;
@@ -37,6 +37,8 @@ const PRECACHE_URLS = [
   OFFLINE_URL,
   "/icons/icon-192.png",
   "/icons/favicon.png",
+  // `/offline`이 AppMark를 렌더한다. 없으면 오프라인 화면에서 로고 자리가 빈다.
+  "/icons/mark.png",
   "/manifest.json",
 ];
 

@@ -19,8 +19,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-/** `--background` 토큰 oklch(0.99 0.002 150)의 sRGB 값. manifest.json과 같이 움직여야 한다. */
-const THEME_COLOR = "#FBFCFB";
+/** `--background` 토큰 oklch(0.99 0.004 75)의 sRGB 값. manifest.json과 같이 움직여야 한다. */
+const THEME_COLOR = "#FDFBF9";
 
 export const metadata: Metadata = {
   title: "Safetopia — 카페 연차 관리",

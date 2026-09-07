@@ -1,47 +1,39 @@
+import Image from "next/image";
+
 import { cn } from "@/lib/utils";
-import {
-  MARK_BG,
-  MARK_CUP,
-  MARK_HANDLE,
-  MARK_HIGHLIGHT,
-  MARK_LEAF,
-  MARK_LEAF_VEIN,
-  MARK_VIEWBOX,
-} from "@/lib/brand-mark";
+import { MARK_BG, MARK_CORNER_RATIO, MARK_PX, MARK_SRC } from "@/lib/brand-mark";
 
 /**
- * 앱 브랜드 마크. PWA 아이콘과 동일한 기하(`lib/brand-mark.ts`)를 인라인 SVG로
- * 그린다 — PNG를 로드하지 않으므로 셸 첫 페인트에서 로고 자리가 비지 않고,
- * 서버 컴포넌트에서도 그대로 쓸 수 있다.
+ * 앱 브랜드 마크 — 크림 라운드 사각형 안의 로스팅 엠블럼.
+ *
+ * 그림은 PWA 아이콘과 같은 원본에서 잘라 낸 `/icons/mark.png`이고, 배경·모서리는
+ * `lib/brand-mark.ts`의 상수를 그대로 쓴다(홈 화면 아이콘과 어긋나지 않게).
+ *
+ * 배경 사각형은 CSS로 즉시 칠해지므로 PNG가 도착하기 전에도 로고 자리가 비지 않는다.
+ * `unoptimized`는 필수다 — 최적화를 켜면 URL이 `/_next/image?url=…`이 되어
+ * 서비스워커의 `/icons/` 캐시 규칙과 precache 목록에서 벗어나고, 오프라인 페이지에서
+ * 마크가 빈칸이 된다.
  */
 export function AppMark({ className }: { className?: string }) {
   return (
-    <svg
-      viewBox={MARK_VIEWBOX}
+    <span
       role="img"
       aria-label="Safetopia"
-      className={cn("shrink-0", className)}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center overflow-hidden",
+        className,
+      )}
+      style={{ backgroundColor: MARK_BG, borderRadius: `${MARK_CORNER_RATIO * 100}%` }}
     >
-      <rect width="64" height="64" rx="16" fill={MARK_BG} />
-      <path d={MARK_HIGHLIGHT} fill="#fff" opacity="0.08" />
-      <g
-        fill="none"
-        stroke="#fff"
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d={MARK_CUP} />
-        <path d={MARK_HANDLE} />
-      </g>
-      <path d={MARK_LEAF} fill="#fff" opacity="0.9" />
-      <path
-        d={MARK_LEAF_VEIN}
-        fill="none"
-        stroke={MARK_BG}
-        strokeWidth="1.5"
-        strokeLinecap="round"
+      <Image
+        src={MARK_SRC}
+        alt=""
+        width={MARK_PX}
+        height={MARK_PX}
+        unoptimized
+        priority
+        className="size-[78%] object-contain"
       />
-    </svg>
+    </span>
   );
 }

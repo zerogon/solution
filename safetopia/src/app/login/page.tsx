@@ -4,8 +4,9 @@ import { Suspense, useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Lock, User } from "lucide-react";
 import { toast } from "sonner";
+import Image from "next/image";
 import { loginAction } from "@/actions/auth";
-import { AppMark } from "@/components/app-mark";
+import { LOCKUP_PX, LOCKUP_SRC } from "@/lib/brand-mark";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -111,9 +112,20 @@ export default function LoginPage() {
     <div className="flex min-h-dvh items-center justify-center bg-muted/40 px-4 py-10">
       <Card className="w-full max-w-sm rounded-2xl shadow-sm">
         <CardHeader className="items-center gap-3 px-6 pt-8 pb-2 text-center">
-          <AppMark className="size-14" />
+          {/* 로그인은 워드마크까지 있는 전체 로고를 쓴다(셸 안에서는 엠블럼만).
+              `unoptimized`는 AppMark와 같은 이유 — 서비스워커가 `/icons/` 경로로 다룬다. */}
+          <Image
+            src={LOCKUP_SRC}
+            alt="ROASTING CAFÉ"
+            width={LOCKUP_PX}
+            height={LOCKUP_PX}
+            unoptimized
+            priority
+            className="w-40"
+          />
           <div>
-            <h1 className="font-heading text-xl font-semibold tracking-tight">Safetopia</h1>
+            {/* 브랜드명은 위 로고 이미지가 이미 보여 준다. 제목 시맨틱만 남긴다. */}
+            <h1 className="sr-only">Safetopia</h1>
             <p className="text-sm text-muted-foreground">카페 연차 관리</p>
           </div>
         </CardHeader>

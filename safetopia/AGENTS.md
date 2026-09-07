@@ -16,7 +16,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Base UI 주의**: `asChild` 없음 → `render={<Link/>}`. `Select.onValueChange`는 `(value: string | null)`. 메뉴 항목에 `<button type=submit>`을 넘길 땐 `nativeButton`.
 
 ## 디자인
-- `src/app/globals.css` OKLCH 토큰. 형제와 구조·L/C 동일, **hue만 150(세이지 그린)**. 새 색은 150 계열 안에서; 상태색은 취소(muted)뿐이다.
+- `src/app/globals.css` OKLCH 토큰. 형제와 구조·L/C 동일, **hue만 웜(브랜드 52 로스팅 브라운 + 중성 65~75)**. hue 52는 로고 잉크(`public/icons/icon.png`)를 측정해 얻었다. 새 색은 이 계열 안에서 — 예외는 의미색뿐이다(취소 muted, destructive 25, 토요일 chart-2 250, 경고 amber 유틸).
+- 브랜드 로고는 벡터가 아니라 **원본 PNG 한 장에서 잘라 쓴다**. 크롭·색·모서리 상수는 `src/lib/brand-mark.ts` 하나가 출처이고 `components/app-mark.tsx`와 `scripts/generate-icons.ts`가 공유한다. 절차는 `public/icons/README.md`. 아이콘을 다시 구우면 `public/sw.js`의 `CACHE_VERSION`도 올린다(`/icons/*`는 cache-first).
 - 라이트 고정(`layout.tsx`가 `colorScheme: light`). `.dark` 블록은 **가드로 남긴다** — 지우면 `dark:` 유틸이 OS 다크에서 되살아난다.
 - 숫자는 `font-mono tabular-nums`. 페이지는 `<div className="space-y-6"><PageHeader/>…</div>`.
 - 날짜 음영은 `isShadedDay`(`src/lib/calendar.ts`) 하나 — 주말+지점 휴무+공휴일. **표시 전용이라 `leave-days.ts`의 `dayOff`(차감 판정)와 일부러 다르다.** 합치지 말 것.
