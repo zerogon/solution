@@ -15,6 +15,8 @@ export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
+  /** 모바일 하단 탭바에서 숨긴다. 사이드바(데스크톱)에는 그대로 남는다. */
+  hideOnMobile?: boolean;
 }
 
 /**
@@ -24,6 +26,10 @@ export interface NavItem {
  * 하단 탭바는 항목마다 `flex-1`이라 개수 비의존이지만 5칸이 편안한 상한이다 —
  * 390px에서 78px씩이고 아이콘 알약이 48px라 여유가 있다. 6칸부터가 위험선.
  * 직원 탭 4개는 PRD 7장 그대로. `/leave/history`는 대시보드·마이페이지에서 진입한다.
+ *
+ * `hideOnMobile`은 좁은 화면에서만 빠진다 — 관리자 대시보드는 md 미만에서 스케줄 보드
+ * 대신 **같은 달의 월 캘린더**를 그리므로(`admin/dashboard/page.tsx`의 md 이중 렌더),
+ * 폰에서는 캘린더 탭이 방금 본 달력을 한 번 더 보여 주는 셈이 된다.
  */
 export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
   [Role.EMPLOYEE]: [
@@ -37,7 +43,7 @@ export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
     { href: "/admin/employees", label: "직원", icon: Users },
     { href: "/admin/branches", label: "지점", icon: Store },
     { href: "/admin/leaves", label: "연차", icon: ClipboardList },
-    { href: "/admin/calendar", label: "캘린더", icon: CalendarDays },
+    { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, hideOnMobile: true },
   ],
 };
 

@@ -19,13 +19,16 @@ export function BottomTabBar({
   badges?: Record<string, number>;
 }) {
   const pathname = usePathname();
-  const active = activeNavHref(items, pathname);
+  // 좁은 화면에서 중복되는 항목은 여기서 걸러낸다. `activeNavHref`도 걸러낸 목록으로
+  // 계산해야 숨긴 경로에 직접 들어왔을 때 엉뚱한 탭이 켜지지 않는다.
+  const visible = items.filter((item) => !item.hideOnMobile);
+  const active = activeNavHref(visible, pathname);
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur md:hidden">
       {/* 홈 인디케이터가 있는 기기에서 탭이 가리지 않도록 safe-area만큼 띄운다. */}
       <ul className="mx-auto flex max-w-md pb-[env(safe-area-inset-bottom)]">
-        {items.map(({ href, label, icon: Icon }) => {
+        {visible.map(({ href, label, icon: Icon }) => {
           const isActive = href === active;
           const count = badges?.[href] ?? 0;
           return (

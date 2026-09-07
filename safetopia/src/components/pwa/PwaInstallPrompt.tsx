@@ -33,12 +33,11 @@ if (typeof window !== "undefined") {
 
 const DISMISS_DATE_KEY = "safetopia:install-dismissed-date";
 
+/** PC는 시트 자체를 띄우지 않으므로 데스크톱 전용 모드는 없다(`isTouchDevice` 참고). */
 type InstallMode =
   | "chrome"
   | "ios"
-  | "macSafari"
   | "firefoxAndroid"
-  | "firefoxDesktop"
   | "inAppAndroid"
   | "inAppIos"
   | null;
@@ -65,6 +64,16 @@ function isDismissedToday(): boolean {
   }
 }
 
+/**
+ * 손가락 입력이 하나라도 있는 기기인지. PC에서는 설치 시트를 띄우지 않는다.
+ *
+ * 판정을 화면 폭이 아니라 **입력 장치**로 하는 이유: 창을 좁힌 데스크톱과 태블릿을
+ * 폭으로는 가를 수 없다. `any-pointer: coarse`는 마우스 전용 PC에서만 거짓이다.
+ */
+function isTouchDevice(): boolean {
+  return window.matchMedia("(any-pointer: coarse)").matches;
+}
+
 function detectInstallMode(): InstallMode {
   if (typeof window === "undefined") return null;
 
@@ -85,16 +94,11 @@ function detectInstallMode(): InstallMode {
     /iphone|ipad|ipod/i.test(ua) || (platform === "MacIntel" && maxTouchPoints > 1);
   if (isIos) return "ios";
 
-  // Firefox iOS(FxiOS)는 위 iOS 분기에서 이미 처리된다.
-  if (/firefox/i.test(ua) && !/fxios/i.test(ua)) {
-    return /android/i.test(ua) ? "firefoxAndroid" : "firefoxDesktop";
+  // Firefox iOS(FxiOS)는 위 iOS 분기에서 이미 처리된다. 데스크톱 Firefox는 애초에
+  // 여기까지 오지 않는다 — 호출부가 터치 기기에서만 부른다.
+  if (/firefox/i.test(ua) && !/fxios/i.test(ua) && /android/i.test(ua)) {
+    return "firefoxAndroid";
   }
-
-  // macOS Safari — Chromium 계열 UA를 모두 제외한다.
-  const isSafariEngine =
-    /safari/i.test(ua) && !/chrome|chromium|edg\/|opr\//i.test(ua);
-  const isMac = /macintosh|mac os x/i.test(ua) && maxTouchPoints <= 1;
-  if (isSafariEngine && isMac) return "macSafari";
 
   // Chromium 계열은 beforeinstallprompt 이벤트에 맡긴다.
   return null;
@@ -114,6 +118,9 @@ export function PwaInstallPrompt() {
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
     if (standalone) return;
+
+    // PC는 대상이 아니다 — 홈 화면에 추가할 홈 화면이 없다.
+    if (!isTouchDevice()) return;
 
     const mode = detectInstallMode();
 
@@ -324,17 +331,6 @@ function InstallHint({ mode }: { mode: InstallMode }) {
         </>
       ),
     },
-    macSafari: {
-      icon: <Share className="size-3.5" />,
-      title: "Safari에서 설치",
-      body: (
-        <>
-          상단 메뉴의 <strong className="text-foreground">파일</strong> →{" "}
-          <strong className="text-foreground">Dock에 추가…</strong>를 선택하면 Dock에서
-          앱처럼 실행할 수 있어요. (Safari 17 이상)
-        </>
-      ),
-    },
     firefoxAndroid: {
       icon: <Share className="size-3.5" />,
       title: "Firefox에서 설치",
@@ -343,17 +339,6 @@ function InstallHint({ mode }: { mode: InstallMode }) {
           우측 상단의 <strong className="text-foreground">메뉴(⋮)</strong>를 열고{" "}
           <strong className="text-foreground">설치</strong> 또는{" "}
           <strong className="text-foreground">홈 화면에 추가</strong>를 눌러주세요.
-        </>
-      ),
-    },
-    firefoxDesktop: {
-      icon: <Share className="size-3.5" />,
-      title: "Firefox에서 빠르게 접속",
-      body: (
-        <>
-          Firefox 데스크톱은 PWA 설치를 기본 지원하지 않습니다.{" "}
-          <strong className="text-foreground">Ctrl/Cmd + D</strong>로 북마크에
-          추가하거나, <em>PWAs for Firefox</em> 확장을 설치하면 앱처럼 사용할 수 있어요.
         </>
       ),
     },
