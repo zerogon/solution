@@ -65,13 +65,43 @@ function isDismissedToday(): boolean {
 }
 
 /**
- * 손가락 입력이 하나라도 있는 기기인지. PC에서는 설치 시트를 띄우지 않는다.
+ * "확실히 PC"일 때만 참. 설치 시트를 억제하는 유일한 조건이다.
  *
- * 판정을 화면 폭이 아니라 **입력 장치**로 하는 이유: 창을 좁힌 데스크톱과 태블릿을
- * 폭으로는 가를 수 없다. `any-pointer: coarse`는 마우스 전용 PC에서만 거짓이다.
+ * **fail-open이어야 한다.** 판단이 서지 않으면 억제하지 않는다 — 안 떠야 할 PC에서
+ * 한 번 뜨는 것보다, 떠야 할 폰에서 조용히 안 뜨는 쪽이 훨씬 나쁘다(원인을 찾을
+ * 단서가 화면에 하나도 남지 않는다).
+ *
+ * 그래서 세 단계로 좁힌다.
+ *  1. UA가 모바일/태블릿이라고 말하면 즉시 아니다. 폰에서는 여기서 끝난다.
+ *  2. 멀티터치 포인트가 있으면 아니다 — iPadOS는 Mac UA를 보고하므로 1로는 안 걸린다.
+ *  3. 남은 것만 `any-pointer: coarse`로 가른다. 화면 폭이 아니라 입력 장치로 보는
+ *     이유는 창을 좁힌 데스크톱과 태블릿을 폭으로는 가를 수 없기 때문이다.
+ *     쿼리를 이해 못 하는 브라우저는 `mq.media`가 "not all"로 돌아온다 — 그때는
+ *     `matches`가 항상 false라 PC로 오판하므로, 판정을 포기하고 띄운다.
  */
-function isTouchDevice(): boolean {
-  return window.matchMedia("(any-pointer: coarse)").matches;
+function isDesktop(): boolean {
+  const ua = window.navigator.userAgent;
+  if (/android|iphone|ipad|ipod|mobile|tablet|silk|kindle/i.test(ua)) return false;
+  if ((window.navigator.maxTouchPoints ?? 0) > 1) return false;
+
+  const query = "(any-pointer: coarse)";
+  const mq = window.matchMedia(query);
+  if (mq.media !== query) return false; // 미지원 → 판정 불가 → 억제하지 않는다
+  return !mq.matches;
+}
+
+/**
+ * `?install` 이 붙어 있으면 "오늘 하루 보지 않기"를 무시한다.
+ *
+ * 이 플래그는 localStorage에만 남아서, 한 번 체크하면 그날은 무슨 수를 써도 시트를
+ * 다시 볼 수 없다 — 폰에서 사이트 데이터를 지우게 하는 것 말고는 확인할 방법이 없었다.
+ */
+function isForced(): boolean {
+  try {
+    return new URLSearchParams(window.location.search).has("install");
+  } catch {
+    return false;
+  }
 }
 
 function detectInstallMode(): InstallMode {
@@ -112,15 +142,17 @@ export function PwaInstallPrompt() {
   const checkboxId = useId();
 
   useEffect(() => {
-    if (isDismissedToday()) return;
+    const forced = isForced();
+    if (!forced && isDismissedToday()) return;
 
+    // 이미 설치된 앱 안에서는 `?install`로도 띄우지 않는다 — 홈 화면에 추가할 것이 없다.
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
     if (standalone) return;
 
     // PC는 대상이 아니다 — 홈 화면에 추가할 홈 화면이 없다.
-    if (!isTouchDevice()) return;
+    if (!forced && isDesktop()) return;
 
     const mode = detectInstallMode();
 
@@ -144,7 +176,7 @@ export function PwaInstallPrompt() {
       e.preventDefault();
       const evt = e as BeforeInstallPromptEvent;
       deferredPrompt = evt;
-      if (isDismissedToday()) return;
+      if (!forced && isDismissedToday()) return;
       setEvent(evt);
       setInstallMode("chrome");
       setOpen(true);
