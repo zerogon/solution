@@ -37,6 +37,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 상태 전이는 전부 `src/lib/leave-service.ts`, 전부 `$transaction`. 신청 트랜잭션이 `usedDays`를 더하고, 취소가 되돌린다. balance 행 `FOR UPDATE`로 같은 직원 동시 신청을 직렬화하고, `leave_request_days(user_id, date)` 유니크가 최후 방어선. `npm run race-test`로 검증(기대: 성공 1 / 차단 9).
 - 취소 두 경로: 직원 본인은 **시작일이 오늘(KST) 이후**인 건만(`cancelOwnRequest`), 관리자는 언제든 사유 선택(`adminCancelRequest`, 감사 로그). 둘 다 `cancelledBy/At`, 관리자 사유는 `cancelReason`.
 - `LeaveRequestDay`는 CONFIRMED 동안만 존재. 취소 시 **삭제**(그래야 그 날 재신청 가능). 부모 `LeaveRequest`는 이력으로 남는다. 캘린더·오늘 휴가자는 이 표를 상태 조건 없이 읽는다.
+- 직원 `/calendar`는 같은 지점(`user.branchId`) 동료의 `LeaveRequestDay`까지 읽는다(연한 칩, `DayLeaveList` 재사용). **다른 지점은 비공개** — 지점 필터를 빼면 전 지점 연차가 노출된다. 소속 지점이 없으면 본인만.
 - 잔여 산식 `src/lib/leave-balance.ts`: total = 부여+이월+조정, remaining = total - used. 대기/신청 가능 개념 없음.
 
 ## 인증
