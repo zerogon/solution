@@ -4,6 +4,12 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { Bell, Compass, Share, Smartphone, Zap } from "lucide-react";
 
 import { AppMark } from "@/components/app-mark";
+import {
+  detectInstallMode,
+  isDesktop,
+  readInstallEnv,
+  type InstallMode,
+} from "@/lib/install-mode";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -36,20 +42,14 @@ if (typeof window !== "undefined") {
 const DISMISS_DATE_KEY = "safetopia:install-dismissed-date-v2";
 
 /**
- * PC는 시트 자체를 띄우지 않으므로 데스크톱 전용 모드는 없다(`isDesktop` 참고).
+ * 같은 탭 세션에서 시트를 한 번만 띄우기 위한 표식.
  *
- * `chrome`은 `beforeinstallprompt`를 손에 쥔 상태 — "지금 설치" 원클릭이 가능하다.
- * `chromeManual`은 같은 Chromium인데 그 이벤트가 오지 않은 상태다. 이 경우에도
- * 시트는 뜨고 메뉴 경로를 안내한다.
+ * 시트는 `/login`과 로그인 뒤 셸 레이아웃 양쪽에 마운트된다. 이 가드가 없으면 로그인
+ * 화면에서 한 번 본 사용자가 로그인하자마자(`router.replace`로 셸이 새로 마운트되며)
+ * 같은 시트를 곧바로 다시 본다. `sessionStorage`라 탭을 닫으면 풀린다 —
+ * "오늘 하루 보지 않기"(`localStorage`, 사용자가 명시적으로 고른 것)와는 역할이 다르다.
  */
-type InstallMode =
-  | "chrome"
-  | "chromeManual"
-  | "ios"
-  | "firefoxAndroid"
-  | "inAppAndroid"
-  | "inAppIos"
-  | null;
+const SHOWN_SESSION_KEY = "safetopia:install-shown-session";
 
 function getLocalDateString(date = new Date()): string {
   const y = date.getFullYear();
@@ -73,34 +73,24 @@ function isDismissedToday(): boolean {
   }
 }
 
-/**
- * "확실히 PC"일 때만 참. 설치 시트를 억제하는 유일한 조건이다.
- *
- * **fail-open이어야 한다.** 판단이 서지 않으면 억제하지 않는다 — 안 떠야 할 PC에서
- * 한 번 뜨는 것보다, 떠야 할 폰에서 조용히 안 뜨는 쪽이 훨씬 나쁘다(원인을 찾을
- * 단서가 화면에 하나도 남지 않는다).
- *
- * 그래서 세 단계로 좁힌다.
- *  1. UA가 모바일/태블릿이라고 말하면 즉시 아니다. 폰에서는 여기서 끝난다.
- *  2. 멀티터치 포인트가 있으면 아니다 — iPadOS는 Mac UA를 보고하므로 1로는 안 걸린다.
- *  3. 남은 것만 `any-pointer: coarse`로 가른다. 화면 폭이 아니라 입력 장치로 보는
- *     이유는 창을 좁힌 데스크톱과 태블릿을 폭으로는 가를 수 없기 때문이다.
- *     쿼리를 이해 못 하는 브라우저는 `mq.media`가 "not all"로 돌아온다 — 그때는
- *     `matches`가 항상 false라 PC로 오판하므로, 판정을 포기하고 띄운다.
- */
-function isDesktop(): boolean {
-  const ua = window.navigator.userAgent;
-  if (/android|iphone|ipad|ipod|mobile|tablet|silk|kindle/i.test(ua)) return false;
-  if ((window.navigator.maxTouchPoints ?? 0) > 1) return false;
+function wasShownThisSession(): boolean {
+  try {
+    return window.sessionStorage.getItem(SHOWN_SESSION_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
 
-  const query = "(any-pointer: coarse)";
-  const mq = window.matchMedia(query);
-  if (mq.media !== query) return false; // 미지원 → 판정 불가 → 억제하지 않는다
-  return !mq.matches;
+function markShownThisSession() {
+  try {
+    window.sessionStorage.setItem(SHOWN_SESSION_KEY, "1");
+  } catch {
+    // 시크릿 모드 등. 기록 못 하면 다음 마운트에서 한 번 더 뜨는 데서 그친다.
+  }
 }
 
 /**
- * `?install` 이 붙어 있으면 "오늘 하루 보지 않기"를 무시한다.
+ * `?install` 이 붙어 있으면 "오늘 하루 보지 않기"·세션 1회 가드·PC 억제를 모두 무시한다.
  *
  * 이 플래그는 localStorage에만 남아서, 한 번 체크하면 그날은 무슨 수를 써도 시트를
  * 다시 볼 수 없다 — 폰에서 사이트 데이터를 지우게 하는 것 말고는 확인할 방법이 없었다.
@@ -113,36 +103,6 @@ function isForced(): boolean {
   }
 }
 
-function detectInstallMode(): InstallMode {
-  if (typeof window === "undefined") return null;
-
-  const ua = window.navigator.userAgent;
-  const platform = window.navigator.platform;
-  const maxTouchPoints = window.navigator.maxTouchPoints ?? 0;
-
-  // 인앱 웹뷰(카카오톡·네이버·라인·밴드·인스타·페북)는 "홈 화면에 추가"가 아예
-  // 불가능하다. 사내 공유는 카톡 링크로 퍼질 가능성이 크므로 먼저 걸러낸다.
-  // (아래 iOS/Android 분기에도 같이 걸리기 때문에 순서가 중요하다.)
-  if (/kakaotalk|naver|instagram|fbav|fban|fb_iab|daumapps|line\/|band/i.test(ua)) {
-    return /android/i.test(ua) ? "inAppAndroid" : "inAppIos";
-  }
-
-  // iPadOS 13+ Safari는 "데스크톱 사이트 요청"이 기본 ON이라 Mac UA를 보고한다.
-  // UA 스니핑만으로는 안 잡히므로 "터치 되는 Mac" 휴리스틱을 함께 쓴다.
-  const isIos =
-    /iphone|ipad|ipod/i.test(ua) || (platform === "MacIntel" && maxTouchPoints > 1);
-  if (isIos) return "ios";
-
-  // Firefox iOS(FxiOS)는 위 iOS 분기에서 이미 처리된다. 데스크톱 Firefox는 애초에
-  // 여기까지 오지 않는다 — 호출부가 터치 기기에서만 부른다.
-  if (/firefox/i.test(ua) && !/fxios/i.test(ua) && /android/i.test(ua)) {
-    return "firefoxAndroid";
-  }
-
-  // Chromium 계열은 beforeinstallprompt 이벤트에 맡긴다.
-  return null;
-}
-
 export function PwaInstallPrompt() {
   const [event, setEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [open, setOpen] = useState(false);
@@ -152,7 +112,7 @@ export function PwaInstallPrompt() {
 
   useEffect(() => {
     const forced = isForced();
-    if (!forced && isDismissedToday()) return;
+    if (!forced && (isDismissedToday() || wasShownThisSession())) return;
 
     // 이미 설치된 앱 안에서는 `?install`로도 띄우지 않는다 — 홈 화면에 추가할 것이 없다.
     const standalone =
@@ -161,9 +121,11 @@ export function PwaInstallPrompt() {
     if (standalone) return;
 
     // PC는 대상이 아니다 — 홈 화면에 추가할 홈 화면이 없다.
-    if (!forced && isDesktop()) return;
+    const env = readInstallEnv();
+    if (!forced && isDesktop(env)) return;
 
-    const mode = detectInstallMode();
+    const mode = detectInstallMode(env);
+    markShownThisSession();
 
     // 비Chromium 브라우저는 beforeinstallprompt를 쏘지 않으므로 즉시 안내를 띄운다.
     if (mode !== null) {

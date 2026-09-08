@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 
 function LoginForm() {
   const router = useRouter();
@@ -132,6 +133,13 @@ export default function LoginPage() {
         <CardContent className="px-6 pt-4 pb-8">
           <Suspense fallback={<div className="h-40 animate-pulse rounded-md bg-muted" />}>
             <LoginForm />
+            {/* 링크로 들어온 첫 화면이 여기다 — 설치 안내는 로그인 전에 떠야 한다.
+                루트 레이아웃이 아니라 이 Suspense 경계 **안**에 두는 이유: 시트(Base UI
+                모달)는 열리는 순간 바깥 형제에 aria-hidden을 직접 찍는데, 위 경계가
+                하이드레이트되기 전에 그러면 mismatch가 난다. 같은 경계 안이면 경계가
+                커밋된 뒤에야 effect가 돈다. 로그인 뒤 셸에도 마운트되지만 세션 1회
+                가드가 중복을 막는다. */}
+            <PwaInstallPrompt />
           </Suspense>
         </CardContent>
       </Card>
