@@ -109,9 +109,9 @@ export function DeadlineCalculatorBody({
   // 커버리지 전체의 공휴일이라 ~205개다(연도 2개 시절엔 ~40개였다). 매 렌더 돌 이유가 없다.
   const holidayModifier = useMemo(() => holidayDates.map(parseDate), [holidayDates]);
 
-  // ⚠️ 예전에는 여기서 `getUTCDay()`로 주말만 로컬 판정해 "기준일이 휴일입니다"를
-  // 그렸다. 그건 공휴일 기준일에 뜨지 않았고, 무엇보다 **아무 결과도 설명하지 못했다.**
-  // 이제 정확한 조건은 `trace.startIso !== picked`이고, 그 판정은 오라클을 거쳐서 온다.
+  // ⚠️ 기준일이 휴일인지는 여기서 말하지 않는다 — 2026-09-09 규칙부터 기준일의 휴일
+  // 여부는 결과에 아무 영향이 없다. 말할 것은 결과 보정 하나이고, 그 판정은 오라클을
+  // 거쳐서 온다(`trace.resultSkipped`).
   const holidayNames = (s: Skip) =>
     s.holidays.length > 0 ? ` (${s.holidays.map((h) => h.name).join(", ")})` : "";
 
@@ -221,26 +221,20 @@ export function DeadlineCalculatorBody({
           )}
         </div>
 
-        {/* 이 줄들이 기능의 작업 증명이다 — 없으면 "광복절을 건너뛴 것"과 "고장난 것"을
-            사용자가 구별할 수 없다. 규칙이 3단계이므로 보정이 일어난 단계만 말한다:
-            둘 다 없으면 "그대로", 하나만 있으면 그 하나만. */}
+        {/* 이 줄이 기능의 작업 증명이다 — 없으면 "한글날을 건너뛴 것"과 "고장난 것"을
+            사용자가 구별할 수 없다. 규칙이 2단계이고 보정은 결과에만 일어나므로
+            말할 것도 하나다: 보정이 있었으면 어디서 어디로, 없었으면 "그대로". */}
         {trace && (
           <div className="space-y-0.5 pt-1.5 text-[11px] text-muted-foreground">
-            {trace.startIso !== picked && (
+            {trace.rawIso !== trace.iso ? (
               // 한 문장을 JSX 텍스트 노드로 쪼개면 줄바꿈이 공백으로 들어가 이름 괄호
               // 앞이 두 칸이 된다. 문장 하나는 표현식 하나로 만든다.
               <p>
-                {`기준일 ${formatKoMd(picked)} 휴일${holidayNames(trace.baseSkipped)}` +
-                  ` → ${formatKoMd(trace.startIso)}부터`}
-              </p>
-            )}
-            {trace.rawIso !== trace.iso ? (
-              <p>
-                {`${LEAD_DAYS}일째 ${formatKoMd(trace.rawIso)} 휴일${holidayNames(trace.resultSkipped)}` +
+                {`${LEAD_DAYS}일 전 ${formatKoMd(trace.rawIso)} 휴일${holidayNames(trace.resultSkipped)}` +
                   ` → ${formatKoMd(trace.iso)}`}
               </p>
             ) : (
-              <p>{LEAD_DAYS}일째가 그대로 영업일입니다</p>
+              <p>{LEAD_DAYS}일 전이 그대로 영업일입니다</p>
             )}
           </div>
         )}

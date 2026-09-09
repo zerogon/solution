@@ -5,7 +5,7 @@ import { parseIcsHolidays } from "@/lib/holidays-ical";
 import { addDaysIso, formatKoMd, parseDate } from "@/lib/utils";
 
 /**
- * 마감일 계산기(기준일 포함 D-10 · 양 끝 휴일 보정)의 검증 도구.
+ * 마감일 계산기(달력일 D-10 · 결과만 휴일 보정)의 검증 도구.
  *
  * 이 저장소에는 테스트 러너가 없고(`package.json`에 `test` 스크립트가 없다) 관례가
  * `scripts/debug-*.ts`를 `tsx`로 돌리는 것이다.
@@ -18,7 +18,7 @@ import { addDaysIso, formatKoMd, parseDate } from "@/lib/utils";
  *   npx tsx scripts/debug-holidays.ts calc 2026-10-05   # 운영자 예시 2
  *
  * `calc`가 단계 표를 찍는 이유: 답이 틀렸을 때 "틀렸다"가 아니라 **어디서 갈렸는지**가
- * 보여야 한다. 규칙이 3단계(기준일 보정 → 카운트 → 결과 보정)이므로 표도 3단이고,
+ * 보여야 한다. 규칙이 2단계(카운트 → 결과 보정)이므로 표도 2단이고,
  * `business-days.ts` 헤더의 골든 케이스와 같은 모양이다.
  *
  * ## 이 파일의 판단 하나가 2026-08-30에 뒤집혔다
@@ -60,8 +60,7 @@ type Oracle = {
 };
 
 /**
- * 보정 한 번을 한 줄씩 편다. 규칙의 1단계와 3단계가 **같은 연산**이라
- * (`business-days.ts`의 `previousBusinessDay`) 이 함수도 하나다.
+ * 보정 한 번을 한 줄씩 편다 — 규칙의 2단계(`business-days.ts`의 `previousBusinessDay`).
  */
 function backOffRows(iso: string, o: Oracle, label: string): { rows: string[]; last: string } {
   const rows: string[] = [];
@@ -80,19 +79,13 @@ function backOffRows(iso: string, o: Oracle, label: string): { rows: string[]; l
   return { rows, last: cur };
 }
 
-/** 3단계를 통째로 재현한다. 프로덕션 함수와 같은 규칙을 손으로 편 것이다. */
+/** 2단계를 통째로 재현한다. 프로덕션 함수와 같은 규칙을 손으로 편 것이다. */
 function traceTable(iso: string, n: number, o: Oracle) {
-  console.log("\n  1) 기준일 보정");
-  const base = backOffRows(iso, o, "시작일");
-  console.log(base.rows.join("\n"));
+  const raw = addDaysIso(iso, -n);
+  console.log(`\n  1) 카운트 (기준일 - ${n}일, 기준일의 휴일 여부 무관)`);
+  console.log(`      ${iso}(${KO_DAY[parseDate(iso).getUTCDay()]}) - ${n}일 = ${raw}(${KO_DAY[parseDate(raw).getUTCDay()]})`);
 
-  const raw = addDaysIso(base.last, -(n - 1));
-  console.log(`\n  2) 카운트 (시작일 포함 ${n}일)`);
-  console.log(
-    `      ${base.last} - ${n - 1}일 = ${raw}(${KO_DAY[parseDate(raw).getUTCDay()]})`,
-  );
-
-  console.log("\n  3) 결과 보정");
+  console.log("\n  2) 결과 보정");
   console.log(backOffRows(raw, o, "마감일").rows.join("\n"));
 }
 
@@ -108,8 +101,7 @@ function describe(r: DeadlineResult): string {
   };
   return [
     `${r.iso} ${formatKoMd(r.iso)}`,
-    `시작일 ${r.startIso} [${skip(r.baseSkipped)}]`,
-    `10일째 ${r.rawIso} [${skip(r.resultSkipped)}]`,
+    `10일 전 ${r.rawIso} [${skip(r.resultSkipped)}]`,
   ].join(" · ");
 }
 
@@ -279,20 +271,21 @@ function golden(): number {
   traceTable("2026-10-05", 10, o);
   const g = deadlineIso("2026-10-05", 10, o);
   check(
-    "2026-10-05 → 마감일 (3단계를 모두 지나가는 유일한 케이스)",
-    g.ok ? `${g.iso} 시작일 ${g.startIso} 10일째 ${g.rawIso}` : describe(g),
-    "2026-09-23 시작일 2026-10-02 10일째 2026-09-23",
+    "2026-10-05 → 마감일 (기준일이 공휴일 · 결과 보정이 추석 이틀을 건너뜀)",
+    g.ok ? `${g.iso} 10일 전 ${g.rawIso}` : describe(g),
+    "2026-09-23 10일 전 2026-09-25",
   );
 
   console.log("\n[golden] 그 밖의 케이스");
   const cases: [string, string, string][] = [
-    ["2026-10-19", "2026-10-08", "운영자 예시 1 — 결과 보정(주말 1 + 한글날)"],
-    ["2026-08-15", "2026-08-05", "기준일이 토요일이자 광복절 → 8/14부터 센다"],
-    // ⚠️ 이 한 줄이 "기준일 포함" 규약을 고정한다. -(n-1)을 -n으로 바꾸면 10/6이 된다.
-    ["2026-10-16", "2026-10-07", "기준일 포함 규약 — 제외였다면 10/6"],
-    ["2026-10-06", "2026-09-23", "결과 보정이 추석 연휴+주말 4일을 관통"],
-    // 규칙 교체(2026-09-02) 이전의 골든이 8/14였다. 그 변화 자체를 단언으로 박아 둔다.
-    ["2026-08-29", "2026-08-19", "옛 규칙(→8/14)에서 바뀐다는 사실을 고정"],
+    ["2026-10-19", "2026-10-08", "운영자 예시 1 — 결과 보정(한글날)"],
+    // ⚠️ 이 한 줄이 "기준일은 보정하지 않는다"를 고정한다. 옛 규칙(기준일 보정)이면 8/5다.
+    ["2026-08-17", "2026-08-07", "기준일이 대체공휴일이어도 그대로 센다 — 옛 규칙이면 8/5"],
+    // ⚠️ 이 한 줄이 "기준일 비포함(-n)"을 고정한다. -(n-1)로 바꾸면 10/7이 된다.
+    ["2026-10-16", "2026-10-06", "기준일 비포함 규약 — 포함이었다면 10/7"],
+    ["2026-10-06", "2026-09-23", "결과 보정이 추석 연휴+주말을 관통(9/26 토 → 9/25 → 9/24)"],
+    ["2026-09-22", "2026-09-11", "결과 보정이 주말만(9/12 토)"],
+    ["2026-08-29", "2026-08-19", "기준일이 토요일이어도 그대로 센다"],
     ["2026-01-05", "2025-12-26", "연도 경계 — 2025 커버리지가 없으면 계산 불가가 된다"],
     ["2028-03-05", "", "커버리지 밖은 날짜를 지어내지 않는다"],
   ];
@@ -380,8 +373,6 @@ async function main() {
       console.log(`\n[calc] 기준일 ${iso} ${formatKoMd(iso)} · 커버 연도 ${parsed.covered.join(", ")}`);
       traceTable(iso, 10, oracle);
       console.log(`\n  결과: ${describe(deadlineIso(iso, 10, oracle))}`);
-      // 보정이 실제로 무엇을 했는지 보려면 아무것도 안 한 값이 옆에 있어야 한다.
-      console.log(`  참고 — 아무 보정 없는 단순 -10일: ${addDaysIso(iso, -10)} ${formatKoMd(addDaysIso(iso, -10))}`);
       break;
     }
     case "golden":
