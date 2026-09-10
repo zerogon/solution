@@ -5,8 +5,9 @@ import { ArrowLeft, History } from "lucide-react";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { EMPLOYEE_STATUS_LABEL, ROLE_LABEL } from "@/lib/labels";
-import { summarize } from "@/lib/leave-balance";
-import { formatKstDateTime, toIsoDate } from "@/lib/utils";
+import { getPeriodRows } from "@/lib/queries";
+import { formatPeriodLabel } from "@/lib/leave-accrual";
+import { formatKstDateTime, toIsoDate, todayKstIso } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,14 +25,13 @@ export const dynamic = "force-dynamic";
 export default async function EmployeeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const session = await auth();
-  const thisYear = new Date().getUTCFullYear();
+  const today = todayKstIso();
 
   const [user, branches] = await Promise.all([
     prisma.user.findUnique({
       where: { id },
       include: {
         branch: { select: { id: true, name: true } },
-        leaveBalances: { orderBy: { year: "desc" } },
         adjustments: { orderBy: { createdAt: "desc" }, take: 20, include: { createdBy: { select: { name: true } } } },
         branchHistories: {
           orderBy: { changedAt: "desc" },
@@ -48,7 +48,8 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
   ]);
   if (!user) notFound();
 
-  const hasThisYear = user.leaveBalances.some((b) => b.year === thisYear);
+  // 저장된 회차 행 + 아직 행이 없는 현재 회차. 입사일이 없으면 빈 배열이다.
+  const periods = await getPeriodRows(user, today);
   const isSelf = session?.user.id === user.id;
 
   return (
@@ -100,45 +101,61 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
           </Card>
 
           <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle>연차</CardTitle>
-                <CardDescription>연도별 부여·사용·잔여</CardDescription>
-              </div>
-              {!hasThisYear && <GrantLeaveDialog userId={user.id} year={thisYear} size="default" />}
+            <CardHeader>
+              <CardTitle>연차</CardTitle>
+              <CardDescription>입사일 기준 회차별 부여·사용·잔여</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {user.leaveBalances.length === 0 && (
-                <p className="text-sm text-muted-foreground">아직 부여된 연차가 없습니다.</p>
+              {periods.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  입사일이 등록되지 않아 연차 회차를 계산할 수 없습니다. 위에서 입사일을 입력해주세요.
+                </p>
               )}
-              {user.leaveBalances.map((b) => {
-                const s = summarize(b);
-                return (
-                  <div key={b.id} className="rounded-lg border p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="font-heading font-semibold">{b.year}년</div>
-                      <div className="flex gap-1.5">
-                        <GrantLeaveDialog userId={user.id} year={b.year} initial={b} />
-                        <AdjustLeaveDialog userId={user.id} year={b.year} />
-                      </div>
+              {periods.map((p) => (
+                <div key={p.id ?? "current"} className="rounded-lg border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-heading font-semibold">
+                        {p.legacyYear !== null ? `${p.legacyYear}년(이전 기준)` : formatPeriodLabel(p.period)}
+                      </span>
+                      {p.legacyYear === null && (
+                        <Badge variant={p.manual ? "outline" : "secondary"}>{p.manual ? "수동" : "자동"}</Badge>
+                      )}
                     </div>
-                    <dl className="mt-2 grid grid-cols-3 gap-2 text-center sm:grid-cols-5">
-                      {[
-                        ["부여", b.totalDays],
-                        ["이월", b.carriedOverDays],
-                        ["조정", b.adjustedDays],
-                        ["사용", s.used],
-                        ["잔여", s.remaining],
-                      ].map(([label, v]) => (
-                        <div key={label as string} className="rounded-md bg-muted/50 py-1.5">
-                          <dt className="text-[11px] text-muted-foreground">{label}</dt>
-                          <dd className="font-mono text-sm font-semibold tabular-nums">{v as number}</dd>
-                        </div>
-                      ))}
-                    </dl>
+                    {/* 전환 이전의 캘린더 연도 행은 회차가 정의되지 않아 수정 대상이 아니다. */}
+                    {p.legacyYear === null && (
+                      <div className="flex gap-1.5">
+                        <GrantLeaveDialog
+                          userId={user.id}
+                          periodIndex={p.period.index}
+                          periodLabel={formatPeriodLabel(p.period)}
+                          autoDays={p.autoDays}
+                          initial={p.id ? { totalDays: p.manual ? p.granted : null, carriedOverDays: p.carriedOverDays } : undefined}
+                        />
+                        <AdjustLeaveDialog
+                          userId={user.id}
+                          periodIndex={p.period.index}
+                          periodLabel={formatPeriodLabel(p.period)}
+                        />
+                      </div>
+                    )}
                   </div>
-                );
-              })}
+                  <dl className="mt-2 grid grid-cols-3 gap-2 text-center sm:grid-cols-5">
+                    {[
+                      ["부여", p.granted],
+                      ["이월", p.carriedOverDays],
+                      ["조정", p.adjustedDays],
+                      ["사용", p.summary.used],
+                      ["잔여", p.summary.remaining],
+                    ].map(([label, v]) => (
+                      <div key={label as string} className="rounded-md bg-muted/50 py-1.5">
+                        <dt className="text-[11px] text-muted-foreground">{label}</dt>
+                        <dd className="font-mono text-sm font-semibold tabular-nums">{v as number}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </div>
+              ))}
 
               {user.adjustments.length > 0 && (
                 <>
@@ -149,7 +166,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
                       {user.adjustments.map((a) => (
                         <li key={a.id} className="flex items-baseline gap-2">
                           <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatKstDateTime(a.createdAt)}</span>
-                          <span className="font-mono tabular-nums">{a.year}년 {a.amount > 0 ? "+" : ""}{a.amount}</span>
+                          <span className="font-mono tabular-nums">{a.periodIndex}년차 {a.amount > 0 ? "+" : ""}{a.amount}</span>
                           <span className="min-w-0 flex-1 truncate text-foreground/80">{a.reason}</span>
                           <span className="text-xs text-muted-foreground">{a.createdBy.name}</span>
                         </li>

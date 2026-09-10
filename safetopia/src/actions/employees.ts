@@ -7,7 +7,9 @@ import { requireAdmin } from "@/lib/auth-helpers";
 import { writeAudit } from "@/lib/audit";
 import { toActionError, type ActionResult } from "@/lib/errors";
 import { generateTempPassword } from "@/lib/passwords";
-import { parseDate } from "@/lib/utils";
+import { parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
+import { accrualOn } from "@/lib/leave-accrual";
+import { realignBalances } from "@/lib/leave-period";
 import {
   employeeBranchChangeSchema,
   employeeCreateSchema,
@@ -60,7 +62,21 @@ export async function createEmployee(
     }
 
     const tempPassword = d.initialPassword ?? generateTempPassword();
-    const year = new Date().getUTCFullYear();
+    // 입사일이 있으면 현재 회차 행을 바로 만든다 — 1년 넘은 직원을 등록해도 곧장 일수가 잡힌다.
+    // totalDays를 비우면 null(자동 계산)로 남고, 값을 넣으면 그 회차만 수동 부여가 된다.
+    const balanceCreate = d.hireDate
+      ? (() => {
+          const { period } = accrualOn(d.hireDate, todayKstIso());
+          return {
+            create: {
+              periodIndex: period.index,
+              periodStart: parseDate(period.startIso),
+              periodEnd: parseDate(period.endIso),
+              totalDays: d.totalDays ?? null,
+            },
+          };
+        })()
+      : undefined;
 
     const user = await prisma.$transaction(async (tx) => {
       const created = await tx.user.create({
@@ -74,8 +90,7 @@ export async function createEmployee(
           role: d.role,
           branchId: d.branchId,
           hireDate: d.hireDate ? parseDate(d.hireDate) : null,
-          leaveBalances:
-            d.totalDays !== undefined ? { create: { year, totalDays: d.totalDays } } : undefined,
+          leaveBalances: balanceCreate,
           branchHistories: d.branchId
             ? { create: { toBranchId: d.branchId, changedById: session.user.id, reason: "최초 배정" } }
             : undefined,
@@ -89,7 +104,7 @@ export async function createEmployee(
           targetType: AuditTargetType.USER,
           targetId: created.id,
           description: `직원 등록: ${created.name}(${created.loginId})`,
-          metadata: { role: d.role, branchId: d.branchId, totalDays: d.totalDays ?? null },
+          metadata: { role: d.role, branchId: d.branchId, totalDays: d.totalDays ?? null, hireDate: d.hireDate },
         },
         tx,
       );
@@ -127,23 +142,36 @@ export async function updateEmployee(input: unknown): Promise<ActionResult> {
       if (admins <= 1) return { ok: false, message: "마지막 관리자의 권한은 변경할 수 없습니다." };
     }
 
-    await prisma.user.update({
-      where: { id: d.id },
-      data: {
-        name: d.name,
-        email: d.email,
-        phone: d.phone,
-        role: d.role,
-        hireDate: d.hireDate ? parseDate(d.hireDate) : null,
-      },
+    const hireDateFrom = current.hireDate ? toIsoDate(current.hireDate) : null;
+    const hireDateTo = d.hireDate ?? null;
+
+    const moved = await prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: d.id },
+        data: {
+          name: d.name,
+          email: d.email,
+          phone: d.phone,
+          role: d.role,
+          hireDate: hireDateTo ? parseDate(hireDateTo) : null,
+        },
+      });
+      // 회차 경계는 입사일에서 파생된다. 입사일이 움직이면 저장된 회차 행도 따라 움직여야 한다.
+      // periodIndex(불변 신원)는 그대로라 유니크 키도, 신청이 가리키는 행도 흔들리지 않는다.
+      if (hireDateTo && hireDateTo !== hireDateFrom) {
+        return (await realignBalances(tx, d.id, hireDateTo, todayKstIso())).moved;
+      }
+      return 0;
     });
+
     await writeAudit({
       actorId: session.user.id,
       actorName: session.user.name,
       action: AuditAction.UPDATE_EMPLOYEE,
       targetType: AuditTargetType.USER,
       targetId: d.id,
-      description: `직원 정보 수정: ${d.name}`,
+      description: `직원 정보 수정: ${d.name}${hireDateTo !== hireDateFrom ? ` (입사일 ${hireDateFrom ?? "—"} → ${hireDateTo ?? "—"})` : ""}`,
+      metadata: { hireDateFrom, hireDateTo, movedPeriods: moved },
     });
     revalidate(d.id);
     return { ok: true };

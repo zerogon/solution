@@ -3,8 +3,8 @@ import { ChevronRight, Plus, Users } from "lucide-react";
 
 import { prisma } from "@/lib/prisma";
 import { EMPLOYEE_STATUS_LABEL, ROLE_LABEL, formatDays } from "@/lib/labels";
-import { summarize } from "@/lib/leave-balance";
-import { cn, toIsoDate } from "@/lib/utils";
+import { getCurrentBalanceSummaries } from "@/lib/queries";
+import { cn, toIsoDate, todayKstIso } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState } from "@/components/empty-state";
 import { Badge } from "@/components/ui/badge";
@@ -33,25 +33,20 @@ export default async function EmployeesPage({
     statusParam === "ALL" ? undefined : (Object.values(EmployeeStatus) as string[]).includes(statusParam)
       ? (statusParam as EmployeeStatus)
       : EmployeeStatus.ACTIVE;
-  const year = new Date().getUTCFullYear();
+  const today = todayKstIso();
 
   const [users, branches] = await Promise.all([
     prisma.user.findMany({
       where: statusFilter ? { status: statusFilter } : undefined,
       orderBy: [{ role: "asc" }, { branch: { name: "asc" } }, { name: "asc" }],
-      include: {
-        branch: { select: { name: true } },
-        leaveBalances: { where: { year } },
-      },
+      include: { branch: { select: { name: true } } },
     }),
     prisma.branch.findMany({ where: { status: BranchStatus.ACTIVE }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
 
-  const rows = users.map((u) => {
-    const balance = u.leaveBalances[0];
-    const summary = balance ? summarize(balance) : null;
-    return { ...u, summary };
-  });
+  // 회차가 사람마다 달라 공통 연도 인자가 없다. 오늘 시점의 각자 현재 회차를 본다.
+  const balances = await getCurrentBalanceSummaries(users, today);
+  const rows = users.map((u) => ({ ...u, summary: balances.get(u.id)?.summary ?? null }));
 
   return (
     <div className="space-y-6">
@@ -60,6 +55,7 @@ export default async function EmployeesPage({
         description="직원을 등록하고 소속·재직 상태·연차를 관리합니다."
         action={
           <EmployeeFormDialog
+            todayIso={today}
             branches={branches}
             trigger={
               <Button>
@@ -144,7 +140,7 @@ export default async function EmployeesPage({
                     <TableHead>지점</TableHead>
                     <TableHead>입사일</TableHead>
                     <TableHead>상태</TableHead>
-                    <TableHead className="text-right">{year} 총</TableHead>
+                    <TableHead className="text-right">총</TableHead>
                     <TableHead className="text-right">사용</TableHead>
                     <TableHead className="text-right">잔여</TableHead>
                     <TableHead className="w-0" />

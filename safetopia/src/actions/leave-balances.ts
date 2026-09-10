@@ -5,7 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/auth-helpers";
 import { writeAudit } from "@/lib/audit";
 import { LeaveError, toActionError, type ActionResult } from "@/lib/errors";
-import { summarize } from "@/lib/leave-balance";
+import { formatPeriodLabel, periodByIndex } from "@/lib/leave-accrual";
+import { summarize, withGranted } from "@/lib/leave-balance";
+import { lockPeriodBalance, requireHireIso } from "@/lib/leave-period";
+import { todayKstIso } from "@/lib/utils";
 import { formatDays } from "@/lib/labels";
 import { leaveAdjustSchema, leaveGrantSchema } from "@/lib/validators";
 import { AuditAction, AuditTargetType } from "@/generated/prisma/enums";
@@ -20,7 +23,11 @@ function revalidate(userId: string) {
   revalidatePath("/profile");
 }
 
-/** 연도별 기본 부여·이월을 설정한다(upsert). 사용·조정 누계는 건드리지 않는다. */
+/**
+ * 회차의 수동 부여·이월을 설정한다. 사용·조정 누계는 건드리지 않는다.
+ *
+ * `totalDays: null`은 **수동 부여 해제** — 입사일 기준 자동 계산으로 돌아간다.
+ */
 export async function grantLeave(input: unknown): Promise<ActionResult> {
   const session = await requireAdmin();
   if (!session) return UNAUTHORIZED;
@@ -29,19 +36,28 @@ export async function grantLeave(input: unknown): Promise<ActionResult> {
   const d = parsed.data;
 
   try {
-    const user = await prisma.user.findUnique({ where: { id: d.userId }, select: { name: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: d.userId },
+      select: { id: true, name: true, hireDate: true },
+    });
     if (!user) return { ok: false, message: "직원을 찾을 수 없습니다." };
 
+    const today = todayKstIso();
+    const period = periodByIndex(requireHireIso(user), d.periodIndex);
+
     await prisma.$transaction(async (tx) => {
-      const balance = await tx.leaveBalance.upsert({
-        where: { userId_year: { userId: d.userId, year: d.year } },
-        create: { userId: d.userId, year: d.year, totalDays: d.totalDays, carriedOverDays: d.carriedOverDays },
-        update: { totalDays: d.totalDays, carriedOverDays: d.carriedOverDays },
+      // 잠금은 lockPeriodBalance가 잡는다 — 동시에 들어온 신청(usedDays 증가)이 낡은 값 위에
+      // 검증되는 것을 막는다. 행이 없으면 여기서 만들어진다.
+      const { balance, autoDays } = await lockPeriodBalance(tx, user, period.startIso, today);
+      const updated = await tx.leaveBalance.update({
+        where: { id: balance.id },
+        data: { totalDays: d.totalDays, carriedOverDays: d.carriedOverDays },
       });
       // 부여를 줄여서 이미 사용한 분보다 적어지면 잔여가 음수가 된다 — 원칙적 불허.
-      if (summarize(balance).remaining < 0) {
-        throw new LeaveError(`이미 사용한 ${formatDays(balance.usedDays)}보다 적게 부여할 수 없습니다.`);
+      if (summarize(withGranted(updated, autoDays)).remaining < 0) {
+        throw new LeaveError(`이미 사용한 ${formatDays(updated.usedDays)}보다 적게 부여할 수 없습니다.`);
       }
+      const granted = d.totalDays === null ? `자동 계산(${formatDays(autoDays)})` : `수동 ${formatDays(d.totalDays)}`;
       await writeAudit(
         {
           actorId: session.user.id,
@@ -49,8 +65,13 @@ export async function grantLeave(input: unknown): Promise<ActionResult> {
           action: AuditAction.GRANT_LEAVE,
           targetType: AuditTargetType.LEAVE_BALANCE,
           targetId: balance.id,
-          description: `${user.name} ${d.year}년 연차 부여 ${formatDays(d.totalDays)} + 이월 ${formatDays(d.carriedOverDays)}`,
-          metadata: { userId: d.userId, year: d.year, totalDays: d.totalDays, carriedOverDays: d.carriedOverDays },
+          description: `${user.name} ${formatPeriodLabel(period)} 부여 ${granted} + 이월 ${formatDays(d.carriedOverDays)}`,
+          metadata: {
+            userId: d.userId,
+            periodIndex: d.periodIndex,
+            totalDays: d.totalDays,
+            carriedOverDays: d.carriedOverDays,
+          },
         },
         tx,
       );
@@ -71,15 +92,19 @@ export async function adjustLeave(input: unknown): Promise<ActionResult> {
   const d = parsed.data;
 
   try {
-    const user = await prisma.user.findUnique({ where: { id: d.userId }, select: { name: true } });
+    const user = await prisma.user.findUnique({
+      where: { id: d.userId },
+      select: { id: true, name: true, hireDate: true },
+    });
     if (!user) return { ok: false, message: "직원을 찾을 수 없습니다." };
 
-    await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM leave_balances WHERE user_id = ${d.userId} AND year = ${d.year} FOR UPDATE`;
-      const balance = await tx.leaveBalance.findUnique({ where: { userId_year: { userId: d.userId, year: d.year } } });
-      if (!balance) throw new LeaveError(`${d.year}년 연차가 아직 부여되지 않았습니다. 먼저 부여해주세요.`);
+    const today = todayKstIso();
+    const period = periodByIndex(requireHireIso(user), d.periodIndex);
 
-      const after = summarize({ ...balance, adjustedDays: balance.adjustedDays + d.amount });
+    await prisma.$transaction(async (tx) => {
+      const { balance, autoDays } = await lockPeriodBalance(tx, user, period.startIso, today);
+
+      const after = summarize(withGranted({ ...balance, adjustedDays: balance.adjustedDays + d.amount }, autoDays));
       if (after.remaining < 0) {
         throw new LeaveError(`조정 후 잔여가 음수가 됩니다. (잔여 ${formatDays(after.remaining)})`);
       }
@@ -89,7 +114,13 @@ export async function adjustLeave(input: unknown): Promise<ActionResult> {
         data: { adjustedDays: { increment: d.amount } },
       });
       await tx.leaveAdjustment.create({
-        data: { userId: d.userId, year: d.year, amount: d.amount, reason: d.reason, createdById: session.user.id },
+        data: {
+          userId: d.userId,
+          periodIndex: d.periodIndex,
+          amount: d.amount,
+          reason: d.reason,
+          createdById: session.user.id,
+        },
       });
       await writeAudit(
         {
@@ -98,8 +129,8 @@ export async function adjustLeave(input: unknown): Promise<ActionResult> {
           action: AuditAction.ADJUST_LEAVE,
           targetType: AuditTargetType.LEAVE_BALANCE,
           targetId: balance.id,
-          description: `${user.name} ${d.year}년 연차 조정 ${d.amount > 0 ? "+" : ""}${d.amount} — ${d.reason}`,
-          metadata: { userId: d.userId, year: d.year, amount: d.amount, reason: d.reason },
+          description: `${user.name} ${formatPeriodLabel(period)} 조정 ${d.amount > 0 ? "+" : ""}${d.amount} — ${d.reason}`,
+          metadata: { userId: d.userId, periodIndex: d.periodIndex, amount: d.amount, reason: d.reason },
         },
         tx,
       );

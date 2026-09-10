@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { roundHalf, summarize } from "@/lib/leave-balance";
 
 describe("summarize", () => {
-  it("PRD 4.2 산식", () => {
+  it("PRD 4.3 산식", () => {
     const s = summarize({ totalDays: 15, carriedOverDays: 2, adjustedDays: -1, usedDays: 3.5 });
     expect(s).toEqual({ total: 16, used: 3.5, remaining: 12.5 });
   });

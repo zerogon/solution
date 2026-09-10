@@ -35,6 +35,8 @@ export type ActiveUser = {
   name: string;
   role: Role;
   branchId: string | null;
+  /** 연차 회차 계산의 앵커(`leave-accrual.ts`). 관리자 계정은 없을 수 있다. */
+  hireDate: Date | null;
   mustChangePassword: boolean;
 };
 
@@ -58,6 +60,7 @@ export async function requireActiveUser(): Promise<{ session: Session; user: Act
       role: true,
       status: true,
       branchId: true,
+      hireDate: true,
       mustChangePassword: true,
     },
   });

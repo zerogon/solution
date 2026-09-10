@@ -1,7 +1,8 @@
 import Link from "next/link";
 
 import { prisma } from "@/lib/prisma";
-import { getBalanceSummaries } from "@/lib/queries";
+import { getCurrentBalanceSummaries } from "@/lib/queries";
+import { formatPeriodLabel } from "@/lib/leave-accrual";
 import { cn, parseDate, todayKstIso } from "@/lib/utils";
 import { formatDays } from "@/lib/labels";
 import { PageHeader } from "@/components/page-header";
@@ -25,11 +26,9 @@ export default async function AdminLeavesPage({ searchParams }: { searchParams: 
   const branch = sp.branch || "";
   const yearRange = { gte: parseDate(`${year}-01-01`), lte: parseDate(`${year}-12-31`) };
 
-  const [branches, yearRows] = await Promise.all([
-    prisma.branch.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
-    prisma.leaveBalance.findMany({ distinct: ["year"], select: { year: true }, orderBy: { year: "desc" } }),
-  ]);
-  const years = Array.from(new Set([thisYear, ...yearRows.map((r) => r.year)])).sort((a, b) => b - a);
+  const branches = await prisma.branch.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+  // 신청 목록은 시작일의 캘린더 연도로 자른다 — 잔액과 달리 회차와 무관한 축이다.
+  const years = [thisYear, thisYear - 1, thisYear - 2];
 
   const tabHref = (t: string) => {
     const q = new URLSearchParams();
@@ -63,13 +62,19 @@ export default async function AdminLeavesPage({ searchParams }: { searchParams: 
             </Link>
           ))}
         </div>
-        <LeaveFilterBar branches={branches} years={years} current={{ branch, status: status ?? "", year }} />
+        <LeaveFilterBar
+          branches={branches}
+          years={years}
+          current={{ branch, status: status ?? "", year }}
+          showYear={tab === "requests"}
+          showStatus={tab === "requests"}
+        />
       </div>
 
       {tab === "requests" ? (
         <RequestsTab year={yearRange} branch={branch} status={status} />
       ) : (
-        <SummaryTab year={year} branch={branch} />
+        <SummaryTab branch={branch} />
       )}
     </div>
   );
@@ -99,22 +104,21 @@ async function RequestsTab({ year, branch, status }: { year: { gte: Date; lte: D
   );
 }
 
-async function SummaryTab({ year, branch }: { year: number; branch: string }) {
+/** 각 직원의 **현재 회차** 현황. 회차 경계가 사람마다 달라 공통 연도 축이 없다. */
+async function SummaryTab({ branch }: { branch: string }) {
   const users = await prisma.user.findMany({
     where: { role: Role.EMPLOYEE, status: EmployeeStatus.ACTIVE, branchId: branch || undefined },
     orderBy: [{ branch: { name: "asc" } }, { name: "asc" }],
-    select: { id: true, name: true, branch: { select: { name: true } } },
+    select: { id: true, name: true, hireDate: true, branch: { select: { name: true } } },
   });
-  const summaries = await getBalanceSummaries(
-    users.map((u) => u.id),
-    year,
-  );
+  const summaries = await getCurrentBalanceSummaries(users, todayKstIso());
 
   return (
     <>
       <ul className="space-y-2 md:hidden">
         {users.map((u) => {
-          const s = summaries.get(u.id);
+          const b = summaries.get(u.id);
+          const s = b?.summary;
           return (
             <li key={u.id}>
               <Link href={`/admin/employees/${u.id}`}>
@@ -122,7 +126,10 @@ async function SummaryTab({ year, branch }: { year: number; branch: string }) {
                   <CardContent className="flex items-center justify-between gap-3 py-3">
                     <div>
                       <div className="font-medium">{u.name}</div>
-                      <div className="text-xs text-muted-foreground">{u.branch?.name ?? "소속 없음"}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {u.branch?.name ?? "소속 없음"}
+                        {b && ` · ${b.period.index}년차`}
+                      </div>
                     </div>
                     {s ? (
                       <div className="text-right text-xs text-muted-foreground">
@@ -132,7 +139,7 @@ async function SummaryTab({ year, branch }: { year: number; branch: string }) {
                         <div className="font-mono text-base font-semibold text-foreground tabular-nums">{formatDays(s.remaining)}</div>
                       </div>
                     ) : (
-                      <span className="text-xs text-muted-foreground">미부여</span>
+                      <span className="text-xs text-muted-foreground">입사일 미등록</span>
                     )}
                   </CardContent>
                 </Card>
@@ -148,6 +155,7 @@ async function SummaryTab({ year, branch }: { year: number; branch: string }) {
               <TableRow>
                 <TableHead>직원</TableHead>
                 <TableHead>지점</TableHead>
+                <TableHead>연차 회차</TableHead>
                 <TableHead className="text-right">총 보유</TableHead>
                 <TableHead className="text-right">사용</TableHead>
                 <TableHead className="text-right">잔여</TableHead>
@@ -155,7 +163,8 @@ async function SummaryTab({ year, branch }: { year: number; branch: string }) {
             </TableHeader>
             <TableBody>
               {users.map((u) => {
-                const s = summaries.get(u.id);
+                const b = summaries.get(u.id);
+                const s = b?.summary;
                 return (
                   <TableRow key={u.id}>
                     <TableCell className="font-medium">
@@ -164,6 +173,9 @@ async function SummaryTab({ year, branch }: { year: number; branch: string }) {
                       </Link>
                     </TableCell>
                     <TableCell>{u.branch?.name ?? "—"}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {b ? formatPeriodLabel(b.period) : "—"}
+                    </TableCell>
                     {s ? (
                       <>
                         <TableCell className="text-right font-mono tabular-nums">{s.total}</TableCell>
@@ -172,7 +184,7 @@ async function SummaryTab({ year, branch }: { year: number; branch: string }) {
                       </>
                     ) : (
                       <TableCell colSpan={3} className="text-right text-xs text-muted-foreground">
-                        {year}년 미부여
+                        입사일 미등록
                       </TableCell>
                     )}
                   </TableRow>

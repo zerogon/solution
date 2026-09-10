@@ -3,7 +3,8 @@ import { AlertTriangle, Store } from "lucide-react";
 
 import { requireActiveUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { getBalanceSummary } from "@/lib/queries";
+import { getCurrentBalance } from "@/lib/queries";
+import { formatPeriodLabel } from "@/lib/leave-accrual";
 import { getHolidayOracle } from "@/lib/holidays-server";
 import { formatDays, WEEKDAY_LABEL } from "@/lib/labels";
 import { todayKstIso } from "@/lib/utils";
@@ -17,20 +18,19 @@ export const dynamic = "force-dynamic";
 export default async function LeaveRequestPage() {
   const { user } = await requireActiveUser();
   const today = todayKstIso();
-  const year = Number(today.slice(0, 4));
 
-  const [branch, summary, { payload }] = await Promise.all([
+  const [branch, balance, { payload }] = await Promise.all([
     user.branchId
       ? prisma.branch.findUnique({ where: { id: user.branchId }, select: { name: true, closedWeekdays: true } })
       : null,
-    getBalanceSummary(user.id, year),
+    getCurrentBalance(user, today),
     getHolidayOracle(),
   ]);
 
   const blocker = !branch
     ? { title: "소속 지점이 없습니다", body: "관리자가 지점을 배정하면 신청할 수 있습니다." }
-    : !summary
-      ? { title: `${year}년 연차가 아직 부여되지 않았습니다`, body: "관리자에게 연차 부여를 요청하세요." }
+    : !balance
+      ? { title: "입사일이 등록되지 않았습니다", body: "연차는 입사일을 기준으로 계산됩니다. 관리자에게 문의하세요." }
       : null;
 
   return (
@@ -44,10 +44,10 @@ export default async function LeaveRequestPage() {
               {branch.closedWeekdays.length > 0
                 ? ` · 매주 ${branch.closedWeekdays.map((d) => WEEKDAY_LABEL[d]).join("·")} 휴무`
                 : " · 휴무 없음"}
-              {summary && (
+              {balance && (
                 <>
                   {" · 잔여 "}
-                  <span className="font-mono font-semibold text-foreground tabular-nums">{formatDays(summary.remaining)}</span>
+                  <span className="font-mono font-semibold text-foreground tabular-nums">{formatDays(balance.summary.remaining)}</span>
                 </>
               )}
             </>
@@ -82,13 +82,16 @@ export default async function LeaveRequestPage() {
               <LeaveRequestForm
                 closedWeekdays={branch!.closedWeekdays}
                 holidays={{ covered: payload?.covered ?? [], years: payload?.years ?? {} }}
-                remaining={summary!.remaining}
+                remaining={balance!.summary.remaining}
                 todayIso={today}
+                period={balance!.period}
               />
             </CardContent>
           </Card>
           <p className="text-xs text-muted-foreground">
             지점 휴무일과 법정공휴일은 차감에서 자동 제외됩니다. 주말은 지점 휴무 요일로 지정된 경우에만 제외됩니다.
+            <br />
+            신청은 현재 연차 회차({formatPeriodLabel(balance!.period)}) 안에서만 할 수 있습니다.
           </p>
         </>
       )}

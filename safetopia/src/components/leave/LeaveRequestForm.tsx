@@ -21,11 +21,14 @@ export function LeaveRequestForm({
   holidays,
   remaining,
   todayIso,
+  period,
 }: {
   closedWeekdays: number[];
   holidays: { covered: number[]; years: Record<string, HolidayMap> };
   remaining: number;
   todayIso: string;
+  /** 이 신청이 차감할 연차 회차. 잔액이 회차 단위라 날짜를 이 안으로 묶는다. */
+  period: { startIso: string; endIso: string };
 }) {
   const router = useRouter();
   const [type, setType] = useState<LeaveType>(LeaveType.FULL_DAY);
@@ -39,8 +42,8 @@ export function LeaveRequestForm({
 
   const preview = useMemo(() => {
     if (!start || !effectiveEnd) return null;
-    return computeLeaveDays({ type, startIso: start, endIso: effectiveEnd, closedWeekdays, oracle });
-  }, [type, start, effectiveEnd, closedWeekdays, oracle]);
+    return computeLeaveDays({ type, startIso: start, endIso: effectiveEnd, closedWeekdays, oracle, period });
+  }, [type, start, effectiveEnd, closedWeekdays, oracle, period]);
 
   const canSubmit = Boolean(preview?.ok) && (preview?.ok ? preview.days <= remaining : false);
 
@@ -101,6 +104,7 @@ export function LeaveRequestForm({
             type="date"
             value={start}
             min={todayIso}
+            max={period.endIso}
             onChange={(e) => {
               setStart(e.target.value);
               if (!end || e.target.value > end) setEnd(e.target.value);
@@ -117,6 +121,7 @@ export function LeaveRequestForm({
               type="date"
               value={end}
               min={start || todayIso}
+              max={period.endIso}
               onChange={(e) => setEnd(e.target.value)}
               required
               className="h-10"

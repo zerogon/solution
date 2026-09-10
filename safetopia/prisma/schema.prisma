@@ -124,11 +124,19 @@ model Branch {
   @@map("branches")
 }
 
+/// 연차 잔액 1행 = **입사일 기준 회차** 1개. 캘린더 연도가 아니다(2026-09-10 전환).
 model LeaveBalance {
   id              String   @id @default(uuid())
   userId          String   @map("user_id")
-  year            Int
-  totalDays       Float    @default(0) @map("total_days")
+  /// 1-based 회차(1 = 입사 첫 해). 입사일을 고쳐도 변하지 않는 **불변 신원**이라 유니크 키로 쓴다.
+  /// 음수는 전환 이전의 캘린더 연도 행이다(-2026 = 옛 2026년 행). 회차 계산에서 제외된다.
+  periodIndex     Int      @map("period_index")
+  /// 회차 경계. periodIndex와 입사일에서 파생되며 입사일 수정 시 재계산된다(realignBalances).
+  periodStart     DateTime @map("period_start") @db.Date
+  periodEnd       DateTime @map("period_end") @db.Date
+  /// **null = 자동 계산**(leave-accrual.ts)이 실효값. 값이 있으면 관리자 수동 부여(override).
+  /// 자동값을 저장하지 않는 이유: 1년 미만 회차는 매달 커져서 저장하는 순간 반드시 낡는다.
+  totalDays       Float?   @map("total_days")
   carriedOverDays Float    @default(0) @map("carried_over_days")
   adjustedDays    Float    @default(0) @map("adjusted_days")
   /// 확정된 사용 누계. 신청 시 증가, 취소(본인/관리자) 시 감소 — 전부 leave-service.ts 트랜잭션 안에서.
@@ -136,9 +144,10 @@ model LeaveBalance {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requests LeaveRequest[]
 
-  @@unique([userId, year])
+  @@unique([userId, periodIndex])
   @@map("leave_balances")
 }
 
@@ -157,16 +166,21 @@ model LeaveRequest {
   cancelReason  String?     @map("cancel_reason")
   cancelledById String?     @map("cancelled_by_id")
   cancelledAt   DateTime?   @map("cancelled_at")
+  /// 이 신청이 차감한 회차. 취소는 **정확히 이 행**을 되돌린다 — 시작일에서 회차를 다시 유도하면
+  /// 입사일이 수정된 뒤 증가시킨 행과 감소시킬 행이 달라져 usedDays가 영구히 어긋난다.
+  leaveBalanceId String?    @map("leave_balance_id")
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
 
   user        User              @relation("RequestOwner", fields: [userId], references: [id])
   cancelledBy User?             @relation("RequestCanceller", fields: [cancelledById], references: [id])
+  balance     LeaveBalance?     @relation(fields: [leaveBalanceId], references: [id], onDelete: SetNull)
   dayRows     LeaveRequestDay[]
 
   @@index([userId, status])
   @@index([status, createdAt])
   @@index([startDate, endDate])
+  @@index([leaveBalanceId])
   @@map("leave_requests")
 }
 
@@ -194,7 +208,8 @@ model LeaveRequestDay {
 model LeaveAdjustment {
   id          String   @id @default(uuid())
   userId      String   @map("user_id")
-  year        Int
+  /// 조정이 적용된 회차(LeaveBalance.periodIndex와 같은 규약).
+  periodIndex Int      @map("period_index")
   /// +1.0 / -0.5 처럼 부호 있는 0.5 단위.
   amount      Float
   reason      String
@@ -204,7 +219,7 @@ model LeaveAdjustment {
   user      User @relation("AdjustmentTarget", fields: [userId], references: [id])
   createdBy User @relation("AdjustmentActor", fields: [createdById], references: [id])
 
-  @@index([userId, year])
+  @@index([userId, periodIndex])
   @@map("leave_adjustments")
 }
 

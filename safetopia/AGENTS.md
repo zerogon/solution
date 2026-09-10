@@ -34,11 +34,32 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 일수 계산 `src/lib/leave-days.ts`(순수, 서버·클라이언트 공유, vitest). **주말 자동 제외 없음** — 지점 휴무 요일 + 공휴일만 뺀다. 공휴일 데이터 없는 연도는 `uncovered`로 신청 차단(적게 세면 직원 손해 방향이라 fail-closed).
 - 공휴일 `src/lib/holidays-server.ts` — Google iCal 피드, 12h 메모리 캐시, stale 폴백. `/api/holidays`는 얇은 래퍼.
 - **승인 절차 없음**(2026-09-05 제거). 신청 = 확정(`CONFIRMED`). `LeaveStatus`는 `CONFIRMED | CANCELLED` 둘뿐.
-- 상태 전이는 전부 `src/lib/leave-service.ts`, 전부 `$transaction`. 신청 트랜잭션이 `usedDays`를 더하고, 취소가 되돌린다. balance 행 `FOR UPDATE`로 같은 직원 동시 신청을 직렬화하고, `leave_request_days(user_id, date)` 유니크가 최후 방어선. `npm run race-test`로 검증(기대: 성공 1 / 차단 9).
+- 상태 전이는 전부 `src/lib/leave-service.ts`, 전부 `$transaction`. 신청 트랜잭션이 `usedDays`를 더하고, 취소가 되돌린다. balance 행 잠금(`lockPeriodBalance`)이 같은 직원 동시 신청을 직렬화하고, `leave_request_days(user_id, date)` 유니크가 최후 방어선. `npm run race-test`로 검증(기대: 성공 1 / 차단 9).
 - 취소 두 경로: 직원 본인은 **시작일이 오늘(KST) 이후**인 건만(`cancelOwnRequest`), 관리자는 언제든 사유 선택(`adminCancelRequest`, 감사 로그). 둘 다 `cancelledBy/At`, 관리자 사유는 `cancelReason`.
 - `LeaveRequestDay`는 CONFIRMED 동안만 존재. 취소 시 **삭제**(그래야 그 날 재신청 가능). 부모 `LeaveRequest`는 이력으로 남는다. 캘린더·오늘 휴가자는 이 표를 상태 조건 없이 읽는다.
 - 직원 `/calendar`는 같은 지점(`user.branchId`) 동료의 `LeaveRequestDay`까지 읽는다(연한 칩, `DayLeaveList` 재사용). **다른 지점은 비공개** — 지점 필터를 빼면 전 지점 연차가 노출된다. 소속 지점이 없으면 본인만.
 - 잔여 산식 `src/lib/leave-balance.ts`: total = 부여+이월+조정, remaining = total - used. 대기/신청 가능 개념 없음.
+
+## 연차 회차 — 잔액의 단위는 캘린더 연도가 아니다 (2026-09-10)
+- **입사일 기준 회차**(`src/lib/leave-accrual.ts`, 순수·vitest). n회차 = `[addMonthsIso(hire, 12*(n-1)), 다음 시작-1일]`.
+  회차는 **항상 입사일을 앵커로** 계산한다 — 이전 회차에서 체이닝하면 말일 클램프가 누적돼 밀린다(1/31 → 2/28 → 3/28).
+- 발생: 1회차는 입사 후 1·2·…·11개월마다 1일(최대 11, 회차 끝나면 소멸·자동 이월 없음). 2회차 이상은
+  `min(25, 15 + floor((y-1)/2))`, y = index-1. 법정 요건인 "개근·80% 출근"은 출근을 관리하지 않으므로 충족 가정.
+- `LeaveBalance`의 유니크 키는 `(userId, periodIndex)`다. **`year`는 없앴다** — 입사일에서 파생되는 값이라
+  입사일을 고치면 키가 통째로 이동한다(2025행이 2026행과 충돌). `periodIndex`는 입사일이 바뀌어도 불변인 신원이다.
+  `periodStart/End`는 파생값이라 입사일 수정 시 `realignBalances`가 다시 계산한다. 음수 index는 전환 이전의
+  캘린더 연도 행(`-2026` = 옛 2026년)이고 회차 계산에서 제외된다.
+- `totalDays`는 **nullable이고 null이 "자동 계산"을 뜻한다.** 자동값을 저장하면 1년 미만 회차는 매달 커지므로
+  반드시 낡는다. 읽기·쓰기 모두 `withGranted(row, autoDays)`를 통과한다(`BalanceLike.totalDays`가 `number`인 것이 그 강제 장치).
+- 잔액 행은 미리 만들지 않는다. `lockPeriodBalance`(`src/lib/leave-period.ts`)가
+  `INSERT ... ON CONFLICT DO UPDATE ... RETURNING`으로 **없으면 만들고 있으면 잠근다**(DO NOTHING은 락을 잡지도
+  돌려주지도 않는다). 덕분에 해가 바뀌어도, 1년 넘은 직원을 뒤늦게 등록해도 "미부여"로 막히지 않는다.
+  읽기 경로(`src/lib/queries.ts`)는 행이 없으면 자동 계산으로 **합성**해 보여 준다 — 쓰기 없이.
+- `LeaveRequest.leaveBalanceId`가 그 신청이 깎은 행을 가리킨다. 취소는 **이 id로만** 되돌린다 —
+  시작일에서 회차를 재유도하면 그 사이 입사일이 수정된 경우 다른 행을 깎아 usedDays가 영구히 어긋난다.
+- `computeLeaveDays`의 경계 규칙은 `period_boundary`다(옛 `year_boundary` 폐기). 회차는 연도가 아니라서
+  12/28~1/3처럼 해를 넘겨도 같은 회차면 통과한다. **`periodFor`(회계)와 `computeLeaveDays`(차감)는 다른 축이다 —
+  `isShadedDay`/`dayOff`처럼 합치지 말 것.**
 
 ## 인증
 - `src/auth.config.ts` `ROLE_PREFIX`: `/admin`만 ADMIN. 나머지는 세션만 있으면 접근(관리자도 직원 화면 사용 가능).
@@ -48,7 +69,11 @@ This version has breaking changes — APIs, conventions, and file structure may 
 ## 로컬 개발
 - `npm run db:local:up`(Docker Postgres **5434**, 5433은 pianoflow) → `db:local:dev`(migrate dev) → `db:local:seed`. 파괴적 명령은 전부 `assert-local-db` 가드 뒤.
 - 시드 계정: `admin/admin1234`, `emp01~08/1234`(emp03~은 첫 로그인 비번 변경 강제), `retired01`(차단).
+  시드는 부여 일수를 넣지 않는다 — 입사일만 주고 자동 발생이 맞는지 본다. 입사일은 까다로운 자리로 골랐다
+  (말일·2/29·1주년 직전·상한 근처).
 - 검증: `npm run typecheck`, `npm run lint`, `npm test`(vitest — 순수 함수만), `npm run race-test`, 수동 절차는 `.claude/skills/verify/SKILL.md`.
+  `race-test`는 2단계다 — 1단계는 같은 날짜 동시 신청(기대: 성공 1 / 차단 9 / 잔액 행 1),
+  2단계는 잔액 행이 없는 회차에 `lockPeriodBalance` 동시 10건(기대: 실패 0 / 잔액 행 1).
 
 ## 배포 (Vercel + Neon)
 - `build`는 `prisma generate && next build` — **마이그레이션도 시드도 돌지 않는다**. 스키마를 바꿔 배포할 땐

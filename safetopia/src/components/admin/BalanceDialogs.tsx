@@ -17,21 +17,34 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { formatDays } from "@/lib/labels";
 
-/** 기본 부여·이월 설정. 이미 있으면 덮어쓴다(사용·조정 누계는 유지). */
+/**
+ * 회차의 부여·이월 설정.
+ *
+ * 부여는 기본이 **자동 계산**(입사일 기준)이고, 스위치를 끌 때만 수동 값을 보낸다.
+ * 자동으로 되돌리면 `totalDays: null`이 가고, 1년 미만 회차는 다시 매달 늘어난다.
+ */
 export function GrantLeaveDialog({
   userId,
-  year,
+  periodIndex,
+  periodLabel,
+  autoDays,
   initial,
   size = "sm",
 }: {
   userId: string;
-  year: number;
-  initial?: { totalDays: number; carriedOverDays: number };
+  periodIndex: number;
+  periodLabel: string;
+  /** 수동 부여를 해제했을 때 돌아갈 값. 수동 입력의 기본값이기도 하다. */
+  autoDays: number;
+  initial?: { totalDays: number | null; carriedOverDays: number };
   size?: "sm" | "default";
 }) {
   const [open, setOpen] = useState(false);
+  const [auto, setAuto] = useState(initial?.totalDays == null);
   const [pending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -40,12 +53,12 @@ export function GrantLeaveDialog({
     startTransition(async () => {
       const res = await grantLeave({
         userId,
-        year: Number(fd.get("year")),
-        totalDays: Number(fd.get("totalDays")),
+        periodIndex,
+        totalDays: auto ? null : Number(fd.get("totalDays")),
         carriedOverDays: Number(fd.get("carriedOverDays") || 0),
       });
       if (res.ok) {
-        toast.success("연차를 부여했습니다.");
+        toast.success(auto ? "자동 계산으로 되돌렸습니다." : "연차를 부여했습니다.");
         setOpen(false);
       } else toast.error(res.message);
     });
@@ -61,17 +74,36 @@ export function GrantLeaveDialog({
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
             <DialogTitle>연차 부여</DialogTitle>
-            <DialogDescription>연도별 기본 부여 일수와 이월 일수를 설정합니다.</DialogDescription>
+            <DialogDescription>{periodLabel}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="year">연도</Label>
-              <Input id="year" name="year" type="number" defaultValue={year} min={2000} max={2100} required readOnly={Boolean(initial)} />
+            <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+              <div className="min-w-0">
+                <Label htmlFor="autoGrant" className="cursor-pointer">
+                  자동 계산 사용
+                </Label>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  입사일 기준{" "}
+                  <span className="font-mono tabular-nums text-foreground">{formatDays(autoDays)}</span>
+                </p>
+              </div>
+              <Switch id="autoGrant" checked={auto} onCheckedChange={setAuto} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor="totalDays">기본 부여</Label>
-                <Input id="totalDays" name="totalDays" type="number" step={0.5} min={0} max={60} inputMode="decimal" defaultValue={initial?.totalDays ?? 15} required />
+                <Input
+                  id="totalDays"
+                  name="totalDays"
+                  type="number"
+                  step={0.5}
+                  min={0}
+                  max={60}
+                  inputMode="decimal"
+                  defaultValue={initial?.totalDays ?? autoDays}
+                  disabled={auto}
+                  required={!auto}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="carriedOverDays">이월</Label>
@@ -94,7 +126,15 @@ export function GrantLeaveDialog({
 }
 
 /** 수동 조정(+/-). 사유 필수, 이력 기록. */
-export function AdjustLeaveDialog({ userId, year }: { userId: string; year: number }) {
+export function AdjustLeaveDialog({
+  userId,
+  periodIndex,
+  periodLabel,
+}: {
+  userId: string;
+  periodIndex: number;
+  periodLabel: string;
+}) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -104,7 +144,7 @@ export function AdjustLeaveDialog({ userId, year }: { userId: string; year: numb
     startTransition(async () => {
       const res = await adjustLeave({
         userId,
-        year,
+        periodIndex,
         amount: Number(fd.get("amount")),
         reason: String(fd.get("reason") ?? ""),
       });
@@ -124,9 +164,10 @@ export function AdjustLeaveDialog({ userId, year }: { userId: string; year: numb
       <DialogContent className="sm:max-w-sm">
         <form onSubmit={handleSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>{year}년 연차 조정</DialogTitle>
-            <DialogDescription>+1.0, -0.5 처럼 0.5 단위로 입력합니다. 사유는 이력에 남습니다.</DialogDescription>
+            <DialogTitle>연차 조정</DialogTitle>
+            <DialogDescription>{periodLabel}</DialogDescription>
           </DialogHeader>
+          <p className="text-sm text-muted-foreground">+1.0, -0.5 처럼 0.5 단위로 입력합니다. 사유는 이력에 남습니다.</p>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="amount">조정 수치</Label>

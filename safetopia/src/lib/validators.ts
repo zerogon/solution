@@ -132,16 +132,20 @@ export const branchStatusSchema = z.object({
 
 // ───────────────────────── 연차 잔액 ─────────────────────────
 
+/** 회차 번호(LeaveBalance.periodIndex). 전환 이전 캘린더 연도 행(음수)은 수정 대상이 아니다. */
+const periodIndexSchema = z.number().int().min(1).max(60);
+
 export const leaveGrantSchema = z.object({
   userId: z.uuid(),
-  year: z.number().int().min(2000).max(2100),
-  totalDays: z.number().min(0).max(60).refine(halfStep("0.5일 단위로 입력해주세요.")),
+  periodIndex: periodIndexSchema,
+  /** null = 수동 부여 해제(자동 계산으로 복귀). */
+  totalDays: z.number().min(0).max(60).refine(halfStep("0.5일 단위로 입력해주세요.")).nullable(),
   carriedOverDays: z.number().min(0).max(60).refine(halfStep("0.5일 단위로 입력해주세요.")),
 });
 
 export const leaveAdjustSchema = z.object({
   userId: z.uuid(),
-  year: z.number().int().min(2000).max(2100),
+  periodIndex: periodIndexSchema,
   amount: z
     .number()
     .min(-60)
@@ -168,9 +172,6 @@ export const leaveRequestSchema = z
     }
     if (d.startDate > d.endDate) {
       ctx.addIssue({ code: "custom", message: "종료일이 시작일보다 앞설 수 없습니다.", path: ["endDate"] });
-    }
-    if (d.startDate.slice(0, 4) !== d.endDate.slice(0, 4)) {
-      ctx.addIssue({ code: "custom", message: "연도를 넘기는 신청은 나눠서 해주세요.", path: ["endDate"] });
     }
   });
 

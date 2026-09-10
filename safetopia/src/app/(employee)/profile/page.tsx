@@ -4,28 +4,28 @@ import { History, KeyRound, LogOut } from "lucide-react";
 import { logoutAction } from "@/actions/auth";
 import { requireActiveUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { getBalanceSummary } from "@/lib/queries";
+import { getCurrentBalance } from "@/lib/queries";
+import { formatPeriodLabel } from "@/lib/leave-accrual";
 import { EMPLOYEE_STATUS_LABEL, ROLE_LABEL, WEEKDAY_LABEL } from "@/lib/labels";
 import { formatKoDate, toIsoDate, todayKstIso } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Role } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
 
 export default async function ProfilePage() {
   const { user: me } = await requireActiveUser();
-  const year = Number(todayKstIso().slice(0, 4));
 
-  const [user, summary] = await Promise.all([
+  const [user, balance] = await Promise.all([
     prisma.user.findUniqueOrThrow({
       where: { id: me.id },
       include: { branch: { select: { name: true, address: true, closedWeekdays: true } } },
     }),
-    getBalanceSummary(me.id, year),
+    getCurrentBalance(me, todayKstIso()),
   ]);
 
   const rows: [string, React.ReactNode][] = [
@@ -67,15 +67,16 @@ export default async function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{year}년 연차</CardTitle>
+          <CardTitle>연차</CardTitle>
+          {balance && <CardDescription>{formatPeriodLabel(balance.period)}</CardDescription>}
         </CardHeader>
         <CardContent>
-          {summary ? (
+          {balance ? (
             <dl className="grid grid-cols-3 gap-2">
               {[
-                ["총 보유", summary.total],
-                ["사용", summary.used],
-                ["잔여", summary.remaining],
+                ["총 보유", balance.summary.total],
+                ["사용", balance.summary.used],
+                ["잔여", balance.summary.remaining],
               ].map(([label, v]) => (
                 <div key={label as string} className="rounded-md bg-muted/50 px-3 py-2">
                   <dt className="text-[11px] text-muted-foreground">{label}</dt>
@@ -84,7 +85,9 @@ export default async function ProfilePage() {
               ))}
             </dl>
           ) : (
-            <p className="text-sm text-muted-foreground">아직 부여된 연차가 없습니다.</p>
+            <p className="text-sm text-muted-foreground">
+              입사일이 등록되지 않아 연차를 계산할 수 없습니다. 관리자에게 문의하세요.
+            </p>
           )}
         </CardContent>
       </Card>

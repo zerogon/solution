@@ -4,7 +4,7 @@ import { CalendarDays, CalendarOff, CalendarRange, ChevronLeft, ChevronRight, Cl
 import { prisma } from "@/lib/prisma";
 import { getHolidayOracle } from "@/lib/holidays-server";
 import { monthBounds, resolveMonthParam, shiftMonth } from "@/lib/calendar";
-import { summarize } from "@/lib/leave-balance";
+import { getCurrentBalanceSummaries } from "@/lib/queries";
 import { buildDayRoster, buildScheduleBoard, rangeDays } from "@/lib/schedule-board";
 import { addDaysIso, diffDaysIso, formatKoMd, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
@@ -37,8 +37,6 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
   const { first, last } = monthBounds(ym);
   const days = rangeDays(first, diffDaysIso(first, last) + 1);
   const weekEnd = addDaysIso(today, 6);
-  // 보드에 보이는 달의 연도. `today` 기준으로 두면 달을 넘겼을 때 헤더 날짜와 잔여가 어긋난다.
-  const year = Number(ym.slice(0, 4));
 
   const [users, dayRows, todayOffCount, weekOffCount, activeBranches, recent, { oracle }] = await Promise.all([
     prisma.user.findMany({
@@ -47,8 +45,8 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
       select: {
         id: true,
         name: true,
+        hireDate: true,
         branch: { select: { id: true, name: true, closedWeekdays: true } },
-        leaveBalances: { where: { year } },
       },
     }),
     // LeaveRequestDay는 확정 건만 갖고 있으므로 상태 조건이 필요 없다.
@@ -70,12 +68,16 @@ export default async function AdminDashboardPage({ searchParams }: { searchParam
     getHolidayOracle(),
   ]);
 
+  // 잔여는 보고 있는 달이 아니라 **오늘 기준 현재 회차**다. 회차 경계가 사람마다 달라
+  // 달을 넘겨 봐도 잔여는 지금 값이어야 뜻이 통한다.
+  const balances = await getCurrentBalanceSummaries(users, today);
+
   const groups = buildScheduleBoard({
     users: users.map((u) => ({
       id: u.id,
       name: u.name,
       branch: u.branch,
-      summary: u.leaveBalances[0] ? summarize(u.leaveBalances[0]) : null,
+      summary: balances.get(u.id)?.summary ?? null,
     })),
     dayRows: dayRows.map((r) => ({ userId: r.userId, date: toIsoDate(r.date), type: r.type })),
     days,

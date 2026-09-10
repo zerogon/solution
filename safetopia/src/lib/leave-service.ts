@@ -9,7 +9,14 @@ import {
 import { LeaveError } from "@/lib/errors";
 import { getHolidayOracle } from "@/lib/holidays-server";
 import { LEAVE_DAYS_ERROR_MESSAGE, computeLeaveDays } from "@/lib/leave-days";
-import { summarize } from "@/lib/leave-balance";
+import { periodFor } from "@/lib/leave-accrual";
+import { summarize, withGranted } from "@/lib/leave-balance";
+import {
+  lockBalanceById,
+  lockPeriodBalance,
+  requireHireIso,
+  type TxClient,
+} from "@/lib/leave-period";
 import { writeAudit } from "@/lib/audit";
 import { formatDays } from "@/lib/labels";
 import { parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
@@ -23,10 +30,15 @@ import { parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
  * 액션(`src/actions/leave-requests.ts`)과 동시성 검증 스크립트(`scripts/race-test.ts`)가
  * **같은 함수**를 부른다. 그래서 `db`를 인자로 받는다.
  *
+ * ## 잔액의 단위
+ * 잔액 행은 캘린더 연도가 아니라 **입사일 기준 회차**다(`leave-accrual.ts`). 행은 미리 만들지
+ * 않고 `lockPeriodBalance`가 필요할 때 지연 생성한다.
+ *
  * ## 동시성
- * 같은 직원의 동시 신청은 `leave_balances` 행 `FOR UPDATE`가 직렬화한다 — 두 번째
- * 트랜잭션은 첫 번째가 커밋될 때까지 기다렸다가 갱신된 usedDays를 본다.
- * 그 잠금을 우회하는 어떤 경로(예: 다른 연도 balance)든 `leave_request_days(user_id, date)`
+ * 같은 직원의 동시 신청은 `leave_balances` 행 잠금이 직렬화한다 — 두 번째 트랜잭션은
+ * 첫 번째가 커밋될 때까지 기다렸다가 갱신된 usedDays를 본다. 행이 아직 없는 상태에서
+ * 동시에 들어와도 `ON CONFLICT DO UPDATE`가 유니크 인덱스 위에서 직렬화한다.
+ * 그 잠금을 우회하는 어떤 경로(예: 다른 회차 balance)든 `leave_request_days(user_id, date)`
  * 유니크가 최후 방어선으로 막는다(P2002 → 액션이 메시지로 번역).
  *
  * ## 자식 행(LeaveRequestDay)
@@ -36,22 +48,12 @@ import { parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
 
 type Actor = { id: string; name: string };
 
-async function lockBalance(tx: TxClient, userId: string, year: number) {
-  const rows = await tx.$queryRaw<{ id: string }[]>`
-    SELECT id FROM leave_balances WHERE user_id = ${userId} AND year = ${year} FOR UPDATE`;
-  if (rows.length === 0) {
-    throw new LeaveError(`${year}년 연차가 아직 부여되지 않았습니다. 관리자에게 문의하세요.`);
-  }
-  const balance = await tx.leaveBalance.findUniqueOrThrow({ where: { userId_year: { userId, year } } });
-  return balance;
-}
-
 async function lockRequest(tx: TxClient, requestId: string) {
   // 상태 전이 경쟁(본인 취소 vs 관리자 취소가 동시에)을 막기 위해 행을 잠근 뒤 읽는다.
   await tx.$queryRaw`SELECT id FROM leave_requests WHERE id = ${requestId} FOR UPDATE`;
   const req = await tx.leaveRequest.findUnique({
     where: { id: requestId },
-    include: { user: { select: { id: true, name: true, branchId: true } } },
+    include: { user: { select: { id: true, name: true, branchId: true, hireDate: true } } },
   });
   if (!req) throw new LeaveError("신청을 찾을 수 없습니다.");
   return req;
@@ -63,7 +65,11 @@ async function cancelConfirmed(
   req: Awaited<ReturnType<typeof lockRequest>>,
   by: { id: string; reason: string | null },
 ) {
-  const balance = await lockBalance(tx, req.userId, req.startDate.getUTCFullYear());
+  // 신청이 실제로 차감한 행을 id로 되돌린다. 시작일에서 회차를 다시 유도하면 그 사이
+  // 입사일이 수정된 경우 다른 행을 깎게 된다. FK가 없는 것은 전환 이전 행뿐이다.
+  const balance = req.leaveBalanceId
+    ? await lockBalanceById(tx, req.leaveBalanceId)
+    : (await lockPeriodBalance(tx, req.user, toIsoDate(req.startDate), todayKstIso())).balance;
   await tx.leaveBalance.update({
     where: { id: balance.id },
     data: { usedDays: { decrement: req.days } },
@@ -80,8 +86,6 @@ async function cancelConfirmed(
   });
 }
 
-type TxClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
-
 // ───────────────────────── 신청(= 확정) ─────────────────────────
 
 export async function createLeaveRequest(
@@ -95,6 +99,9 @@ export async function createLeaveRequest(
   if (!user || user.status !== EmployeeStatus.ACTIVE) throw new LeaveError("재직 중인 직원만 신청할 수 있습니다.");
   if (!user.branch) throw new LeaveError("소속 지점이 없어 신청할 수 없습니다. 관리자에게 문의하세요.");
 
+  // 회차는 입사일 없이 정의되지 않는다. 트랜잭션 밖에서 먼저 막아 준다.
+  const hireIso = requireHireIso(user);
+
   const { oracle } = await getHolidayOracle();
   const calc = computeLeaveDays({
     type: input.type,
@@ -102,14 +109,15 @@ export async function createLeaveRequest(
     endIso: input.endIso,
     closedWeekdays: user.branch.closedWeekdays,
     oracle,
+    period: periodFor(hireIso, input.startIso),
   });
   if (!calc.ok) throw new LeaveError(LEAVE_DAYS_ERROR_MESSAGE[calc.reason]);
 
-  const year = Number(input.startIso.slice(0, 4));
+  const today = todayKstIso();
 
   return db.$transaction(async (tx) => {
-    const balance = await lockBalance(tx, input.userId, year);
-    const { remaining } = summarize(balance);
+    const { balance, autoDays } = await lockPeriodBalance(tx, user, input.startIso, today);
+    const { remaining } = summarize(withGranted(balance, autoDays));
     if (calc.days > remaining) {
       throw new LeaveError(
         `잔여 연차가 부족합니다. (신청 ${formatDays(calc.days)} / 잔여 ${formatDays(Math.max(remaining, 0))})`,
@@ -134,6 +142,7 @@ export async function createLeaveRequest(
         endDate: parseDate(input.endIso),
         days: calc.days,
         reason: input.reason,
+        leaveBalanceId: balance.id,
         dayRows: {
           create: calc.countedDates.map((iso) => ({
             userId: input.userId,

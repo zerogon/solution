@@ -11,6 +11,8 @@ import { addDaysIso, diffDaysIso, parseDate } from "@/lib/utils";
  * - 반차는 하루만, 그 날이 쉬는 날이면 신청 자체가 무의미하므로 거부한다.
  * - 공휴일 데이터가 없는 연도(`oracle.covers === false`)는 **계산하지 않는다.** 모르는 채로
  *   세면 휴일을 근무일로 쳐서 직원이 손해 보는 방향이다.
+ * - 한 신청은 **연차 회차 하나** 안에 들어와야 한다(잔액이 회차 단위라서). 캘린더 연도가
+ *   아니므로 12/28~1/3처럼 해를 넘겨도 같은 회차면 통과한다.
  *
  * `countedDates`가 곧 `LeaveRequestDay` 행이다 — 휴무·공휴일은 행을 만들지 않으므로
  * 같은 날 다른 신청과 충돌하지 않는다.
@@ -30,7 +32,7 @@ export type LeaveDaysResult =
       ok: false;
       reason:
         | "range"
-        | "year_boundary"
+        | "period_boundary"
         | "too_long"
         | "uncovered"
         | "half_day_not_single"
@@ -44,7 +46,7 @@ export const MAX_RANGE_DAYS = 31;
 
 export const LEAVE_DAYS_ERROR_MESSAGE: Record<Extract<LeaveDaysResult, { ok: false }>["reason"], string> = {
   range: "종료일이 시작일보다 앞설 수 없습니다.",
-  year_boundary: "연도를 넘기는 신청은 나눠서 해주세요.",
+  period_boundary: "연차 회차 기간을 넘기는 신청은 나눠서 해주세요.",
   too_long: `한 번에 ${MAX_RANGE_DAYS}일까지만 신청할 수 있습니다.`,
   uncovered: "해당 기간의 공휴일 정보를 확인할 수 없어 신청할 수 없습니다. 잠시 후 다시 시도해주세요.",
   half_day_not_single: "반차는 하루만 선택할 수 있습니다.",
@@ -69,11 +71,18 @@ export function computeLeaveDays(input: {
   endIso: string;
   closedWeekdays: readonly number[];
   oracle: HolidayOracle;
+  /**
+   * 신청이 속해야 할 연차 회차(`leave-accrual.ts`). 잔액이 회차 단위라 회차를 넘는 신청은
+   * 나눠야 한다. 생략하면 경계를 보지 않는다 — 입사일 없는 계정 방어용이고, 서버는 항상 넘긴다.
+   */
+  period?: { startIso: string; endIso: string };
 }): LeaveDaysResult {
-  const { type, startIso, endIso, closedWeekdays, oracle } = input;
+  const { type, startIso, endIso, closedWeekdays, oracle, period } = input;
 
   if (startIso > endIso) return { ok: false, reason: "range" };
-  if (startIso.slice(0, 4) !== endIso.slice(0, 4)) return { ok: false, reason: "year_boundary" };
+  if (period && (startIso < period.startIso || endIso > period.endIso)) {
+    return { ok: false, reason: "period_boundary" };
+  }
   if (diffDaysIso(startIso, endIso) + 1 > MAX_RANGE_DAYS) return { ok: false, reason: "too_long" };
 
   if (type !== LeaveType.FULL_DAY) {

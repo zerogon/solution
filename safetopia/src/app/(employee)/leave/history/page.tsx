@@ -2,7 +2,8 @@ import Link from "next/link";
 
 import { requireActiveUser } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
-import { cn, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
+import { cn, formatKoDate, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
+import { accrualOn, periodByIndex } from "@/lib/leave-accrual";
 import { LEAVE_STATUS_LABEL } from "@/lib/labels";
 import { PageHeader } from "@/components/page-header";
 import { LeaveRequestList } from "@/components/leave/LeaveRequestList";
@@ -14,30 +15,36 @@ export const dynamic = "force-dynamic";
 export default async function LeaveHistoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; status?: string }>;
+  searchParams: Promise<{ p?: string; status?: string }>;
 }) {
   const { user } = await requireActiveUser();
   const sp = await searchParams;
   const today = todayKstIso();
-  const thisYear = Number(today.slice(0, 4));
-  const year = /^\d{4}$/.test(sp.year ?? "") ? Number(sp.year) : thisYear;
   const status = (Object.values(LeaveStatus) as string[]).includes(sp.status ?? "") ? (sp.status as LeaveStatus) : undefined;
 
-  const [rows, years] = await Promise.all([
-    prisma.leaveRequest.findMany({
-      where: {
-        userId: user.id,
-        status,
-        startDate: { gte: parseDate(`${year}-01-01`), lte: parseDate(`${year}-12-31`) },
-      },
-      orderBy: { startDate: "desc" },
-      include: { cancelledBy: { select: { name: true } } },
-    }),
-    prisma.leaveBalance.findMany({ where: { userId: user.id }, select: { year: true }, orderBy: { year: "desc" } }),
-  ]);
-  const yearOptions = Array.from(new Set([thisYear, ...years.map((y) => y.year)])).sort((a, b) => b - a);
+  // 이력도 연차 회차 단위로 본다 — 캘린더 연도로 자르면 회차 중간이 잘려 잔여와 대응되지 않는다.
+  const hireIso = user.hireDate ? toIsoDate(user.hireDate) : null;
+  const currentIndex = hireIso ? accrualOn(hireIso, today).period.index : 0;
+  const asked = Number(sp.p);
+  const index =
+    hireIso && Number.isInteger(asked) && asked >= 1 && asked <= currentIndex ? asked : currentIndex;
+  const period = hireIso ? periodByIndex(hireIso, index) : null;
+  // 최근 6회차까지만 칩으로 보여준다. 그보다 오래된 이력은 흔치 않다.
+  const periodOptions = Array.from({ length: Math.min(currentIndex, 6) }, (_, i) => currentIndex - i);
 
-  const href = (y: number, s?: LeaveStatus) => `/leave/history?year=${y}${s ? `&status=${s}` : ""}`;
+  const rows = await prisma.leaveRequest.findMany({
+    where: {
+      userId: user.id,
+      status,
+      ...(period
+        ? { startDate: { gte: parseDate(period.startIso), lte: parseDate(period.endIso) } }
+        : {}),
+    },
+    orderBy: { startDate: "desc" },
+    include: { cancelledBy: { select: { name: true } } },
+  });
+
+  const href = (p: number, s?: LeaveStatus) => `/leave/history?p=${p}${s ? `&status=${s}` : ""}`;
   const chip = (active: boolean) =>
     cn(
       "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
@@ -46,22 +53,29 @@ export default async function LeaveHistoryPage({
 
   return (
     <div className="space-y-6">
-      <PageHeader title="연차 사용 내역" description="신청·취소 이력을 모두 볼 수 있습니다." />
+      <PageHeader
+        title="연차 사용 내역"
+        description={
+          period
+            ? `${formatKoDate(period.startIso)} ~ ${formatKoDate(period.endIso)} · 신청·취소 이력을 모두 볼 수 있습니다.`
+            : "신청·취소 이력을 모두 볼 수 있습니다."
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1.5">
-          {yearOptions.map((y) => (
-            <Link key={y} href={href(y, status)} className={chip(y === year)}>
-              {y}
+        <div className="flex flex-wrap gap-1.5">
+          {periodOptions.map((p) => (
+            <Link key={p} href={href(p, status)} className={chip(p === index)}>
+              {p}년차
             </Link>
           ))}
         </div>
         <div className="flex flex-wrap gap-1.5">
-          <Link href={href(year)} className={chip(!status)}>
+          <Link href={href(index)} className={chip(!status)}>
             전체
           </Link>
           {Object.values(LeaveStatus).map((s) => (
-            <Link key={s} href={href(year, s)} className={chip(s === status)}>
+            <Link key={s} href={href(index, s)} className={chip(s === status)}>
               {LEAVE_STATUS_LABEL[s]}
             </Link>
           ))}

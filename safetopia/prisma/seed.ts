@@ -9,6 +9,7 @@ import "../scripts/load-env";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../src/generated/prisma/client.js";
+import { accrualOn, periodByIndex, periodFor } from "../src/lib/leave-accrual";
 import {
   EmployeeStatus,
   LeaveStatus,
@@ -26,6 +27,12 @@ const addDays = (s: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 const todayIso = () => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+
+/** 입사일에서 회차 컬럼 3개를 만든다. index를 주면 그 회차, 안 주면 오늘이 속한 회차. */
+function periodCreate(hireIso: string, index?: number) {
+  const p = index === undefined ? accrualOn(hireIso, todayIso()).period : periodByIndex(hireIso, index);
+  return { periodIndex: p.index, periodStart: parseDate(p.startIso), periodEnd: parseDate(p.endIso) };
+}
 
 async function main() {
   console.log("🧹 기존 데이터 삭제 중...");
@@ -69,15 +76,17 @@ async function main() {
   });
 
   const year = new Date().getUTCFullYear();
+  // 부여 일수는 넣지 않는다 — **입사일에서 자동으로 나오는지**가 시드로 확인하려는 것이다.
+  // 입사일은 계산이 까다로운 자리를 일부러 고른다: 말일·윤년·1주년 직전·상한 근처.
   const employeesSpec = [
-    { loginId: "emp01", name: "이하나", branch: gangnam, hireDate: `${year - 3}-03-02`, total: 15, carried: 2, mustChange: false },
-    { loginId: "emp02", name: "박두리", branch: gangnam, hireDate: `${year - 1}-07-15`, total: 15, carried: 0, mustChange: false },
-    { loginId: "emp03", name: "최세영", branch: gangnam, hireDate: `${year}-02-01`, total: 11, carried: 0, mustChange: true },
-    { loginId: "emp04", name: "정네모", branch: hongdae, hireDate: `${year - 2}-05-20`, total: 15, carried: 3, mustChange: true },
-    { loginId: "emp05", name: "강다섯", branch: hongdae, hireDate: `${year - 1}-11-01`, total: 15, carried: 1, mustChange: true },
-    { loginId: "emp06", name: "윤여섯", branch: hongdae, hireDate: `${year}-04-10`, total: 11, carried: 0, mustChange: true },
-    { loginId: "emp07", name: "장일곱", branch: pangyo, hireDate: `${year - 4}-01-08`, total: 16, carried: 0, mustChange: true },
-    { loginId: "emp08", name: "오여덟", branch: pangyo, hireDate: `${year - 1}-09-01`, total: 15, carried: 0, mustChange: true },
+    { loginId: "emp01", name: "이하나", branch: gangnam, hireDate: `${year - 3}-03-02`, carried: 2, mustChange: false }, // 만3년 → 16
+    { loginId: "emp02", name: "박두리", branch: gangnam, hireDate: `${year - 1}-07-15`, carried: 0, mustChange: false }, // 만1년 → 15
+    { loginId: "emp03", name: "최세영", branch: gangnam, hireDate: addDays(todayIso(), -95), carried: 0, mustChange: true }, // 1년 미만 → 3
+    { loginId: "emp04", name: "정네모", branch: hongdae, hireDate: `${year - 2}-05-20`, carried: 3, mustChange: true }, // 만2년 → 15
+    { loginId: "emp05", name: "강다섯", branch: hongdae, hireDate: `${year - 1}-01-31`, carried: 1, mustChange: true }, // 말일 입사
+    { loginId: "emp06", name: "윤여섯", branch: hongdae, hireDate: addDays(todayIso(), -360), carried: 0, mustChange: true }, // 1주년 직전 → 11
+    { loginId: "emp07", name: "장일곱", branch: pangyo, hireDate: `${year - 24}-01-08`, carried: 0, mustChange: true }, // 만24년 → 상한 25
+    { loginId: "emp08", name: "오여덟", branch: pangyo, hireDate: "2024-02-29", carried: 0, mustChange: true }, // 윤년 2/29 입사
   ];
 
   const employees: Awaited<ReturnType<typeof prisma.user.create>>[] = [];
@@ -93,9 +102,8 @@ async function main() {
         status: EmployeeStatus.ACTIVE,
         branchId: spec.branch.id,
         hireDate: parseDate(spec.hireDate),
-        leaveBalances: {
-          create: { year, totalDays: spec.total, carriedOverDays: spec.carried },
-        },
+        // totalDays는 넣지 않는다(null = 자동 계산). 이월만 손으로 준다.
+        leaveBalances: { create: { ...periodCreate(spec.hireDate), carriedOverDays: spec.carried } },
         branchHistories: {
           create: { toBranchId: spec.branch.id, changedById: admin.id, reason: "최초 배정" },
         },
@@ -157,10 +165,18 @@ async function main() {
       },
     });
     if (confirmed) {
+      // 신청이 속한 회차에서 깎는다. leave-service를 거치지 않으므로 회차를 직접 찾는다.
+      const { index } = periodFor(user.hireDate!.toISOString().slice(0, 10), dates[0]);
+      const balance = await prisma.leaveBalance.upsert({
+        where: { userId_periodIndex: { userId: user.id, periodIndex: index } },
+        create: { userId: user.id, ...periodCreate(user.hireDate!.toISOString().slice(0, 10), index) },
+        update: {},
+      });
       await prisma.leaveBalance.update({
-        where: { userId_year: { userId: user.id, year } },
+        where: { id: balance.id },
         data: { usedDays: { increment: days } },
       });
+      await prisma.leaveRequest.update({ where: { id: req.id }, data: { leaveBalanceId: balance.id } });
     }
     return req;
   }

@@ -15,6 +15,8 @@ const oracle = holidayOracle([2026], {
   },
 });
 
+const period = { startIso: "2026-09-17", endIso: "2026-10-16" };
+
 describe("computeLeaveDays — 연차", () => {
   it("휴무일·공휴일 없는 평일 3일은 3.0", () => {
     const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-09-14", endIso: "2026-09-16", closedWeekdays: [], oracle });
@@ -54,8 +56,32 @@ describe("computeLeaveDays — 연차", () => {
     expect(computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-09-16", endIso: "2026-09-14", closedWeekdays: [], oracle })).toEqual({ ok: false, reason: "range" });
   });
 
-  it("연도를 넘기면 year_boundary", () => {
-    expect(computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-12-30", endIso: "2027-01-02", closedWeekdays: [], oracle })).toEqual({ ok: false, reason: "year_boundary" });
+  it("회차 시작 이전은 period_boundary", () => {
+    expect(computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-09-14", endIso: "2026-09-16", closedWeekdays: [], oracle, period })).toEqual({ ok: false, reason: "period_boundary" });
+  });
+
+  it("회차 종료 이후는 period_boundary", () => {
+    expect(computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-10-20", endIso: "2026-10-22", closedWeekdays: [], oracle, period })).toEqual({ ok: false, reason: "period_boundary" });
+  });
+
+  it("회차 경계에 딱 맞으면 통과한다", () => {
+    const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-09-17", endIso: "2026-09-18", closedWeekdays: [], oracle, period });
+    expect(r.ok).toBe(true);
+  });
+
+  it("period를 생략하면 경계를 보지 않는다", () => {
+    const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-09-14", endIso: "2026-09-16", closedWeekdays: [], oracle });
+    expect(r.ok).toBe(true);
+  });
+
+  // 회차는 캘린더 연도가 아니다 — 옛 year_boundary 규칙이 정말 사라졌는지 보는 회귀 테스트.
+  it("해를 넘겨도 같은 회차 안이면 통과한다", () => {
+    const wide = holidayOracle([2026, 2027], { "2026": {}, "2027": {} });
+    const r = computeLeaveDays({
+      type: LeaveType.FULL_DAY, startIso: "2026-12-28", endIso: "2027-01-03",
+      closedWeekdays: [], oracle: wide, period: { startIso: "2026-03-02", endIso: "2027-03-01" },
+    });
+    expect(r).toMatchObject({ ok: true, days: 7 });
   });
 
   it("31일 초과는 too_long", () => {
