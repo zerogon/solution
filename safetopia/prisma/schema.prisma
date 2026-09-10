@@ -45,7 +45,9 @@ enum AuditAction {
   CREATE_EMPLOYEE
   UPDATE_EMPLOYEE
   CHANGE_EMPLOYEE_STATUS
+  DELETE_EMPLOYEE
   RESET_PASSWORD
+  /// 2026-09-10 지점 이동 기능 제거로 더 이상 쓰지 않는다. 과거 로그 행이 참조해 값만 남긴다.
   CHANGE_BRANCH
   CREATE_BRANCH
   UPDATE_BRANCH
@@ -78,8 +80,6 @@ model User {
   password           String
   mustChangePassword Boolean        @default(true) @map("must_change_password")
   name               String
-  email              String?        @unique
-  phone              String?
   role               Role           @default(EMPLOYEE)
   status             EmployeeStatus @default(ACTIVE)
   /// ADMIN은 null 허용. EMPLOYEE는 zod에서 필수.
@@ -95,8 +95,6 @@ model User {
   cancelledRequests LeaveRequest[]    @relation("RequestCanceller")
   adjustments       LeaveAdjustment[] @relation("AdjustmentTarget")
   adjustmentsMade   LeaveAdjustment[] @relation("AdjustmentActor")
-  branchHistories   BranchHistory[]   @relation("BranchHistoryUser")
-  branchChangesMade BranchHistory[]   @relation("BranchHistoryActor")
   auditLogs         AuditLog[]
   notifications     Notification[]
 
@@ -117,9 +115,7 @@ model Branch {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  users         User[]
-  historiesFrom BranchHistory[] @relation("BranchHistoryFrom")
-  historiesTo   BranchHistory[] @relation("BranchHistoryTo")
+  users User[]
 
   @@map("branches")
 }
@@ -152,27 +148,27 @@ model LeaveBalance {
 }
 
 model LeaveRequest {
-  id            String      @id @default(uuid())
-  userId        String      @map("user_id")
-  type          LeaveType
-  startDate     DateTime    @map("start_date") @db.Date
-  endDate       DateTime    @map("end_date") @db.Date
+  id             String      @id @default(uuid())
+  userId         String      @map("user_id")
+  type           LeaveType
+  startDate      DateTime    @map("start_date") @db.Date
+  endDate        DateTime    @map("end_date") @db.Date
   /// 신청 시점 계산값(지점 휴무·공휴일 제외). 0.5 단위.
-  days          Float
+  days           Float
   /// 연차 사유 — 2026-09-04 UI에서 비활성(빈 문자열 저장). 컬럼은 마이그레이션 없이 유지.
-  reason        String
-  status        LeaveStatus @default(CONFIRMED)
+  reason         String
+  status         LeaveStatus @default(CONFIRMED)
   /// 관리자 취소 사유(선택). 본인 취소는 null.
-  cancelReason  String?     @map("cancel_reason")
-  cancelledById String?     @map("cancelled_by_id")
-  cancelledAt   DateTime?   @map("cancelled_at")
+  cancelReason   String?     @map("cancel_reason")
+  cancelledById  String?     @map("cancelled_by_id")
+  cancelledAt    DateTime?   @map("cancelled_at")
   /// 이 신청이 차감한 회차. 취소는 **정확히 이 행**을 되돌린다 — 시작일에서 회차를 다시 유도하면
   /// 입사일이 수정된 뒤 증가시킨 행과 감소시킬 행이 달라져 usedDays가 영구히 어긋난다.
-  leaveBalanceId String?    @map("leave_balance_id")
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
+  leaveBalanceId String?     @map("leave_balance_id")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
 
-  user        User              @relation("RequestOwner", fields: [userId], references: [id])
+  user        User              @relation("RequestOwner", fields: [userId], references: [id], onDelete: Cascade)
   cancelledBy User?             @relation("RequestCanceller", fields: [cancelledById], references: [id])
   balance     LeaveBalance?     @relation(fields: [leaveBalanceId], references: [id], onDelete: SetNull)
   dayRows     LeaveRequestDay[]
@@ -198,7 +194,7 @@ model LeaveRequestDay {
   createdAt      DateTime  @default(now()) @map("created_at")
 
   leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id])
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, date])
   @@index([date])
@@ -213,33 +209,15 @@ model LeaveAdjustment {
   /// +1.0 / -0.5 처럼 부호 있는 0.5 단위.
   amount      Float
   reason      String
-  createdById String   @map("created_by_id")
+  /// 관리자를 삭제해도 **남의 조정 이력**은 지우지 않는다 — 행위자만 비운다(AuditLog.actorName과 같은 취지).
+  createdById String?  @map("created_by_id")
   createdAt   DateTime @default(now()) @map("created_at")
 
-  user      User @relation("AdjustmentTarget", fields: [userId], references: [id])
-  createdBy User @relation("AdjustmentActor", fields: [createdById], references: [id])
+  user      User  @relation("AdjustmentTarget", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("AdjustmentActor", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([userId, periodIndex])
   @@map("leave_adjustments")
-}
-
-model BranchHistory {
-  id           String   @id @default(uuid())
-  userId       String   @map("user_id")
-  /// 최초 배정은 null.
-  fromBranchId String?  @map("from_branch_id")
-  toBranchId   String   @map("to_branch_id")
-  changedById  String   @map("changed_by_id")
-  reason       String?
-  changedAt    DateTime @default(now()) @map("changed_at")
-
-  user       User    @relation("BranchHistoryUser", fields: [userId], references: [id])
-  fromBranch Branch? @relation("BranchHistoryFrom", fields: [fromBranchId], references: [id])
-  toBranch   Branch  @relation("BranchHistoryTo", fields: [toBranchId], references: [id])
-  changedBy  User    @relation("BranchHistoryActor", fields: [changedById], references: [id])
-
-  @@index([userId, changedAt])
-  @@map("branch_histories")
 }
 
 model AuditLog {

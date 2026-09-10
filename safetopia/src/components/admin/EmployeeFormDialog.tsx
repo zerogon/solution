@@ -20,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { ROLE_LABEL, formatDays } from "@/lib/labels";
+import { DEFAULT_PASSWORD } from "@/lib/passwords";
 import { accrualOn, formatPeriodLabel, nextAccrualIso } from "@/lib/leave-accrual";
 import { formatKoDate } from "@/lib/utils";
 import { Role } from "@/generated/prisma/enums";
@@ -59,8 +60,6 @@ export function EmployeeFormDialog({
       name: String(fd.get("name") ?? ""),
       loginId: String(fd.get("loginId") ?? "").toLowerCase(),
       initialPassword: String(fd.get("initialPassword") ?? ""),
-      email: String(fd.get("email") ?? ""),
-      phone: String(fd.get("phone") ?? ""),
       role,
       branchId: String(fd.get("branchId") ?? ""),
       hireDate: String(fd.get("hireDate") ?? ""),
@@ -132,7 +131,7 @@ export function EmployeeFormDialog({
           <form onSubmit={handleSubmit} className="space-y-5">
             <DialogHeader>
               <DialogTitle>직원 등록</DialogTitle>
-              <DialogDescription>초기 비밀번호를 비우면 자동으로 발급됩니다.</DialogDescription>
+              <DialogDescription>초기 비밀번호를 비우면 {DEFAULT_PASSWORD}로 설정됩니다.</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
@@ -159,7 +158,7 @@ export function EmployeeFormDialog({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="initialPassword">초기 비밀번호</Label>
-                  <Input id="initialPassword" name="initialPassword" type="text" minLength={4} maxLength={64} autoComplete="off" placeholder="비우면 자동 발급" />
+                  <Input id="initialPassword" name="initialPassword" type="text" minLength={4} maxLength={64} autoComplete="off" placeholder={`비우면 ${DEFAULT_PASSWORD}`} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -184,16 +183,6 @@ export function EmployeeFormDialog({
                     onChange={(e) => setHireDate(e.target.value)}
                     required={role === Role.EMPLOYEE}
                   />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label htmlFor="phone">연락처</Label>
-                  <Input id="phone" name="phone" inputMode="tel" maxLength={20} autoComplete="off" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">이메일</Label>
-                  <Input id="email" name="email" type="email" autoComplete="off" />
                 </div>
               </div>
               <div className="space-y-2">

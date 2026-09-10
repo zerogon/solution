@@ -39,7 +39,6 @@ async function main() {
   await prisma.leaveRequestDay.deleteMany();
   await prisma.leaveRequest.deleteMany();
   await prisma.leaveAdjustment.deleteMany();
-  await prisma.branchHistory.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.leaveBalance.deleteMany();
@@ -69,7 +68,6 @@ async function main() {
       password: adminHash,
       mustChangePassword: false,
       name: "김관리",
-      email: "admin@safetopia.local",
       role: Role.ADMIN,
       status: EmployeeStatus.ACTIVE,
     },
@@ -97,16 +95,12 @@ async function main() {
         password: empHash,
         mustChangePassword: spec.mustChange,
         name: spec.name,
-        phone: `010-0000-${spec.loginId.slice(-2).padStart(4, "0")}`,
         role: Role.EMPLOYEE,
         status: EmployeeStatus.ACTIVE,
         branchId: spec.branch.id,
         hireDate: parseDate(spec.hireDate),
         // totalDays는 넣지 않는다(null = 자동 계산). 이월만 손으로 준다.
         leaveBalances: { create: { ...periodCreate(spec.hireDate), carriedOverDays: spec.carried } },
-        branchHistories: {
-          create: { toBranchId: spec.branch.id, changedById: admin.id, reason: "최초 배정" },
-        },
       },
     });
     employees.push(u);

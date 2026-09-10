@@ -1,9 +1,6 @@
-import { randomInt } from "node:crypto";
-
-/** 헷갈리는 글자(0/O, 1/l/I)를 뺀 임시 비밀번호 8자. 관리자가 구두로 전달하기 좋게. */
-export function generateTempPassword(length = 8): string {
-  const alphabet = "abcdefghjkmnpqrstuvwxyz23456789";
-  let out = "";
-  for (let i = 0; i < length; i += 1) out += alphabet[randomInt(alphabet.length)];
-  return out;
-}
+/**
+ * 초기 비밀번호는 한 값으로 고정한다(2026-09-10). 랜덤 8자를 발급하던 시절엔 관리자가
+ * 그걸 받아 적어 직원에게 전달해야 했는데, 현장에선 그 단계가 늘 새는 지점이었다.
+ * 어차피 `mustChangePassword`가 첫 로그인에서 변경을 강제하므로 추측 가능해도 된다.
+ */
+export const DEFAULT_PASSWORD = "1111";

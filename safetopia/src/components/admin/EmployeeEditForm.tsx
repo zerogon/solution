@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { updateEmployee } from "@/actions/employees";
@@ -10,22 +10,24 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { ROLE_LABEL } from "@/lib/labels";
 import { Role } from "@/generated/prisma/enums";
+import type { BranchOption } from "@/components/admin/EmployeeFormDialog";
 
 export function EmployeeEditForm({
   user,
+  branches,
 }: {
   user: {
     id: string;
     name: string;
-    email: string | null;
-    phone: string | null;
     role: Role;
     branchId: string | null;
     hireDate: string | null;
     isSelf: boolean;
   };
+  branches: BranchOption[];
 }) {
   const [pending, startTransition] = useTransition();
+  const [role, setRole] = useState<Role>(user.role);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -34,10 +36,8 @@ export function EmployeeEditForm({
       const res = await updateEmployee({
         id: user.id,
         name: String(fd.get("name") ?? ""),
-        email: String(fd.get("email") ?? ""),
-        phone: String(fd.get("phone") ?? ""),
         role: String(fd.get("role") ?? user.role),
-        branchId: user.branchId ?? "",
+        branchId: String(fd.get("branchId") ?? ""),
         hireDate: String(fd.get("hireDate") ?? ""),
       });
       if (res.ok) toast.success("저장되었습니다.");
@@ -55,7 +55,13 @@ export function EmployeeEditForm({
         <div className="space-y-2">
           <Label htmlFor="role">권한</Label>
           {/* 자기 자신의 권한은 여기서 못 바꾼다 — 잠금 사고 방지. */}
-          <NativeSelect id="role" name="role" defaultValue={user.role} disabled={user.isSelf}>
+          <NativeSelect
+            id="role"
+            name="role"
+            value={role}
+            onChange={(e) => setRole(e.target.value as Role)}
+            disabled={user.isSelf}
+          >
             {Object.values(Role).map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABEL[r]}
@@ -64,16 +70,24 @@ export function EmployeeEditForm({
           </NativeSelect>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="hireDate">입사일</Label>
-          <Input id="hireDate" name="hireDate" type="date" defaultValue={user.hireDate ?? ""} />
+          <Label htmlFor="branchId">소속 지점{role === Role.EMPLOYEE && " *"}</Label>
+          <NativeSelect
+            id="branchId"
+            name="branchId"
+            defaultValue={user.branchId ?? ""}
+            required={role === Role.EMPLOYEE}
+          >
+            <option value="">{role === Role.EMPLOYEE ? "선택" : "없음"}</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+          </NativeSelect>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="phone">연락처</Label>
-          <Input id="phone" name="phone" defaultValue={user.phone ?? ""} inputMode="tel" maxLength={20} />
-        </div>
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="email">이메일</Label>
-          <Input id="email" name="email" type="email" defaultValue={user.email ?? ""} />
+          <Label htmlFor="hireDate">입사일{role === Role.EMPLOYEE && " *"}</Label>
+          <Input id="hireDate" name="hireDate" type="date" defaultValue={user.hireDate ?? ""} />
         </div>
       </div>
       <div className="flex justify-end">

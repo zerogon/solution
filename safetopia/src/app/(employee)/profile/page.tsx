@@ -42,8 +42,6 @@ export default async function ProfilePage() {
         : "—",
     ],
     ["입사일", user.hireDate ? <span key="h" className="font-mono tabular-nums">{formatKoDate(toIsoDate(user.hireDate))}</span> : "—"],
-    ["연락처", user.phone ?? "—"],
-    ["이메일", user.email ?? "—"],
   ];
 
   return (

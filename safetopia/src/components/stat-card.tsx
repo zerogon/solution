@@ -28,13 +28,16 @@ export function StatCard({
         className,
       )}
     >
+      {/* 모바일에서 아이콘을 접는다 — 3열 그리드에서 카드 폭이 100px 남짓이라
+          아이콘(36px)+gap+패딩이 글자 자리를 다 먹고 라벨·숫자가 함께 밀렸다. */}
       {Icon && (
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <div className="hidden size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary sm:flex">
           <Icon className="size-4.5" />
         </div>
       )}
       <div className="min-w-0">
-        <div className="text-xs text-muted-foreground">{label}</div>
+        {/* break-keep: 한글은 어절 중간에서 끊기면 안 된다. "총 보유"가 "총/보유"로 갈렸다. */}
+        <div className="text-xs text-muted-foreground break-keep">{label}</div>
         <div
           className={cn(
             "font-mono text-xl leading-tight font-semibold tabular-nums",

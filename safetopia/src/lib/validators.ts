@@ -50,13 +50,6 @@ const optionalText = (max: number) =>
 
 const employeeBase = z.object({
   name: z.string().trim().min(1, "이름을 입력해주세요.").max(30),
-  email: z
-    .string()
-    .trim()
-    .optional()
-    .transform((v) => (v ? v : null))
-    .refine((v) => v === null || z.email().safeParse(v).success, "이메일 형식이 올바르지 않습니다."),
-  phone: optionalText(20),
   role: z.enum(Role),
   branchId: z.string().trim().optional().transform((v) => (v ? v : null)),
   hireDate: isoDateSchema.optional().or(z.literal("")).transform((v) => (v ? v : null)),
@@ -99,16 +92,11 @@ export const employeeStatusSchema = z.object({
   status: z.enum(EmployeeStatus),
 });
 
-export const employeeBranchChangeSchema = z.object({
-  id: z.uuid(),
-  toBranchId: z.uuid("이동할 지점을 선택해주세요."),
-  reason: optionalText(200),
-});
+/** 직원 완전 삭제. 연차 신청·잔액·조정이 DB cascade로 함께 사라진다 — 되돌릴 수 없다. */
+export const employeeDeleteSchema = z.object({ id: z.uuid() });
 
-export const resetPasswordSchema = z.object({
-  id: z.uuid(),
-  newPassword: passwordSchema.optional().or(z.literal("")).transform((v) => (v ? v : null)),
-});
+/** 초기화 값은 항상 DEFAULT_PASSWORD라 입력받을 것이 id뿐이다. */
+export const resetPasswordSchema = z.object({ id: z.uuid() });
 
 // ───────────────────────── 지점 ─────────────────────────
 

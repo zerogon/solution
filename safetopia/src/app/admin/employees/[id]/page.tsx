@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, History } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { EmployeeEditForm } from "@/components/admin/EmployeeEditForm";
-import { BranchChangeDialog, EmployeeStatusSelect, ResetPasswordButton } from "@/components/admin/EmployeeControls";
+import { DeleteEmployeeDialog, EmployeeStatusSelect, ResetPasswordButton } from "@/components/admin/EmployeeControls";
 import { AdjustLeaveDialog, GrantLeaveDialog } from "@/components/admin/BalanceDialogs";
 import { LeaveRequestList } from "@/components/leave/LeaveRequestList";
 import { AdminRequestActions } from "@/components/admin/AdminRequestActions";
@@ -33,10 +33,6 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
       include: {
         branch: { select: { id: true, name: true } },
         adjustments: { orderBy: { createdAt: "desc" }, take: 20, include: { createdBy: { select: { name: true } } } },
-        branchHistories: {
-          orderBy: { changedAt: "desc" },
-          include: { fromBranch: { select: { name: true } }, toBranch: { select: { name: true } }, changedBy: { select: { name: true } } },
-        },
         leaveRequests: {
           orderBy: { createdAt: "desc" },
           take: 30,
@@ -44,9 +40,15 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
         },
       },
     }),
-    prisma.branch.findMany({ where: { status: BranchStatus.ACTIVE }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.branch.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, status: true } }),
   ]);
   if (!user) notFound();
+
+  // 비활성 지점은 고를 수 없지만, 이미 그 지점 소속이라면 목록에 남겨야 한다 —
+  // 빠지면 셀렉트가 빈 값으로 열려 저장 한 번에 소속이 날아간다.
+  const branchOptions = branches
+    .filter((b) => b.status === BranchStatus.ACTIVE || b.id === user.branchId)
+    .map((b) => ({ id: b.id, name: b.name }));
 
   // 저장된 회차 행 + 아직 행이 없는 현재 회차. 입사일이 없으면 빈 배열이다.
   const periods = await getPeriodRows(user, today);
@@ -82,15 +84,13 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
           <Card>
             <CardHeader>
               <CardTitle>기본 정보</CardTitle>
-              <CardDescription>소속 지점은 아래 &lsquo;지점 이동&rsquo;으로만 변경할 수 있습니다.</CardDescription>
             </CardHeader>
             <CardContent>
               <EmployeeEditForm
+                branches={branchOptions}
                 user={{
                   id: user.id,
                   name: user.name,
-                  email: user.email,
-                  phone: user.phone,
                   role: user.role,
                   branchId: user.branchId,
                   hireDate: user.hireDate ? toIsoDate(user.hireDate) : null,
@@ -168,7 +168,7 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
                           <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatKstDateTime(a.createdAt)}</span>
                           <span className="font-mono tabular-nums">{a.periodIndex}년차 {a.amount > 0 ? "+" : ""}{a.amount}</span>
                           <span className="min-w-0 flex-1 truncate text-foreground/80">{a.reason}</span>
-                          <span className="text-xs text-muted-foreground">{a.createdBy.name}</span>
+                          <span className="text-xs text-muted-foreground">{a.createdBy?.name ?? "—"}</span>
                         </li>
                       ))}
                     </ul>
@@ -192,43 +192,22 @@ export default async function EmployeeDetailPage({ params }: { params: Promise<{
                 {isSelf && <p className="text-xs text-muted-foreground">본인 계정의 상태는 변경할 수 없습니다.</p>}
               </div>
               <div className="space-y-2">
-                <div className="text-xs font-medium text-muted-foreground">소속 지점 — {user.branch?.name ?? "없음"}</div>
-                <BranchChangeDialog userId={user.id} currentBranchId={user.branchId} branches={branches} />
-              </div>
-              <div className="space-y-2">
                 <div className="text-xs font-medium text-muted-foreground">비밀번호</div>
                 <ResetPasswordButton userId={user.id} userName={user.name} />
                 {user.mustChangePassword && (
                   <p className="text-xs text-amber-700">아직 초기 비밀번호를 변경하지 않았습니다.</p>
                 )}
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-1.5">
-                <History className="size-4" />
-                지점 이동 이력
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {user.branchHistories.length === 0 ? (
-                <p className="text-sm text-muted-foreground">이력이 없습니다.</p>
-              ) : (
-                <ul className="space-y-1.5 text-sm">
-                  {user.branchHistories.map((h) => (
-                    <li key={h.id} className="flex flex-wrap items-baseline gap-x-2">
-                      <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatKstDateTime(h.changedAt)}</span>
-                      <span>
-                        {h.fromBranch?.name ?? "—"} → <span className="font-medium">{h.toBranch.name}</span>
-                      </span>
-                      {h.reason && <span className="text-xs text-muted-foreground">{h.reason}</span>}
-                      <span className="text-xs text-muted-foreground">by {h.changedBy.name}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <Separator />
+              <div className="space-y-2">
+                <div className="text-xs font-medium text-muted-foreground">직원 삭제</div>
+                <DeleteEmployeeDialog userId={user.id} userName={user.name} isSelf={isSelf} />
+                <p className="text-xs text-muted-foreground">
+                  {isSelf
+                    ? "본인 계정은 삭제할 수 없습니다."
+                    : "기록을 남겨야 한다면 삭제 대신 재직 상태를 '퇴사'로 바꾸세요."}
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>

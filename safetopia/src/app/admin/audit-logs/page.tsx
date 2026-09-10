@@ -19,6 +19,7 @@ const ACTION_LABEL: Record<AuditAction, string> = {
   LOGIN: "로그인",
   CREATE_EMPLOYEE: "직원 등록",
   UPDATE_EMPLOYEE: "직원 수정",
+  DELETE_EMPLOYEE: "직원 삭제",
   CHANGE_EMPLOYEE_STATUS: "재직 상태 변경",
   RESET_PASSWORD: "비밀번호 초기화",
   CHANGE_BRANCH: "지점 이동",
@@ -34,7 +35,7 @@ const ACTION_LABEL: Record<AuditAction, string> = {
 const GROUPS: { key: string; label: string; actions: AuditAction[] }[] = [
   { key: "", label: "전체", actions: [] },
   { key: "leave", label: "연차 처리", actions: ["CANCEL_REQUEST_ADMIN", "GRANT_LEAVE", "ADJUST_LEAVE", "CARRY_OVER_LEAVE"] },
-  { key: "employee", label: "직원", actions: ["CREATE_EMPLOYEE", "UPDATE_EMPLOYEE", "CHANGE_EMPLOYEE_STATUS", "RESET_PASSWORD", "CHANGE_BRANCH"] },
+  { key: "employee", label: "직원", actions: ["CREATE_EMPLOYEE", "UPDATE_EMPLOYEE", "CHANGE_EMPLOYEE_STATUS", "DELETE_EMPLOYEE", "RESET_PASSWORD", "CHANGE_BRANCH"] },
   { key: "branch", label: "지점", actions: ["CREATE_BRANCH", "UPDATE_BRANCH", "CHANGE_BRANCH_STATUS"] },
   { key: "login", label: "로그인", actions: ["LOGIN"] },
 ];

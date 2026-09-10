@@ -20,6 +20,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 브랜드 로고는 벡터가 아니라 **원본 PNG 한 장에서 잘라 쓴다**. 크롭·색·모서리 상수는 `src/lib/brand-mark.ts` 하나가 출처이고 `components/app-mark.tsx`와 `scripts/generate-icons.ts`가 공유한다. 절차는 `public/icons/README.md`. 아이콘을 다시 구우면 `public/sw.js`의 `CACHE_VERSION`도 올린다(`/icons/*`는 cache-first).
 - 라이트 고정(`layout.tsx`가 `colorScheme: light`). `.dark` 블록은 **가드로 남긴다** — 지우면 `dark:` 유틸이 OS 다크에서 되살아난다.
 - 숫자는 `font-mono tabular-nums`. 페이지는 `<div className="space-y-6"><PageHeader/>…</div>`.
+- 한글 라벨에는 `break-keep`(어절 중간에서 끊기면 안 된다). `StatCard`는 모바일에서 아이콘을 접는다 —
+  3열 그리드에서 카드 폭이 100px 남짓이라 아이콘 36px + gap + 패딩이 글자 자리를 다 먹었다.
 - 날짜 음영은 `isShadedDay`(`src/lib/calendar.ts`) 하나 — 주말+지점 휴무+공휴일. **표시 전용이라 `leave-days.ts`의 `dayOff`(차감 판정)와 일부러 다르다.** 합치지 말 것.
 - 음영 클래스는 색은 같고 **바탕이 달라 둘**이다: 표 셀은 `SHADED_DAY_CLASS`(반투명 — hover·합계 행 틴트가 비쳐야 한다), 월 그리드 칸은 `SHADED_DAY_CELL`/`OUT_OF_MONTH_CELL`(불투명 — `gap-px bg-border` 위라 반투명이면 격자선보다 어두워진다).
 - 월 캘린더는 `MonthGrid`(`src/components/month-grid.tsx`, 서버 컴포넌트) 하나를 직원/관리자 캘린더와 관리자 대시보드 모바일이 공유한다. 셀 본문은 `renderDay` 슬롯.
@@ -39,6 +41,22 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `LeaveRequestDay`는 CONFIRMED 동안만 존재. 취소 시 **삭제**(그래야 그 날 재신청 가능). 부모 `LeaveRequest`는 이력으로 남는다. 캘린더·오늘 휴가자는 이 표를 상태 조건 없이 읽는다.
 - 직원 `/calendar`는 같은 지점(`user.branchId`) 동료의 `LeaveRequestDay`까지 읽는다(연한 칩, `DayLeaveList` 재사용). **다른 지점은 비공개** — 지점 필터를 빼면 전 지점 연차가 노출된다. 소속 지점이 없으면 본인만.
 - 잔여 산식 `src/lib/leave-balance.ts`: total = 부여+이월+조정, remaining = total - used. 대기/신청 가능 개념 없음.
+
+## 직원 계정 (2026-09-10)
+- **완전 삭제가 있다**(`deleteEmployee`). 퇴사 처리(`changeEmployeeStatus`)와 다른 동작이다 — 연차 신청·차감일·
+  잔액·조정이 DB cascade로 함께 사라진다. 남는 건 감사 로그뿐이고, `AuditLog.actorId`는 SET NULL이라
+  `actorName` 스냅샷이 "누가 지웠는지"를 지탱한다. 본인·마지막 관리자는 못 지운다. UI는 상세 화면에만
+  두고 **이름을 그대로 받아 적어야** 버튼이 열린다(목록에는 없다).
+- 그 삭제를 위해 `LeaveRequest.user`/`LeaveRequestDay.user`/`LeaveAdjustment.user`가 `onDelete: Cascade`다.
+  **`LeaveAdjustment.createdById`만 nullable + SetNull** — 관리자를 지울 때 그가 *남에게* 해 준 조정까지
+  사라지면 안 된다. 읽는 쪽은 `createdBy?.name ?? "—"`.
+- 소속 지점은 **수정 폼에서 그냥 바꾼다**. `BranchHistory`·`BranchChangeDialog`·`changeEmployeeBranch`는 제거했다.
+  `AuditAction.CHANGE_BRANCH` 값만 과거 로그 행 때문에 남아 있다(더 이상 쓰지 않는다).
+  셀렉트는 활성 지점 + **현재 소속 지점**을 담는다 — 비활성 지점 소속인 직원의 소속이 저장 한 번에 날아가지 않게.
+- 비밀번호는 초기화·신규 등록 모두 `DEFAULT_PASSWORD`(`src/lib/passwords.ts`, `1111`) 하나로 고정이다.
+  랜덤 임시 비밀번호는 관리자가 받아 적어 전달하는 단계에서 늘 샜다. `mustChangePassword`가 첫 로그인에서
+  변경을 강제하므로 추측 가능해도 된다.
+- 직원에게 **연락처·이메일 필드는 없다**(컬럼째 제거). `Branch.phone`(지점 연락처)과 헷갈리지 말 것.
 
 ## 연차 회차 — 잔액의 단위는 캘린더 연도가 아니다 (2026-09-10)
 - **입사일 기준 회차**(`src/lib/leave-accrual.ts`, 순수·vitest). n회차 = `[addMonthsIso(hire, 12*(n-1)), 다음 시작-1일]`.
