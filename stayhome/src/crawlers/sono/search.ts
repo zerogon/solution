@@ -4,7 +4,7 @@ import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { SONO, type SonoBranch } from "./config";
 import { formatDateCompact } from "./format";
 import { fetchMemberNo } from "./login";
-import { parseRoomList, type RoomListPayload } from "./parse";
+import { parseRoomList, type ParseDiagnostics, type RoomListPayload } from "./parse";
 import { SessionLostError } from "../_shared/errors";
 
 /**
@@ -56,8 +56,9 @@ export async function performSearch(
       const payload = await fetchRoomList(ctx, memNo, batch, { ciYmd, coYmd, nights });
       let rows = 0;
       const dates = new Set<string>();
+      const diag: ParseDiagnostics = { unnamedViewCds: new Set() };
       for (const branch of batch) {
-        const parsed = parseRoomList(payload, branch, { nights });
+        const parsed = parseRoomList(payload, branch, { nights }, diag);
         rows += parsed.length;
         for (const r of parsed) if (r.stay) dates.add(toIsoDate(r.stay.checkin));
         out.push(...parsed);
@@ -70,6 +71,14 @@ export async function performSearch(
         // collapses to 1 the scheduler quietly goes back to 60 requests.
         checkinDates: dates.size,
       });
+      // A view code without a name reaches the screen as the bare code. That is
+      // the intended degradation, but it must be visible here first — the crawl
+      // log is the only place that can say "a new viewCd appeared" by name.
+      if (diag.unnamedViewCds.size) {
+        log("[sono] unnamed viewCd — SONO.viewNames에 없다, 화면에는 코드가 그대로 보인다", {
+          codes: [...diag.unnamedViewCds].sort(),
+        });
+      }
     } catch (e) {
       // One batch failing shouldn't kill the crawl — log and keep going, so
       // the window still upserts what the other batches found.

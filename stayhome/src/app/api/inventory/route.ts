@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { inventoryQuerySchema } from "@/lib/validators";
 import { parseDate } from "@/lib/utils";
 import { isPriceKind } from "@/lib/price";
+import { isVariantList } from "@/lib/variants";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +70,7 @@ export async function GET(req: Request) {
       priceKind: true,
       stdCapacity: true,
       maxCapacity: true,
+      variants: true,
       syncedAt: true,
       resort: { select: { slug: true } },
     },
@@ -84,10 +86,13 @@ export async function GET(req: Request) {
   // 인원도 같은 이유로 접는다 — `stdCapacity`만 있고 `maxCapacity`가 없는 상태를
   // 클라이언트가 표현할 수 있게 되면 "기준 4"만 그리게 되고, 최대 6인인 방을 6인
   // 가족을 찾던 담당자가 후보에서 뺀다.
+  // `variants`는 접는 게 아니라 **검사한다** — jsonb에서 온 값이 계약 모양이 아니면
+  // 크래시가 아니라 "세부 목록 없음"(null)이다(`isPriceKind`와 같은 자세).
   const rows = found.map(
-    ({ resort: r, price, priceKind, stdCapacity, maxCapacity, ...row }) => ({
+    ({ resort: r, price, priceKind, stdCapacity, maxCapacity, variants, ...row }) => ({
       ...row,
       resortSlug: r.slug,
+      variants: isVariantList(variants) ? variants : null,
       price:
         price != null && isPriceKind(priceKind) ? { amount: price, kind: priceKind } : null,
       occupancy:

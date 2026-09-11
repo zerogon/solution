@@ -29,8 +29,10 @@
 //     "어떤 창에서만 요금이 안 뜬다"라 진단이 어렵다 — 그래서 더 올려야 한다.
 // v4: 행에 occupancy(기준·최대 인원)가 추가됐다. v3와 정확히 같은 이유 — 낡은 본문은
 //     크래시하지 않고 인원만 안 보인다.
+// v5: 행에 variants(접힌 변형 목록, 소노)가 추가됐다. v3·v4와 같은 이유 — 낡은 본문은
+//     크래시하지 않고 세부 목록만 안 보인다.
 // 올리면 activate 핸들러가 이전 접두사 캐시를 지운다.
-const CACHE_VERSION = "v4";
+const CACHE_VERSION = "v5";
 const STATIC_CACHE = `welfarestay-static-${CACHE_VERSION}`;
 const DATA_CACHE = `welfarestay-data-${CACHE_VERSION}`;
 const OFFLINE_CACHE = `welfarestay-offline-${CACHE_VERSION}`;

@@ -29,6 +29,9 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *   flow      금액 조사 Q2 — drive PAST the availability calendar into room
  *             selection and record every JSON body. `keys` censused the one
  *             response we already read; this asks what else the flow calls.
+ *   variants  변형 조사(2026-09-11) — 접힌 행이 무엇을 접고 있나. viewCd 어휘,
+ *             rmTypeCd 정체, 2박 접기 오판 수, viewCd 이름표 출처, room/detail 재현.
+ *             인자: 지점 value 쉼표 구분(기본 청송·비발디A·고양·제주).
  *   diff      compare site property list against SONO.branches
  *
  * Credentials: `SONO_ID`/`SONO_PW` env if set, otherwise the primary
@@ -284,6 +287,8 @@ interface Capture {
   ms: number;
   post: string | null;
   body: string;
+  /** 요청 헤더 **이름**만. SPA만 보내는 헤더(H3)를 가려내기 위한 것이고 값은 남기지 않는다. */
+  reqHeaders: string[];
 }
 
 /**
@@ -319,6 +324,7 @@ function recordFlow(context: BrowserContext, phase: () => string): Capture[] {
       ms: t0 ? Date.now() - t0 : -1,
       post: res.request().postData(),
       body,
+      reqHeaders: Object.keys(res.request().headers()),
     });
   });
   return captures;
@@ -464,6 +470,53 @@ async function probeClickables(page: Page): Promise<string> {
     }
     return out.join("\n");
   });
+}
+
+
+// ─── 변형 조사 (2026-09-11): 접힌 행이 무엇을 접고 있나 ────────────────────
+//
+// `parse.ts`는 `resortTypeNm + roomTypeNm`으로 변형(`rmTypeCd`)을 한 행에 접는다.
+// 운영자가 보고 싶은 것은 그 접힌 것들 — 뷰(스탠다드/파크뷰)와 세부(더블취사/
+// 트윈취사)다. `keys`가 세어둔 15키에 `viewCd`는 있지만 **이름이 없고**, 세부 축은
+// `room/detail`에만 있다(08-25 `flow`가 SPA 경유로 한 번 닿았고, 08-31 직접 POST는
+// `W22M3S4` "이용회원번호는 필수입니다"로 거절). `variants` 스텝은 그 둘을 배선하기
+// 전에 물어야 할 것을 묻는다 — 상세는 그 스텝의 주석.
+//
+// `userinfo`에는 회원사명·담당자·연락처가 평문으로 들어 있다. 롯데 `member` 스텝이
+// 블랙리스트로 가리다가 터미널에 찍은 전례가 있어(`debug-page.ts`), 여기서는
+// **값을 보여줄 키를 화이트리스트로** 고르고 나머지는 타입과 길이만 찍는다.
+const SAFE_VALUE_KEY = /(Cd|Yn|Ind|Type|Grade|Seq|Div|Gubun|Cnt|Level|Flag)$/;
+const SECRET_KEY = /No$|Nm$|Name|Phone|Tel|Mobile|Email|Addr|Birth|Id$|Pw|Pass/i;
+
+function maskedShape(label: string, payload: unknown, path = "", depth = 0) {
+  if (!path) console.log(`\n=== structure (masked): ${label} ===`);
+  if (Array.isArray(payload)) {
+    console.log(`  ${path || "(root)"} [] length=${payload.length}`);
+    if (payload[0] && typeof payload[0] === "object") maskedShape(label, payload[0], `${path}[0]`, depth + 1);
+    return;
+  }
+  if (payload === null || typeof payload !== "object") {
+    const key = path.split(".").pop() ?? "";
+    const str = String(payload);
+    let shown: string;
+    if (payload == null || payload === "") shown = JSON.stringify(payload);
+    else if (SECRET_KEY.test(key)) shown = `${typeof payload}(len=${str.length}) ${str.slice(0, 2)}…`;
+    else if (SAFE_VALUE_KEY.test(key) && str.length <= 6) shown = JSON.stringify(payload);
+    else shown = `${typeof payload}(len=${str.length})`;
+    console.log(`  ${path} = ${shown}`);
+    return;
+  }
+  if (depth > 4) {
+    console.log(`  ${path} {…}`);
+    return;
+  }
+  for (const [k, v] of Object.entries(payload)) maskedShape(label, v, path ? `${path}.${k}` : k, depth + 1);
+}
+
+/** 요청 본문을 찍을 때 `*No` 값을 가린다 — `memNo`가 그 자리에 온다. */
+function maskPost(post: string | null): string {
+  if (!post) return "(no body)";
+  return post.replace(/"(\w*No)":"([^"]*)"/g, (_, k, v) => `"${k}":"${String(v).slice(0, 2)}…(${String(v).length})"`);
 }
 
 /** 같은 URL을 한 번만 해부한다 — 페이징된 같은 엔드포인트가 리포트를 덮지 않게. */
@@ -1269,6 +1322,592 @@ async function main() {
     console.log("  위 request 필드에 `rmTypeCd`가 있는지부터 볼 것.");
 
     console.log(`\n(JSON 왕복 ${captures.length}건 중 크롤러가 모르는 것 ${novel.length}건)`);
+  } else if (step === "variants") {
+    // 변형 조사 (2026-09-11). 다섯 파트, 각자 try/catch — Part 3(`room/detail`
+    // 재현)이 죽어도 Part 1·2의 census는 남아야 한다. 인자: 지점 value를 쉼표로.
+    //
+    //   Part 1  (지점, 객실유형)별 코드 census — viewCd가 전역 어휘인가 지점별인가
+    //   Part 2  rmTypeCd의 정체·안정성, rmTypeCode 프로브, **2박에서 접기 판정이
+    //           변형 판정과 갈리는 행 수**(parse.ts를 변형 유도로 바꾸는 근거)
+    //   Part 3  viewCd 이름표 출처 — userinfo(마스킹) · 번들 스캔 · room/detail 재현
+    //   Part 4  room/detail이 열렸다면 그 어휘(viewNm? bedNm? cookNm?)와 조인율
+    //   Part 5  비용 — storeCdList 1/4/8, 응답 폭
+    const { SONO } = await import("../src/crawlers/sono/config");
+    const { fetchMemberNo } = await import("../src/crawlers/sono/login");
+    const { todayKstIso, parseDate, addDaysUtc } = await import("../src/lib/utils");
+    const { formatDateCompact, parseDateCompact } = await import("../src/crawlers/sono/format");
+
+    type Entry = Record<string, unknown>;
+    type Branch = (typeof SONO.branches)[number];
+    const str = (e: Entry, k: string) => (e[k] == null ? "" : String(e[k]));
+    const omit = (o: Entry, ...keys: string[]) =>
+      Object.fromEntries(Object.entries(o).filter(([k]) => !keys.includes(k)));
+
+    const wanted = (urlArg ?? "소노벨 청송,소노벨 A 비발디파크,소노캄 고양,소노벨 제주")
+      .split(",")
+      .map((x) => x.trim());
+    const stores = wanted
+      .map((v) => SONO.branches.find((b) => b.value === v))
+      .filter((b): b is Branch => !!b);
+    if (!stores.length) throw new Error(`no matching store in ${JSON.stringify(wanted)}`);
+
+    let phase = "boot";
+    const captures = recordFlow(context, () => phase);
+
+    const ctx = {
+      resortId: "debug",
+      slug: "sono",
+      context,
+      page,
+      credentials: { id: "", pw: "" },
+      log: (m: string, meta?: Record<string, unknown>) => console.log(m, meta ?? ""),
+      deadlineAt: Date.now() + 10 * 60_000,
+    };
+    await page.goto(SITE.home, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    const memNo = await fetchMemberNo(ctx);
+    if (!memNo) throw new Error("no memNo — run `doLogin` first");
+    console.log(`stores: ${stores.map((b) => `${b.value}(${b.storeCd})`).join(" · ")}`);
+
+    const postJson = async (path: string, data: unknown, timeout = 60_000) => {
+      const t0 = Date.now();
+      const res = await page.request.post(
+        `${SONO.apiBase}/${path}?lang=ko&deviceType=PC&mobileAppYn=N`,
+        {
+          timeout,
+          headers: { "content-type": "application/json", Accept: "application/json", Referer: SONO.bookingUrl },
+          data,
+        },
+      );
+      const text = await res.text();
+      let json: Entry | null = null;
+      try {
+        json = JSON.parse(text) as Entry;
+      } catch {
+        /* not json */
+      }
+      return { status: res.status(), ms: Date.now() - t0, bytes: text.length, json, text };
+    };
+    const describe = (r: Awaited<ReturnType<typeof postJson>>) => {
+      const err = r.json?.error as Entry | string | undefined;
+      const errText = err
+        ? typeof err === "string"
+          ? err
+          : `${str(err, "code") || str(err, "errorId")} ${str(err, "message") || str(err, "errorMsg") || str(err, "msg")}`.trim()
+        : "";
+      return `HTTP ${r.status} · ${r.ms}ms · ${r.bytes}B · success=${String(r.json?.success)}` +
+        (errText ? ` · error=${errText.slice(0, 120)}` : "");
+    };
+    const entriesOf = (json: Entry | null): Entry[] =>
+      ((json?.body ?? []) as Entry[]).flatMap((s) => (s.rmTypeList ?? []) as Entry[]);
+
+    const listPc = async (checkin: Date, nights: number, storeCds: string[], rmTypeCode = "") => {
+      const r = await postJson("memberReservation/room/list/pc", {
+        memNo,
+        ...SONO.request,
+        ciYmd: formatDateCompact(checkin),
+        coYmd: formatDateCompact(addDaysUtc(checkin, nights)),
+        nights,
+        storeCdList: storeCds,
+        rmTypeCode,
+      });
+      return { ...r, entries: entriesOf(r.json) };
+    };
+
+    const today = parseDate(todayKstIso());
+    const storeCds = stores.map((b) => b.storeCd);
+    // 2박으로 묻는다: 응답은 그 달 전체 + nights-1일 꼬리라 1박의 상위집합이고,
+    // Part 2의 2박 판정 비교에 월말 하루가 필요하다.
+    const A = await listPc(addDaysUtc(today, 14), 2, storeCds);
+    const B = await listPc(addDaysUtc(today, 45), 2, storeCds);
+    console.log(`\nlist/pc  이번 달: ${describe(A)} · ${A.entries.length} entries`);
+    console.log(`list/pc  다음 달: ${describe(B)} · ${B.entries.length} entries`);
+    if (!A.entries.length) throw new Error("이번 달 응답에 엔트리가 없다 — 날짜·세션을 확인할 것");
+
+    const roomTypeOf = (e: Entry) => [str(e, "resortTypeNm"), str(e, "roomTypeNm")].filter(Boolean).join(" ");
+    const groupKey = (e: Entry) => `${str(e, "storeCd")}|${roomTypeOf(e)}`;
+    const CODE_KEYS = ["viewCd", "pyeongCd", "rmTypeCd", "roomTypeCd", "resortTypeCd", "levelYn"];
+
+    // ── Part 1 ──────────────────────────────────────────────────────────────
+    try {
+      const groups = new Map<string, Entry[]>();
+      for (const e of A.entries) groups.set(groupKey(e), [...(groups.get(groupKey(e)) ?? []), e]);
+      console.log(`\n\n=== Part 1 · (지점, 객실유형)별 코드 census — ${A.entries.length} entries · ${groups.size} groups ===`);
+      keyCensus("body[].rmTypeList[] — 15키 재확인", A.entries.slice(0, 400));
+      for (const [g, rows] of [...groups].sort((a, b) => a[0].localeCompare(b[0]))) {
+        const variants = new Set(rows.map((r) => str(r, "rmTypeCd"))).size;
+        console.log(`\n  ${g}  (${rows.length} entries · ${variants} rmTypeCd)`);
+        for (const k of CODE_KEYS) console.log(`      ${k.padEnd(13)} ${valueAlphabet(rows.map((r) => r[k]))}`);
+      }
+
+      console.log("\n  --- viewCd → 어느 지점·객실유형에 나오나 (전역 어휘인가 지점별인가) ---");
+      const viewIndex = new Map<string, { stores: Set<string>; rooms: Set<string>; n: number }>();
+      for (const e of A.entries) {
+        const v = str(e, "viewCd");
+        const x = viewIndex.get(v) ?? { stores: new Set(), rooms: new Set(), n: 0 };
+        x.stores.add(str(e, "storeCd"));
+        x.rooms.add(str(e, "roomTypeNm"));
+        x.n++;
+        viewIndex.set(v, x);
+      }
+      for (const [v, x] of [...viewIndex].sort((a, b) => a[0].localeCompare(b[0]))) {
+        console.log(
+          `    viewCd=${JSON.stringify(v).padEnd(8)} ×${String(x.n).padStart(5)}  stores={${[...x.stores].join(",")}}  rooms=${[...x.rooms].slice(0, 6).join(" · ")}`,
+        );
+      }
+      const crossStore = [...viewIndex.values()].filter((x) => x.stores.size > 1).length;
+      console.log(
+        `  → viewCd ${viewIndex.size}종, 그중 ${crossStore}종이 둘 이상의 지점에 나온다.` +
+          (viewIndex.size <= 12 && crossStore > 0
+            ? " 짧은 전역 어휘로 보인다 — 이름표 키 후보 = viewCd (단, 같은 코드가 지점마다 다른 뷰를 뜻할 수 있으니 Part 4/헤드 브라우저로 이름을 대조할 것)."
+            : " 지점마다 갈린다 — 이름표 키 = `${storeCd}:${viewCd}`."),
+      );
+
+      const pyeongMixed = [...groups].filter(([, rows]) => new Set(rows.map((r) => str(r, "pyeongCd"))).size > 1);
+      console.log(`\n  pyeongCd가 섞인 그룹: ${pyeongMixed.length}/${groups.size}` + (pyeongMixed.length ? "  ← 접기 키 가정이 깨졌다. 라벨에 평형을 더해야 한다" : "  (08-31과 같다 — 접힘은 뷰 축뿐)"));
+      for (const [g, rows] of pyeongMixed.slice(0, 6)) console.log(`      ${g}: pyeongCd=${valueAlphabet(rows.map((r) => r.pyeongCd))}`);
+    } catch (e) {
+      console.log("!!! Part 1 실패:", e instanceof Error ? e.message : e);
+    }
+
+    // ── Part 2 ──────────────────────────────────────────────────────────────
+    try {
+      console.log("\n\n=== Part 2 · rmTypeCd의 정체와 안정성 ===");
+      const tupleOf = (e: Entry) => [str(e, "storeCd"), str(e, "roomTypeCd"), str(e, "viewCd"), str(e, "pyeongCd")].join("|");
+      const byRm = new Map<string, Set<string>>();
+      const byTuple = new Map<string, Set<string>>();
+      const rmStores = new Map<string, Set<string>>();
+      for (const e of [...A.entries, ...B.entries]) {
+        const rm = `${str(e, "storeCd")}|${str(e, "rmTypeCd")}`;
+        byRm.set(rm, (byRm.get(rm) ?? new Set()).add(tupleOf(e)));
+        byTuple.set(tupleOf(e), (byTuple.get(tupleOf(e)) ?? new Set()).add(str(e, "rmTypeCd")));
+        rmStores.set(str(e, "rmTypeCd"), (rmStores.get(str(e, "rmTypeCd")) ?? new Set()).add(str(e, "storeCd")));
+      }
+      const rmMulti = [...byRm].filter(([, t]) => t.size > 1);
+      const tupleMulti = [...byTuple].filter(([, r]) => r.size > 1);
+      const rmShared = [...rmStores].filter(([, s]) => s.size > 1).length;
+      console.log(`  (지점, rmTypeCd) → (roomTypeCd, viewCd, pyeongCd) 가 함수인가: 위반 ${rmMulti.length}/${byRm.size}`);
+      for (const [rm, t] of rmMulti.slice(0, 5)) console.log(`      ${rm} → ${[...t].join(" / ")}`);
+      console.log(
+        `  역방향 (roomTypeCd, viewCd, pyeongCd) → rmTypeCd 가 1:1인가: 위반 ${tupleMulti.length}/${byTuple.size}` +
+          (tupleMulti.length ? "  ← 한 뷰 안에 rmTypeCd가 여럿 = 세부 축이 이미 list/pc에 갈라져 있다. 라벨은 `${뷰} (${rmTypeCd})`" : ""),
+      );
+      for (const [t, rms] of tupleMulti.slice(0, 8)) console.log(`      ${t} → {${[...rms].join(", ")}}`);
+      console.log(`  같은 rmTypeCd가 둘 이상의 지점에 나오는 수: ${rmShared}/${rmStores.size}  (0이면 rmTypeCd는 지점 안에서만 뜻이 있다)`);
+
+      // 날짜별 변형 집합이 들쭉날쭉한가 — 2박 세부 목록에서 변형이 탈락하는 빈도.
+      const perDate = new Map<string, Map<string, Set<string>>>();
+      for (const e of A.entries) {
+        const g = groupKey(e);
+        const d = perDate.get(g) ?? new Map<string, Set<string>>();
+        d.set(str(e, "ciYmd"), (d.get(str(e, "ciYmd")) ?? new Set()).add(str(e, "rmTypeCd")));
+        perDate.set(g, d);
+      }
+      let ragged = 0;
+      for (const [g, d] of perDate) {
+        const sigs = new Set([...d.values()].map((set) => [...set].sort().join(",")));
+        if (sigs.size > 1) {
+          ragged++;
+          if (ragged <= 5) console.log(`      ragged: ${g} — 날짜별 변형 집합 ${sigs.size}종 (${[...d.values()].map((s) => s.size).join(",")})`);
+        }
+      }
+      console.log(`  이번 달 안에서 날짜마다 변형 집합이 다른 그룹: ${ragged}/${perDate.size}`);
+
+      const unionOf = (entries: Entry[]) => {
+        const m = new Map<string, Set<string>>();
+        for (const e of entries) m.set(groupKey(e), (m.get(groupKey(e)) ?? new Set()).add(str(e, "rmTypeCd")));
+        return m;
+      };
+      const uA = unionOf(A.entries);
+      const uB = unionOf(B.entries);
+      let drift = 0;
+      for (const [g, setA] of uA) {
+        const setB = uB.get(g);
+        if (!setB) continue;
+        if ([...setA].sort().join() !== [...setB].sort().join()) {
+          drift++;
+          if (drift <= 5) console.log(`      drift: ${g} — 이번 달 {${[...setA]}} vs 다음 달 {${[...setB]}}`);
+        }
+      }
+      console.log(`  이번 달 ↔ 다음 달 변형 집합이 다른 그룹: ${drift}/${uA.size}`);
+
+      // rmTypeCode 프로브 — 요청 필드는 있는데(항상 "") 무엇을 하는지 아무도 안 물어봤다.
+      const probe = A.entries.find((e) => str(e, "storeCd") === stores[0].storeCd) ?? A.entries[0];
+      const P = await listPc(addDaysUtc(today, 14), 1, [str(probe, "storeCd")], str(probe, "rmTypeCd"));
+      const pRm = new Set(P.entries.map((e) => str(e, "rmTypeCd")));
+      const baseRm = new Set(A.entries.filter((e) => str(e, "storeCd") === str(probe, "storeCd")).map((e) => str(e, "rmTypeCd")));
+      console.log(
+        `\n  rmTypeCode="${str(probe, "rmTypeCd")}" 프로브: ${describe(P)} · ${P.entries.length} entries · rmTypeCd {${[...pRm].join(",")}} (필터 없을 때 ${baseRm.size}종)` +
+          (pRm.size === 1 && baseRm.size > 1 ? "  ← 변형 필터다" : pRm.size === baseRm.size ? "  ← 무시된다" : ""),
+      );
+
+      // ★ 2박: 접기 판정(밤마다 아무 변형이나 OR → AND) vs 변형 판정(한 변형이 두 밤 다).
+      // 사이트는 rmTypeCd 하나로 전 숙박을 예약하므로 후자가 실제 예약 가능성이다.
+      const OPEN = new Set(["A", "E"]);
+      const bookable = (e: Entry) => OPEN.has(str(e, "rsvStatusCd")) && Number(e.rsvRmCnt ?? 0) > 0;
+      const cal = new Map<string, Map<string, Map<string, Entry>>>();
+      for (const e of A.entries) {
+        const g = groupKey(e);
+        const dates = cal.get(g) ?? new Map<string, Map<string, Entry>>();
+        const night = dates.get(str(e, "ciYmd")) ?? new Map<string, Entry>();
+        night.set(str(e, "rmTypeCd"), e);
+        dates.set(str(e, "ciYmd"), night);
+        cal.set(g, dates);
+      }
+      let rows2 = 0;
+      let foldTrue = 0;
+      let variantTrue = 0;
+      let disagree = 0;
+      const perStore = new Map<string, number>();
+      for (const [g, dates] of cal) {
+        for (const d of dates.keys()) {
+          const d0 = parseDateCompact(d);
+          if (!d0) continue;
+          const n2 = dates.get(formatDateCompact(addDaysUtc(d0, 1)));
+          if (!n2) continue;
+          const n1 = dates.get(d)!;
+          rows2++;
+          const foldAvail = [...n1.values()].some(bookable) && [...n2.values()].some(bookable);
+          const varAvail = [...n1.entries()].some(([rm, e]) => bookable(e) && n2.has(rm) && bookable(n2.get(rm)!));
+          if (foldAvail) foldTrue++;
+          if (varAvail) variantTrue++;
+          if (foldAvail !== varAvail) {
+            disagree++;
+            const st = g.split("|")[0];
+            perStore.set(st, (perStore.get(st) ?? 0) + 1);
+            if (disagree <= 8) {
+              const detail = [...n1.entries()].map(([rm, e]) => `${rm}:${str(e, "rsvStatusCd")}${str(e, "rsvRmCnt")}/${n2.get(rm) ? str(n2.get(rm)!, "rsvStatusCd") + str(n2.get(rm)!, "rsvRmCnt") : "-"}`);
+              console.log(`      ${g} ${d}: fold=${foldAvail} variant=${varAvail}  [${detail.join(" ")}]`);
+            }
+          }
+        }
+      }
+      console.log(
+        `\n  ★ 2박 행 ${rows2}개 중 접기 판정 available=${foldTrue}, 변형 판정 available=${variantTrue}, **갈리는 행 ${disagree}**` +
+          (disagree ? `  (지점별 ${[...perStore].map(([s, n]) => `${s}:${n}`).join(" ")})  ← 현재 parse.ts가 거짓 예약 가능으로 발행하는 행` : "  (이 표본에서는 접기도 틀리지 않았다)"),
+      );
+    } catch (e) {
+      console.log("!!! Part 2 실패:", e instanceof Error ? e.message : e);
+    }
+
+    // ── Part 3 ──────────────────────────────────────────────────────────────
+    let detailJson: Entry | null = null;
+    let detailPost: string | null = null;
+    let detailOpensStandalone = false;
+    try {
+      console.log("\n\n=== Part 3a · userinfo 전 필드 (마스킹) — 이용회원번호 후보 찾기 ===");
+      const ui = await page.request.get(`${SONO.apiBase}/management/auth/userinfo?lang=ko&deviceType=PC&mobileAppYn=N`, {
+        timeout: 20_000,
+        headers: { Accept: "application/json" },
+      });
+      maskedShape("management/auth/userinfo", await ui.json());
+    } catch (e) {
+      console.log("!!! Part 3a 실패:", e instanceof Error ? e.message : e);
+    }
+
+    try {
+      console.log("\n\n=== Part 3b · SPA 번들 스캔 — 코드표 엔드포인트 · room/detail 본문 빌더 ===");
+      phase = "bundle";
+      await page.goto(SITE.booking, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.waitForTimeout(6_000);
+      await dismissLayers(page);
+      const scriptUrls: string[] = await page.evaluate(() => {
+        const fromTags = Array.from(document.scripts).map((s) => s.src);
+        const fromPerf = performance.getEntriesByType("resource").map((e) => e.name);
+        return Array.from(new Set(fromTags.concat(fromPerf))).filter((u) => /\.js(\?|$)/.test(u));
+      });
+      console.log(`  스크립트 ${scriptUrls.length}개`);
+      const PATTERNS: Array<[string, RegExp]> = [
+        ["viewCd", /viewCd/g],
+        ["viewNm", /viewNm/g],
+        ["pyeongNm", /pyeongNm/g],
+        ["code-table", /\/(common|cmm|com|comm)\/code|cmmCode|comCode|codeList|grpCd|codeGrp|commonCode|getCode/g],
+        ["이용회원번호", /이용회원번호|useMemNo|utilMemNo|usrMemNo|useCustNo|utlMemNo/g],
+        ["room/detail", /room\/detail|\/detail\/price/g],
+        ["W22M3S4", /W22M3S4/g],
+      ];
+      let totalHits = 0;
+      for (const url of scriptUrls) {
+        let text: string;
+        try {
+          text = await (await page.request.get(url, { timeout: 30_000 })).text();
+        } catch {
+          continue;
+        }
+        const hits: string[] = [];
+        for (const [name, re] of PATTERNS) {
+          re.lastIndex = 0;
+          let m: RegExpExecArray | null;
+          let n = 0;
+          while ((m = re.exec(text)) && n < 6) {
+            n++;
+            hits.push(`  [${name}] …${text.slice(Math.max(0, m.index - 220), m.index + 220).replace(/\s+/g, " ")}…`);
+          }
+        }
+        if (hits.length) {
+          totalHits += hits.length;
+          console.log(`\n--- ${url.slice(0, 150)} (${text.length}B) ---`);
+          console.log(hits.join("\n"));
+        }
+      }
+      console.log(`\n  번들 히트 ${totalHits}건`);
+      const bootCalls = captures.filter((c) => c.phase === "bundle" && !/room\/list|management\/auth/.test(c.url));
+      console.log(`  예약 화면 로드가 부른 JSON ${bootCalls.length}건:`);
+      for (const c of bootCalls) console.log(`    ${c.status} ${c.method} ${c.url.slice(0, 140)} (${c.body.length}B)`);
+    } catch (e) {
+      console.log("!!! Part 3b 실패:", e instanceof Error ? e.message : e);
+    }
+
+    try {
+      console.log("\n\n=== Part 3c · room/detail 재현 ===");
+      const manual = process.env.SONO_FLOW_MANUAL === "1";
+      const isDetail = (c: Capture) => /memberReservation\/room\/detail(\?|$)/.test(c.url) && c.status === 200;
+      phase = "search";
+      await page.goto(SITE.home, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.waitForTimeout(4_000);
+      await dismissLayers(page);
+
+      if (manual) {
+        const waitMs = Number(process.env.NET_WAIT_MS ?? 180_000);
+        phase = "manual";
+        console.log(">>> 브라우저에서 지점·날짜를 고르고 검색한 뒤 **예약 가능한 객실을 클릭**해 객실 선택 화면까지 들어가세요.");
+        console.log(`>>> ${Math.round(waitMs / 1000)}초 기록합니다 (room/detail 200이 잡히면 바로 넘어갑니다).`);
+        const until = Date.now() + waitMs;
+        while (Date.now() < until && !captures.some(isDetail)) await page.waitForTimeout(2_000);
+      } else {
+        const storeLabel = stores[0].value;
+        try {
+          await page.getByRole("button", { name: "지역 또는 숙소 선택" }).first().click({ timeout: 10_000 });
+          await page.waitForTimeout(2_500);
+          await page.getByText(storeLabel, { exact: true }).first().click({ timeout: 8_000 });
+          await page.waitForTimeout(2_000);
+          await page.getByRole("button", { name: "검색", exact: true }).first().click({ timeout: 8_000 });
+          await page.waitForTimeout(10_000);
+          console.log(`  검색 실행: ${storeLabel}`);
+        } catch (e) {
+          console.log("  자동 검색 실패:", e instanceof Error ? e.message.slice(0, 160) : e);
+        }
+        phase = "roomclick";
+        for (let hop = 1; hop <= 6 && !captures.some(isDetail); hop++) {
+          const target = context.pages()[context.pages().length - 1];
+          await dismissLayers(target).catch(() => undefined);
+          const before = captures.length;
+          const modalOk = target.getByRole("button", { name: /^(확인|예|진행)$/ }).filter({ visible: true }).first();
+          const dayCell = target.locator("div.calendar td").filter({ hasText: /마감임박|예약가능/ }).first();
+          // 달력 다음 화면 — 객실 카드/선택 버튼. 이름을 모르므로 넓게 잡고 첫 것을 누른다.
+          const roomPick = target
+            .getByRole("button", { name: /선택|예약하기|다음|계속|객실선택/ })
+            .or(target.getByRole("link", { name: /선택|예약하기|다음|계속/ }))
+            .or(target.locator("[class*=room] [class*=btn], [class*=roomList] button, li[class*=room]"))
+            .filter({ visible: true })
+            .first();
+          let label = "";
+          try {
+            if (await modalOk.count()) {
+              label = `모달 "${(await modalOk.textContent())?.trim().slice(0, 20)}"`;
+              await modalOk.click({ timeout: 6_000 });
+            } else if (await dayCell.count()) {
+              label = `달력 셀 "${(await dayCell.textContent())?.trim().replace(/\s+/g, " ").slice(0, 30)}"`;
+              await dayCell.click({ timeout: 6_000 });
+            } else if (await roomPick.count()) {
+              label = `객실/진행 "${(await roomPick.textContent())?.trim().replace(/\s+/g, " ").slice(0, 30)}"`;
+              await roomPick.click({ timeout: 6_000 });
+            } else {
+              console.log(`  [hop ${hop}] 누를 것이 없습니다.`);
+              await dump(target, `variants-hop${hop}`);
+              console.log(await probeClickables(target).catch((e) => `  probe 실패: ${e}`));
+              break;
+            }
+          } catch (e) {
+            console.log(`  [hop ${hop}] 클릭 실패:`, e instanceof Error ? e.message.slice(0, 140) : e);
+            break;
+          }
+          await page.waitForTimeout(6_000);
+          const fresh = captures.slice(before);
+          console.log(`  [hop ${hop}] ${label} → 새 JSON ${fresh.length}건: ${fresh.map((c) => `${c.status} ${endpointOf(c.url).split("/user/")[1] ?? c.url}`).join(" · ").slice(0, 400)}`);
+        }
+      }
+
+      const cap = captures.find(isDetail);
+      if (!cap) {
+        console.log("\n  !!! room/detail 200을 잡지 못했다. 이것은 '없다'의 증거가 아니다 — 셀렉터 문제와 구별되지 않는다.");
+        console.log("  !!! SONO_FLOW_MANUAL=1 NET_WAIT_MS=240000 CRAWLER_HEADLESS=false 로 손으로 몰 것.");
+        const seenEp = [...new Set(captures.filter((c) => c.phase === "roomclick" || c.phase === "manual").map((c) => endpointOf(c.url)))];
+        console.log(`  이 구간에 관측된 엔드포인트 ${seenEp.length}종:\n${seenEp.map((e) => `    ${e}`).join("\n")}`);
+      } else {
+        detailPost = cap.post;
+        try {
+          detailJson = JSON.parse(cap.body) as Entry;
+        } catch {
+          /* leave null */
+        }
+        const idx = captures.indexOf(cap);
+        const before = captures.slice(0, idx).filter((c) => !/room\/list|management\/auth|management\/common/.test(c.url));
+        console.log(`\n  ✔ SPA가 room/detail을 불렀다: ${cap.status} ${cap.ms}ms ${cap.body.length}B`);
+        console.log(`    요청 본문: ${maskPost(cap.post)}`);
+        console.log(`    요청 헤더 이름: ${cap.reqHeaders.join(", ")}`);
+        console.log(`    그 앞의 콜 ${before.length}건 (뒤에서 8건):`);
+        for (const c of before.slice(-8)) console.log(`      ${c.status} ${c.method} ${endpointOf(c.url).split("/user/")[1] ?? c.url}  body=${maskPost(c.post).slice(0, 200)}`);
+
+        // 재생 ① 같은 컨텍스트 · 선행 콜 순서대로 → detail
+        const SEQ = ["room/filter", "room/reserve/pre", "room/reserve/session/check"];
+        const priors = SEQ.map((ep) => [...before].reverse().find((c) => c.url.includes(ep))).filter((c): c is Capture => !!c);
+        console.log(`\n  재생 ① 선행 ${priors.length}콜 + detail (같은 컨텍스트)`);
+        for (const c of priors) {
+          const p = new URL(c.url).pathname.split("/user/")[1] ?? "";
+          const r = await postJson(p, c.post ?? "{}", 30_000);
+          console.log(`      ${p}: ${describe(r)}`);
+        }
+        const r1 = await postJson("memberReservation/room/detail", cap.post ?? "{}", 30_000);
+        console.log(`      detail: ${describe(r1)}`);
+        detailOpensStandalone = r1.status === 200 && r1.json?.success !== false && entriesOf(r1.json).length > 0;
+        if (!detailJson && detailOpensStandalone) detailJson = r1.json;
+
+        // 재생 ② detail 단독 · 본문 보강
+        console.log("\n  재생 ② detail 단독");
+        const r2 = await postJson("memberReservation/room/detail", cap.post ?? "{}", 30_000);
+        console.log(`      그대로: ${describe(r2)}`);
+        let parsedPost: Entry = {};
+        try {
+          parsedPost = JSON.parse(cap.post ?? "{}") as Entry;
+        } catch {
+          /* keep {} */
+        }
+        const r2b = await postJson("memberReservation/room/detail", { ...parsedPost, memNo, userIndCd: SONO.request.userIndCd, rsvIndCd: SONO.request.rsvIndCd }, 30_000);
+        console.log(`      + memNo/userIndCd/rsvIndCd: ${describe(r2b)}`);
+
+        // 재생 ③ 새 컨텍스트(저장된 세션만, 네비게이션 없음)
+        console.log("\n  재생 ③ 새 컨텍스트 — 쿠키만으로 열리는가");
+        const ctx2 = await newContextFromState(browser, JSON.parse(readFileSync(STATE_FILE, "utf8")));
+        try {
+          const page2 = await ctx2.newPage();
+          for (const c of priors) {
+            const p = new URL(c.url).pathname.split("/user/")[1] ?? "";
+            const res = await page2.request.post(`${SONO.apiBase}/${p}?lang=ko&deviceType=PC&mobileAppYn=N`, {
+              timeout: 30_000,
+              headers: { "content-type": "application/json", Accept: "application/json", Referer: SONO.bookingUrl },
+              data: c.post ?? "{}",
+            });
+            console.log(`      ${p}: HTTP ${res.status()}`);
+          }
+          const res3 = await page2.request.post(`${SONO.apiBase}/memberReservation/room/detail?lang=ko&deviceType=PC&mobileAppYn=N`, {
+            timeout: 30_000,
+            headers: { "content-type": "application/json", Accept: "application/json", Referer: SONO.bookingUrl },
+            data: cap.post ?? "{}",
+          });
+          const t3 = await res3.text();
+          let j3: Entry | null = null;
+          try {
+            j3 = JSON.parse(t3) as Entry;
+          } catch {
+            /* not json */
+          }
+          console.log(`      detail: HTTP ${res3.status()} · ${t3.length}B · success=${String(j3?.success)} · entries=${entriesOf(j3).length}` + (j3?.error ? ` · error=${JSON.stringify(j3.error).slice(0, 120)}` : ""));
+        } finally {
+          await ctx2.close();
+        }
+
+        console.log("\n  판정표:");
+        console.log(`    H1 선행 콜이 서버 세션 상태를 만든다 → 재생 ①이 열리고 ②가 닫히면 참`);
+        console.log(`    H2 빠진 본문 필드 → ②에서 보강본만 열리면 참`);
+        console.log(`    H3 SPA만 보내는 헤더 → 위 '요청 헤더 이름'에 우리가 안 보내는 이름이 있고 ①②③ 모두 닫히면 후보`);
+        console.log(`    ③이 열리면 크롤러 세션(storageState)만으로 충분하다는 뜻이다`);
+      }
+    } catch (e) {
+      console.log("!!! Part 3c 실패:", e instanceof Error ? e.message : e);
+    }
+
+    // ── Part 4 ──────────────────────────────────────────────────────────────
+    try {
+      if (!detailJson) {
+        console.log("\n\n=== Part 4 · (room/detail 응답이 없어 건너뜀) ===");
+      } else {
+        console.log("\n\n=== Part 4 · room/detail 어휘와 조인 ===");
+        envelopeKeys("room/detail", detailJson);
+        const roomLevel: Entry[] = [];
+        const viewLevel: Entry[] = [];
+        const leaves: Entry[] = [];
+        const walk = (v: unknown) => {
+          if (Array.isArray(v)) {
+            for (const x of v) walk(x);
+            return;
+          }
+          if (!v || typeof v !== "object") return;
+          const o = v as Entry;
+          if (Array.isArray(o.viewList)) roomLevel.push(omit(o, "viewList"));
+          if (Array.isArray(o.rmTypeList)) {
+            viewLevel.push(omit(o, "rmTypeList"));
+            for (const l of o.rmTypeList as Entry[]) leaves.push(l);
+          }
+          for (const val of Object.values(o)) if (val && typeof val === "object") walk(val);
+        };
+        walk(detailJson);
+        keyCensus("room/detail → 객실유형 수준(viewList를 가진 객체)", roomLevel);
+        keyCensus("room/detail → 뷰 수준(rmTypeList를 가진 객체)", viewLevel);
+        keyCensus("room/detail → 말단 rmTypeList[]", leaves);
+        if (!leaves.length) {
+          const big = largestArray(detailJson);
+          if (big) keyCensus(`room/detail → 가장 긴 배열 ${big.path}`, big.rows);
+        }
+        console.log("\n  --- 이름 필드 어휘와 null 비율 ---");
+        for (const k of ["viewNm", "viewCd", "pyeongNm", "pyeongCd", "bedNm", "cookNm", "dongNm", "rmTypeNm", "rmTypeCd", "roomTypeNm", "groupRoomNameNm"]) {
+          const pool = [...viewLevel, ...leaves].filter((o) => k in o);
+          if (!pool.length) continue;
+          const nulls = pool.filter((o) => o[k] == null || o[k] === "").length;
+          console.log(`    ${k.padEnd(16)} in ${pool.length} objs · null/empty ${nulls} · ${valueAlphabet(pool.map((o) => o[k]))}`);
+        }
+        // 조인: 같은 지점·같은 날짜의 list/pc rmTypeCd 집합과 대조.
+        let reqStore = "";
+        let reqCi = "";
+        try {
+          const p = JSON.parse(detailPost ?? "{}") as Entry;
+          reqStore = String((p.storeCdList as string[] | undefined)?.[0] ?? p.storeCd ?? "");
+          reqCi = str(p, "ciYmd");
+        } catch {
+          /* unknown */
+        }
+        const dRm = new Set(leaves.map((l) => str(l, "rmTypeCd")).filter(Boolean));
+        const lRm = new Set(
+          [...A.entries, ...B.entries]
+            .filter((e) => (!reqStore || str(e, "storeCd") === reqStore) && (!reqCi || str(e, "ciYmd") === reqCi))
+            .map((e) => str(e, "rmTypeCd")),
+        );
+        const both = [...dRm].filter((x) => lRm.has(x)).length;
+        console.log(`\n  조인 rmTypeCd — detail ${dRm.size}종 / list/pc(${reqStore || "?"}, ${reqCi || "?"}) ${lRm.size}종 / 교집합 ${both}` + (lRm.size === 0 ? "  (list/pc에 그 지점·날짜가 없어 판정 불가 — 조사 지점에 포함시켜 다시)" : ""));
+        console.log(`    detail에만: {${[...dRm].filter((x) => !lRm.has(x)).join(",")}}  list/pc에만: {${[...lRm].filter((x) => !dRm.has(x)).join(",")}}`);
+      }
+    } catch (e) {
+      console.log("!!! Part 4 실패:", e instanceof Error ? e.message : e);
+    }
+
+    // ── Part 5 ──────────────────────────────────────────────────────────────
+    try {
+      if (!detailOpensStandalone || !detailPost) {
+        console.log("\n\n=== Part 5 · (page.request로 detail이 안 열려 비용 측정 건너뜀) ===");
+      } else {
+        console.log("\n\n=== Part 5 · room/detail 비용 — storeCdList 1 / 4 / 8 ===");
+        const base = JSON.parse(detailPost) as Entry;
+        const all = SONO.branches.map((b) => b.storeCd);
+        for (const n of [1, 4, 8]) {
+          const r = await postJson("memberReservation/room/detail", { ...base, storeCdList: all.slice(0, n) }, 60_000);
+          const leaves = entriesOf(r.json);
+          const storesAnswered = new Set(((r.json?.body ?? []) as Entry[]).map((s) => str(s, "storeCd"))).size;
+          const dates = [...new Set(leaves.map((l) => str(l, "ciYmd")).filter(Boolean))].sort();
+          console.log(`    ${n}지점: ${describe(r)} · 답한 지점 ${storesAnswered} · 말단 ${leaves.length} · 날짜 ${dates.length}개 ${dates[0] ?? ""}→${dates[dates.length - 1] ?? ""}`);
+        }
+        console.log("  판단: 8지점을 한 콜에 답하고 날짜가 달 전체면 list/pc와 같은 4콜 구조 — 정기 수집에 들어간다.");
+        console.log("        날짜가 ciYmd..coYmd뿐이면 지점×날짜 콜이라 리솜 요금처럼 '최신화'에서만 가능하다.");
+      }
+    } catch (e) {
+      console.log("!!! Part 5 실패:", e instanceof Error ? e.message : e);
+    }
+
+    console.log("\n\n=== 세부 축 GO 조건(넷 다) ===");
+    console.log(`  1. page.request로 DOM 없이 열린다(선행 콜 ≤3)   → ${detailOpensStandalone ? "예" : "아니오/미확인"}`);
+    console.log("  2. 8지점/콜 또는 월 단위 응답(패스 +≤8초)        → Part 5");
+    console.log("  3. rmTypeCd 조인 ≥99%                            → Part 4");
+    console.log("  4. viewNm/bedNm/cookNm non-null ≥95%             → Part 4");
+    console.log("  하나라도 아니면 뷰 축만 배선하고 실패한 기준을 AGENTS.md에 적는다.");
+    console.log(`\n(JSON 왕복 ${captures.length}건 기록 · today=${todayKstIso()})`);
   } else if (step === "diff") {
     // Drift watchdog: the config list is the runtime source of truth, so the
     // only way it can rot is silently. Symptom would be "필터를 눌렀는데 0건",

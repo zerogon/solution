@@ -444,6 +444,7 @@ npx tsx scripts/set-room-rate.ts SONO "소노벨 제주" "리조트 스위트" -
 - **요일·시즌 축이 없다.** 금·토가 더 비싼 실제 요금표를 평일 값으로 주장하므로, 어느 기준으로
   넣었는지는 `note`에 적는다. 특히 **소노는 뷰 변형이 접힌 행**이라(`parse.ts`가 570그룹 중
   300개를 접는다) "그 방의 값"이 하나가 아닐 수 있다 — 접힌 축을 `note`에 명시할 것.
+  2026-09-11부터 행을 펼치면 그 변형 목록이 보이므로 거기 라벨을 그대로 적으면 된다.
 - **`note`는 평문이고 관리 표에 마스킹 없이 그려진다.** `ResortAccount.memo` 전례를 볼 것.
 
 검증 SQL:
@@ -604,6 +605,8 @@ Q1만 근거로 "요금은 없다"고 적고 있었다. 그건 **재고 응답�
 즉 접힌 행에 "그 방의 값"이라는 건 존재하지 않는다 — 요금을 붙이려면 최저가로 접고
 행이 스스로 "부터"라고 말해야 한다. `room/detail`도 `roomTypeNm > viewList > rmTypeList`
 3단으로 **변형 단위**라 이 문제를 그대로 물려받는다.
+(2026-09-11: 이 문장은 **요금**에 대해 그대로 참이다. 변형별 잔여 수는 이제 행의 `variants`에
+남으므로 "접혀서 버려진다"는 부분만 옛말이 됐다 — 아래 "### 변형은 뷰 축이고 이름은 응답에 없다".)
 
 ### 인원도 없다 — 그리고 막는 것은 접기가 아니었다 (2026-08-31)
 
@@ -631,6 +634,61 @@ Q1만 근거로 "요금은 없다"고 적고 있었다. 그건 **재고 응답�
 따라서 그 그룹에 단일 정원이 없을 이유가 없다. 요금이 막혔던 이유(`rsvRmCnt`가 변형마다
 다르다)를 정원에 그대로 옮겨 적은 것이 틀렸다. **소노가 빈 것은 값이 없어서다.**
 
+### 변형은 뷰 축이고 이름은 응답에 없다 (2026-09-11, 배선 완료 · 실측 대기)
+
+운영자가 보고 싶은 세부 타입(스탠다드/파크뷰 → 더블취사/트윈취사 …)은 이 크롤러가 **접어서
+버리고 있던 것**이다. `rmTypeList` 15키 중 `rmTypeCd`(변형 = 사이트의 예약 단위) · `viewCd` ·
+`pyeongCd` · `roomTypeCd`는 `RoomListPayload`에 선언되지 않아 타입 경계에서 사라졌고,
+`parse.ts`는 `resortTypeNm + roomTypeNm`으로 접으면서 `rsvRmCnt`를 버렸다.
+
+**이제 접힌 행이 자기 변형을 `variants`로 들고 간다**(`src/lib/variants.ts`,
+`ResortInventory.variants` jsonb). 행은 그대로다 — 행 수·유니크 키·`removeVanishedRows`
+그룹 키·수동 요금 조인 무변경. 설계 근거는 `CLAUDE.md`의 "소노 변형" 절.
+
+- **판정이 변형 단위로 내려갔고, 행은 거기서 유도된다.** 변형마다 숙박 전 밤을 AND(밤이 하나라도
+  없으면 그 변형은 목록에서 빠진다), 행은 `available = some(variant.available)`,
+  `closingSoon = available && every(bookable.closingSoon)`. **1박은 옛 접기와 동치**다.
+  2박부터는 옛 접기가 틀렸다 — 밤마다 아무 변형이나 OR하고 밤을 AND하면 1박째 스탠다드만,
+  2박째 파크뷰만 가능한 행이 초록이 된다. 사이트는 `rmTypeCd` 하나로 전 숙박을 예약한다.
+  행의 **존재** 조건("모든 밤에 엔트리")은 그대로라 행 수는 변하지 않는다.
+- **`remaining` = `available`일 때 전 밤 중 최소, 아니면 null.** `W`의 음수는 수가 아니다.
+- **이름은 `SONO.viewNames`에서만 온다.** 응답에 `viewNm`이 없다. 표에 없는 코드는 코드가
+  라벨이고 `search.ts`가 `[sono] unnamed viewCd {codes}`를 배치당 한 번 남긴다. 키는
+  `"66:01"`(지점 한정) → `"01"`(전역) 순으로 본다 — 어느 모양이 맞는지는 `variants` 스텝
+  Part 1이 답하고, **지금 표는 비어 있다.** 즉 조사 전에 배포되면 화면에는 코드가 보인다
+  (의도된 강등, 지어낸 이름보다 낫다).
+- **같은 라벨이 한 행에 둘이면 `라벨 (rmTypeCd)`**로 구별한다. 한 `viewCd` 안에 `rmTypeCd`가
+  여럿이면 세부 축이 이미 `list/pc`에 갈라져 있다는 뜻이고, 그 둘을 합치면 "44실"의 거짓이 돌아온다.
+- `rmTypeCd`가 비면 `viewCd/pyeongCd/roomTypeCd` 합성 키, 그것도 비면 단일 트랙 = 옛 접기.
+  강등 방향이 "어제의 동작"이지 쓰레기가 아니다.
+
+**`variants` 스텝이 묻는 것**(다섯 파트, 각자 try/catch): ① (지점, 객실유형)별 코드 census와
+`viewCd`의 전역/지점별 판정, `pyeongCd` 혼합 재확인 ② `rmTypeCd` → (roomTypeCd, viewCd, pyeongCd)
+함수성·역방향 1:1·날짜/월 안정성, 요청 `rmTypeCode`의 뜻(항상 `""`였고 아무도 안 물어봤다),
+**2박 접기 오판 행 수** ③ `viewCd` 이름 출처 — `userinfo` 전 필드(화이트리스트 마스킹 — 회원사·
+담당자·연락처가 평문이다), SPA 번들의 코드표 엔드포인트·`room/detail` 본문 빌더, 그리고
+`room/detail` 재현(SPA로 200을 잡은 뒤 선행 콜 `room/filter`→`reserve/pre`→`session/check`
+순서 재생 ①, 단독+본문 보강 ②, 새 컨텍스트 ③ — H1 서버 세션 상태 / H2 빠진 필드 / H3 헤더)
+④ 열렸다면 34키·`viewList` 키(`viewNm`?)·`bedNm`/`cookNm` 어휘·null 비율·`rmTypeCd` 조인율
+⑤ `storeCdList` 1/4/8 비용과 응답 폭. **세부 축 GO 조건 넷**: DOM 없이 열림(선행 ≤3콜) ·
+8지점/콜 또는 월 단위 · 조인 ≥99% · 이름 non-null ≥95%.
+
+⚠️ **2026-09-11에는 돌리지 못했다** — 작업 환경에 `.env`가 없어 자격증명 DB에 닿지 못했다.
+`recordFlow`는 이 스텝을 위해 요청 헤더 **이름**(값 아님)을 함께 기록하게 됐다(`Capture.reqHeaders`).
+
+검증 SQL(조사·`db:push` 뒤):
+
+```sql
+select resort_name, count(*) total, count(variants) with_variants from resort_inventory group by 1;  -- SONO만 total=with_variants
+select jsonb_typeof(variants), count(*) from resort_inventory where variants is not null group by 1; -- 'array'만
+select count(*) from resort_inventory r, jsonb_array_elements(r.variants) v
+ where not (v ? 'label' and v ? 'code' and v ? 'available' and v ? 'closingSoon' and v ? 'remaining'); -- 0
+select count(*) from resort_inventory r, jsonb_array_elements(r.variants) v where (v->>'remaining')::int < 0; -- 0
+select count(*) from resort_inventory r, jsonb_array_elements(r.variants) v where v->>'label' ~ '^[0-9A-Z]{1,4}$'; -- 이름 없는 코드, viewNames 뒤 0
+select count(*) from resort_inventory where resort_name like '소노%' and available
+   and not exists (select 1 from jsonb_array_elements(variants) v where (v->>'available')::bool); -- 0 (행≠변형 모순)
+```
+
 ## 로컬 검증
 
 ```bash
@@ -646,6 +704,8 @@ npx tsx scripts/debug-sono.ts diff       # 사이트 지점 목록 ↔ SONO.bran
 npx tsx scripts/debug-sono.ts keys ["지점명"]   # 응답 키 전수 조사 (금액 조사, 잘림 없음)
 npx tsx scripts/debug-sono.ts flow ["지점명"]   # 금액 조사 Q2 — 예약 흐름을 객실 선택까지
 SONO_FLOW_MANUAL=1 NET_WAIT_MS=180000 npx tsx scripts/debug-sono.ts flow   # 손으로 몰기
+npx tsx scripts/debug-sono.ts variants ["지점,지점"]   # 변형 조사 — viewCd 어휘 · 2박 오판 수 · room/detail 재현
+SONO_FLOW_MANUAL=1 CRAWLER_HEADLESS=false npx tsx scripts/debug-sono.ts variants   # Part 3c를 손으로
 ```
 
 **`flow` 스텝이 존재하는 이유**: `keys`는 *우리가 읽는 응답*의 키를 전수 조사한다.
@@ -1545,7 +1605,7 @@ SELECT DISTINCT resort_name, branch_name, region FROM resort_inventory ORDER BY 
   윈도우가 스킵되고, 루프 순서가 고정이라 같은 지점이 매번 빠진다. 상세는 위 HANWHA 절.
 
 행 수가 크게 늘 수 있다는 것도 염두에 둘 것. `upsertInventory`는 다중행 INSERT 한
-문장이라 Postgres의 바인드 파라미터 상한 65,535(행당 12개)에 걸린다 —
+문장이라 Postgres의 바인드 파라미터 상한 65,535(행당 17개, 2026-09-11 현재)에 걸린다 —
 `UPSERT_CHUNK_ROWS`로 1,000행씩 끊는다. 소노 한 콜이 ~3,900행이다.
 
 ## 어제 있었고 오늘 응답에 없는 행

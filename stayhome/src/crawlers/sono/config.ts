@@ -123,6 +123,22 @@ export const SONO = {
   ] as const,
 
   /**
+   * 뷰 코드 → 화면 이름. **응답에는 코드만 온다**(`viewCd`, `viewNm` 없음 — `keys` 15키
+   * 전수). 이 표가 비어 있으면 `parse.ts`가 코드를 그대로 라벨로 쓰고 `search.ts`가
+   * `[sono] unnamed viewCd`로 남긴다 — 이름을 지어내는 대신 코드가 화면에 보이는 것이
+   * 이 기능의 실패 방향이다.
+   *
+   * 키는 두 모양을 받는다. `"01"`(전역)과 `"66:01"`(지점 한정)이고 지점 한정이 이긴다 —
+   * 같은 코드가 지점마다 다른 뷰를 뜻하는지는 `debug-sono.ts variants`(Part 1)가 답하고,
+   * 그 답이 나오기 전까지는 어느 쪽으로도 채우지 않는다.
+   *
+   * ⚠️ 채울 때 각 항목에 확인 날짜와 방법을 적을 것(헤드 브라우저의 객실 선택 화면에서
+   * 잔여 수와 `rsvRmCnt`를 대조). 이 표는 사이트가 준 것이 아니라 **사람이 확인한 답**이고,
+   * 사이트가 코드를 바꾸면 증상은 에러가 아니라 화면에 코드가 다시 보이는 것이다.
+   */
+  viewNames: {} as Readonly<Record<string, string>>,
+
+  /**
    * Stores per room-list request. 8 keeps a batch around 0.7MB / 2s, so one
    * failing batch costs a quarter of the pass rather than all of it — the same
    * isolation Lotte gets from its per-branch try/catch, at the granularity

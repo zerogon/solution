@@ -1,5 +1,6 @@
 import type { BrowserContext, Page } from "playwright-core";
 import type { PriceKind } from "@/lib/price";
+import type { InventoryVariant } from "@/lib/variants";
 
 export type CrawlerLogger = (msg: string, meta?: Record<string, unknown>) => void;
 
@@ -140,6 +141,25 @@ export interface InventoryRow {
    * 가격은 잡음이지만, 그 방이 몇 명짜리인지는 후보를 추릴 때 여전히 정보다.
    */
   occupancy?: { standard: number; max: number };
+
+  /**
+   * 이 행이 접고 있는 변형들 — 사이트의 실제 예약 단위(`src/lib/variants.ts`).
+   *
+   * **행의 분해이지 새 판정이 아니다.** 소노는 `resortTypeNm + roomTypeNm`으로 뷰
+   * 변형(`rmTypeCd`)을 한 행에 접는데, 운영자가 보고 싶은 것이 그 접힌 것들이라
+   * 행은 그대로 두고 아래에 목록을 단다(2026-09-11). 행 수 · 유니크 키 · 필터 카운트 ·
+   * 수동 요금 조인 키는 이 필드와 무관하다.
+   *
+   * 붙이지 않으면(undefined) "이 크롤러는 분해하지 않는다"는 뜻이고 DB에는 NULL이 된다.
+   * 소노는 변형이 하나뿐인 행에도 길이 1로 붙인다 — `variants IS NULL`이 정확히
+   * 크롤러의 구별이 되게. 순서는 응답의 첫 등장 순서(SPA가 보여주는 순서)다.
+   *
+   * 소노에서는 행의 `available`/`closingSoon`이 **이 목록에서 유도된다** — 어느 한
+   * 변형이 전 숙박을 예약 가능해야 행이 가능이다. 밤마다 아무 변형이나 OR한 뒤 AND하던
+   * 종전 접기는 2박 이상에서 아무 변형도 두 밤을 다 못 채우는 행을 초록으로 냈다
+   * (`sono/parse.ts`).
+   */
+  variants?: InventoryVariant[];
 }
 
 export interface CrawlerModule {

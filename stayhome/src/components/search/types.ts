@@ -1,5 +1,6 @@
 import type { ResortSlug } from "@/generated/prisma/enums";
 import type { PriceKind } from "@/lib/price";
+import type { InventoryVariant } from "@/lib/variants";
 
 /** `/api/inventory`가 돌려주는 한 행. 라우트의 `select`와 필드가 일치해야 한다. */
 export interface InventoryRow {
@@ -36,6 +37,15 @@ export interface InventoryRow {
    * 변하지 않으므로, 요금처럼 신선도·가용성으로 가릴 이유가 없다.
    */
   occupancy: { standard: number; max: number } | null;
+  /**
+   * 이 행이 접고 있는 변형(뷰 등)의 목록 — 사이트의 실제 예약 단위(`@/lib/variants`).
+   *
+   * **빈칸은 에러가 아니다** — 소노만 분해한다(2026-09-11). 행의 분해이지 새 판정이
+   * 아니라서 필터 칩 건수·요약 스탯·수동 요금은 이 필드를 보지 않는다. 화면은 변형이
+   * 둘 이상일 때만 펼침 버튼을 그리고, 변형의 색은 행과 같은 `syncedAt`으로 판정한다
+   * (같은 문장으로 쓰였으니 나이가 같다).
+   */
+  variants: InventoryVariant[] | null;
   syncedAt: string;
 }
 

@@ -306,6 +306,20 @@ model ResortInventory {
   stdCapacity Int? @map("std_capacity")
   maxCapacity Int? @map("max_capacity")
 
+  /// 이 행이 접고 있는 변형 목록(`InventoryVariant[]`, `src/lib/variants.ts`). **소노만 채운다.**
+  ///
+  /// 소노 `room/list/pc`는 뷰 변형(`rmTypeCd`)마다 상태·잔여를 따로 주는데 행은
+  /// `resortTypeNm + roomTypeNm`으로 접혀 있다(2026-08-31 실측 570그룹 중 300개). 운영자가
+  /// 보고 싶은 것이 그 접힌 것들이라, 접힘을 풀어 행 수·유니크 키·필터 카운트·수동 요금
+  /// 조인 키를 바꾸는 대신 **행 아래에 목록을 단다**(2026-09-11 결정). 행의 분해이지
+  /// 새 판정이 아니다 — `removeVanishedRows`·백스톱·신선도 어느 것도 이 컬럼을 모른다.
+  ///
+  /// 다른 크롤러는 NULL이고, 소노는 변형이 하나뿐인 행에도 길이 1 배열을 쓴다 —
+  /// `variants IS NULL`이 정확히 "이 크롤러는 분해하지 않는다"가 되게.
+  /// upsert가 매 패스 덮어쓰므로 `price`와 같은 **"값의 나이 = synced_at"** 등식 안에 있다
+  /// (`run.ts`의 COALESCE 금지). 값이 이 모양이 아니면 `/api/inventory`가 null로 강등한다.
+  variants Json? @db.JsonB
+
   syncedAt DateTime @default(now()) @map("synced_at")
 
   resort Resort @relation(fields: [resortId], references: [id], onDelete: Cascade)

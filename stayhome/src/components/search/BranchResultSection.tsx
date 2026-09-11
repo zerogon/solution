@@ -7,13 +7,13 @@ import {
   TONE_DOT,
   TONE_LABEL,
   TONE_ORDER,
-  TONE_SURFACE,
   showsPrice,
   toneOf,
 } from "@/lib/availability-tone";
 import { PRICE_KIND_LABEL, formatKrw, perNightAverage, type PriceKind } from "@/lib/price";
 import { checkedLabel, relativeAge, syncedLabel } from "@/lib/freshness";
 import { RoomRateCell } from "./RoomRateCell";
+import { RoomRow } from "./RoomRow";
 import { rateKey, showsRowPrice, type ManualRate } from "./manual-rates";
 import type { InventoryRow } from "./types";
 
@@ -147,12 +147,14 @@ export function BranchResultSection({
           // 붙은 행에는 입력 자리를 만들지 않는다(운영자 결정: 자동 우선).
           const editable = row.price == null || row.price.kind === "manual";
           return (
-            <li
+            // 행의 껍질(`<li>`·세부 목록 펼침)은 `RoomRow`가 갖는다 — 줄 안의 내용은 여기 그대로다.
+            <RoomRow
               key={row.id}
-              className={cn(
-                "flex items-center gap-3 rounded-lg border px-3 py-2.5",
-                TONE_SURFACE[tone],
-              )}
+              tone={tone}
+              roomType={row.roomType}
+              variants={row.variants}
+              syncedAt={row.syncedAt}
+              now={now}
             >
               <span
                 className={cn("size-2 shrink-0 rounded-full", TONE_DOT[tone])}
@@ -251,7 +253,7 @@ export function BranchResultSection({
                   <ExternalLink className="size-4" />
                 </a>
               )}
-            </li>
+            </RoomRow>
           );
         })}
       </ul>
