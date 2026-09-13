@@ -634,7 +634,55 @@ Q1만 근거로 "요금은 없다"고 적고 있었다. 그건 **재고 응답�
 따라서 그 그룹에 단일 정원이 없을 이유가 없다. 요금이 막혔던 이유(`rsvRmCnt`가 변형마다
 다르다)를 정원에 그대로 옮겨 적은 것이 틀렸다. **소노가 빈 것은 값이 없어서다.**
 
-### 변형은 뷰 축이고 이름은 응답에 없다 (2026-09-11, 배선 완료 · 실측 대기)
+### 변형과 그 이름 — `room/detail`은 `actualMemNo` 하나로 열린다 (2026-09-11 배선 · 09-13 이름·실측)
+
+**2026-09-13 요약**: 변형(`rmTypeCd`)은 뷰 축만이 아니라 **뷰 × 취사 × 침대**이고(한 뷰 안에
+`rmTypeCd`가 최대 4개 — 역방향 1:1 위반 11/36), 그 이름은 `room/list/pc`에 없고
+`POST memberReservation/room/detail`에 있다. 그 콜은 **본문에 `actualMemNo`(= `memNo`)를 실으면
+저장된 쿠키만으로 열린다.** 크롤러는 `sono/names.ts`로 배치마다 한 번 묻는다. 아래 원래 절(09-11)의
+"이름은 `SONO.viewNames`에서만 온다"는 **폐기됐다** — 그 표는 삭제했다.
+
+| 본문 | 결과 |
+| --- | --- |
+| SPA가 보낸 그대로(`memNo`·`actualMemNo`·`rsvBlckCd:"000"` …) | 200 · 16말단 |
+| `actualMemNo` 뺌 | **400 `W22M3S4` 이용회원번호는 필수입니다** |
+| `rsvBlckCd` 뺌 | 200 · 같은 답 |
+| 새 컨텍스트(저장된 storageState만, 네비게이션 0) | 200 · 같은 바이트 |
+
+- **응답 모양**: `body[]`(객실유형) `> viewList[]`(`viewCd`·`viewNm`) `> rmTypeList[]`(34키 —
+  `rmTypeCd`·`viewNm`·`cookNm`·`bedNm`·`rmTypeNm`·`rsvStatusCd`·`rsvRmCnt` …). **어느 층에도
+  `storeCd`가 없다** — 8지점 배치의 답은 `rmTypeCd`로만 키잉된다.
+- ⚠️ **`variants` 스텝의 첫 실행은 이 콜을 "안 열림"으로 판정했다.** 열린 응답(10KB, 200,
+  `success:true`)을 `list/pc` 모양(`body[].rmTypeList`)으로 세어 0이 나왔기 때문이다.
+  `detailLeavesOf`로 고쳤다. 09-07 `subtypes` 조사의 "known-good 본문으로도 거절"도 같은 자리의
+  다른 실수다 — `list/pc`의 본문에는 애초에 `actualMemNo`가 없다.
+- **그래도 지점 없이 키잉해도 되는 근거**(32지점 × 2날짜 × 지점별 호출 64회): 288코드 중 같은
+  코드에 **비어 있지 않은** 뷰·취사·침대 이름이 둘 이상인 경우 0. 어긋난 7코드는 전부
+  `rmTypeNm`의 띄어쓰기(`"골드"`/`"골 드"`)나 `groupRoomNameNm`, 또는 한쪽이 공백 자리표시자
+  `" "`인 경우였다. 그래서 병합은 **칸 단위로 공백은 정보가 아니고, 비어 있지 않은 두 값이 다르면
+  그 코드는 이름을 포기**한다(오크밸리 `occupancy.ts`의 `record`와 같은 규칙).
+- **커버리지**: 한 날짜의 detail이 전 지점 `list/pc` 코드 **382/382**를 명명했고, 8지점 배치가 지점별
+  호출의 합집합과 같은 코드를 답했다(62/62). `list/pc`의 변형 집합은 날짜·달 사이에 변하지 않았다(0/30).
+- **비용**: 1지점 0.7초 · 4지점 0.8초 · 8지점 1.0초. 배치당 1콜 × 4배치, `ctx.page` WeakMap으로
+  **패스당 한 번**(2박 패스는 0콜). 타임아웃은 `ctx.deadlineAt`에서 유도하고 8초 미만 남으면 묻지
+  않는다. **절대 던지지 않는다** — 실패 방향은 코드 라벨 + `[sono] unnamed rmTypeCd` 로그다.
+- **라벨** = `${viewNm} ${cookNm}/${bedNm}`. 사이트 자신의 조립 규칙(`entry.*.js`의
+  `${groupRoomNameNm viewNm cookNm}/${bedNm}`)에서 객실유형만 뺐다 — 행이 이미 객실유형을 말한다.
+  취사 칸이 공백인 호텔은 `스탠다드/더블`이 된다. 관측 어휘: 뷰 `스탠다드 파크뷰 오션뷰 파셜오션뷰
+  레이크뷰 파노라마 설악마운틴 가든뷰 …`, 침대 `침대 더블 트윈 온돌 패밀리 트윈 킹 트윈 트리플
+  2더블,1싱글 …`.
+- 공개 객실 카탈로그(`facilityNm` "스위트 파크뷰" 등)는 09-07에 확인한 대로 **조인 키가 전부 null**이라
+  쓰지 않는다. 이제 쓸 이유도 없다.
+
+실측(2026-09-13): `run-crawl SONO "소노벨 청송"` 콜드 로그인 포함 108행 15.1초, 16/16 명명 —
+`리조트 스위트` 1박이 `스탠다드 취사/더블 65실 · 스탠다드 클린/더블 30 · 파크뷰 취사/더블 22 ·
+파크뷰 클린/더블 30 · 스탠다드 취사/온돌 13`. `CRAWL_BUDGET_MS=50000 run-crawl SONO hot` →
+**60/60 · 56스킵 · 20,384행 · 49.8초 1패스**(프로덕션 크론은 09-12에 같은 스윕을 46.6초+21.4초
+2패스로 돌았다 — 예산 게이트가 나누는 구조는 그대로이고 이름 콜은 첫 윈도우에만 ~4초 붙는다).
+DB: 변형 37,436개 중 **코드 라벨 0**, 행↔변형 불변식(아래 SQL) 위반 0, 펼칠 수 있는 행 7,546,
+비소노 `variants` 0. 2박 접기 오판은 540행 중 2(청송·제주 리조트 패밀리 9/17).
+
+#### 원래 절 (2026-09-11) — 판정·그릇은 그대로, 이름 출처만 위 절로 바뀌었다
 
 운영자가 보고 싶은 세부 타입(스탠다드/파크뷰 → 더블취사/트윈취사 …)은 이 크롤러가 **접어서
 버리고 있던 것**이다. `rmTypeList` 15키 중 `rmTypeCd`(변형 = 사이트의 예약 단위) · `viewCd` ·
@@ -673,8 +721,9 @@ Q1만 근거로 "요금은 없다"고 적고 있었다. 그건 **재고 응답�
 ⑤ `storeCdList` 1/4/8 비용과 응답 폭. **세부 축 GO 조건 넷**: DOM 없이 열림(선행 ≤3콜) ·
 8지점/콜 또는 월 단위 · 조인 ≥99% · 이름 non-null ≥95%.
 
-⚠️ **2026-09-11에는 돌리지 못했다** — 작업 환경에 `.env`가 없어 자격증명 DB에 닿지 못했다.
-`recordFlow`는 이 스텝을 위해 요청 헤더 **이름**(값 아님)을 함께 기록하게 됐다(`Capture.reqHeaders`).
+2026-09-11에는 `.env`가 없어 돌리지 못했고 **2026-09-13에 돌렸다**(결과는 위 절). `recordFlow`는
+이 스텝을 위해 요청 헤더 **이름**(값 아님)을 함께 기록한다(`Capture.reqHeaders`) — 09-13에 H3(헤더)는
+불필요로 판명됐다(새 컨텍스트의 `page.request`로 열린다).
 
 검증 SQL(조사·`db:push` 뒤):
 
@@ -684,7 +733,7 @@ select jsonb_typeof(variants), count(*) from resort_inventory where variants is 
 select count(*) from resort_inventory r, jsonb_array_elements(r.variants) v
  where not (v ? 'label' and v ? 'code' and v ? 'available' and v ? 'closingSoon' and v ? 'remaining'); -- 0
 select count(*) from resort_inventory r, jsonb_array_elements(r.variants) v where (v->>'remaining')::int < 0; -- 0
-select count(*) from resort_inventory r, jsonb_array_elements(r.variants) v where v->>'label' ~ '^[0-9A-Z]{1,4}$'; -- 이름 없는 코드, viewNames 뒤 0
+select count(*) from resort_inventory r, jsonb_array_elements(r.variants) v where v->>'label' = v->>'code'; -- 이름 못 받은 변형 (09-13 실측 0/37,436)
 select count(*) from resort_inventory where resort_name like '소노%' and available
    and not exists (select 1 from jsonb_array_elements(variants) v where (v->>'available')::bool); -- 0 (행≠변형 모순)
 ```

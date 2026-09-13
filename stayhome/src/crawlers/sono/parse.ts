@@ -3,6 +3,7 @@ import type { InventoryVariant } from "@/lib/variants";
 import type { InventoryRow } from "../types";
 import { SONO, type SonoBranch } from "./config";
 import { formatDateCompact, parseDateCompact } from "./format";
+import type { VariantNames } from "./names";
 
 /**
  * Subset of `POST /memberReservation/room/list/pc` we rely on.
@@ -32,11 +33,12 @@ export interface RoomListPayload {
       resortTypeNm?: string;
       roomTypeNm?: string;
       /**
-       * The site's booking unit — one per 뷰(/평형) variant of a room type. This is
-       * what the SPA actually reserves, so it is the identity of an `InventoryVariant`.
+       * The site's booking unit — one per 뷰 × 취사 × 침대 variant of a room type.
+       * This is what the SPA actually reserves, so it is the identity of an
+       * `InventoryVariant`, and the key `names.ts` names it by.
        */
       rmTypeCd?: string;
-      /** View code. **Code only** — the response carries no `viewNm`; names come from `SONO.viewNames`. */
+      /** View code. **Code only** — this response carries no name; `room/detail` does (`names.ts`). */
       viewCd?: string;
       /** 평형 code. Measured never to mix inside one (store, roomType) group (2026-08-31, 0/570). */
       pyeongCd?: string;
@@ -76,9 +78,9 @@ const OPEN_STATUSES = new Set(["A", "E"]);
  *    what turns 60 hot windows into 4 requests (2 months x 2 stay lengths).
  *
  * 2. **Group by `resortTypeNm + roomTypeNm` — but judge per variant.** One room
- *    type spans several `rmTypeCd` (뷰 variants) that the booking UI shows as
- *    one choice; the row keeps that grouping so the row count, the unique key
- *    and the manual-rate join stay what they were. Each variant is judged on
+ *    type spans several `rmTypeCd` (뷰 · 취사 · 침대 variants) that the booking UI
+ *    shows as one choice; the row keeps that grouping so the row count, the unique
+ *    key and the manual-rate join stay what they were. Each variant is judged on
  *    its own across the stay and kept on the row as `variants`, and the row's
  *    own verdict is derived from them:
  *
@@ -90,8 +92,9 @@ const OPEN_STATUSES = new Set(["A", "E"]);
  *    is not — a room whose 스탠다드 is free on night 1 and whose 파크뷰 is free on
  *    night 2 read as bookable, yet the site books one `rmTypeCd` for the whole
  *    stay and neither variant can. That is the same shape as the 2박 bug fixed
- *    on 2026-08-09, one level down. The row still stores booleans; the per-variant
- *    remaining count now survives on `variants` instead of being thrown away.
+ *    on 2026-08-09, one level down (measured 2026-09-13: 2 of 540 two-night rows).
+ *    The row still stores booleans; the per-variant remaining count now survives
+ *    on `variants` instead of being thrown away.
  *
  *    Summing the counts onto the row would still be wrong — four variants at 11
  *    rooms each, all 마감임박, would read as "44 left" — so the row has no count.
@@ -100,11 +103,16 @@ const OPEN_STATUSES = new Set(["A", "E"]);
  *    count closely (measured across 23 days × 32 stores: median remaining is
  *    54–206 for A and 3–11 for E), so re-deriving it from a threshold the way
  *    the Lotte crawler must would only add a second, worse opinion.
+ *
+ * `names` labels the variants (`names.ts`). Without it — or for a code it could
+ * not name — the label is the `rmTypeCd` itself: a code on screen is the intended
+ * degradation, an invented name is not.
  */
 export function parseRoomList(
   payload: RoomListPayload,
   branch: SonoBranch,
   request: { nights: number },
+  names?: VariantNames,
   diag?: ParseDiagnostics,
 ): InventoryRow[] {
   // The store's name is read from `branch.value`, never from `storeNm`: the
@@ -140,7 +148,7 @@ export function parseRoomList(
     const byCode = tracks.get(roomType) ?? new Map<string, VariantTrack>();
     let track = byCode.get(code);
     if (!track) {
-      track = { code, label: variantLabel(branch, entry, diag), order: order++, nights: new Map() };
+      track = { code, label: variantLabel(code, names, diag), order: order++, nights: new Map() };
       byCode.set(code, track);
       tracks.set(roomType, byCode);
     }
@@ -198,11 +206,11 @@ export function parseRoomList(
 
 /**
  * What the parser cannot fix but the crawl log should say. `search.ts` prints
- * it once per batch — a new `viewCd` shows up there as a name, not as a bare
- * code that quietly appears on screen.
+ * it once per batch — a code that reaches the screen unnamed shows up there
+ * first, by name, rather than quietly on screen.
  */
 export interface ParseDiagnostics {
-  unnamedViewCds: Set<string>;
+  unnamedRmTypeCds: Set<string>;
 }
 
 /** One night of one variant. */
@@ -243,11 +251,10 @@ function coversStay(dates: Set<string>, checkin: Date, stayNights: number): bool
  * is left out rather than guessed — the row still exists (another variant
  * covered those nights), it just does not list this one for this stay.
  *
- * Two variants may share a label (same `viewCd`, different `rmTypeCd` — the
- * 세부 axis already split in the response). They stay separate, because merging
- * would recreate the "44 left" lie, and the label gets the code appended so the
- * screen never shows two identical lines. A code is allowed on screen; an
- * invented name is not.
+ * Two variants may still share a label when the site gives two `rmTypeCd` the
+ * same view · 취사 · 침대 names. They stay separate, because merging would recreate
+ * the "44 left" lie, and the label gets the code appended so the screen never
+ * shows two identical lines.
  */
 function judgeVariants(
   byCode: Map<string, VariantTrack>,
@@ -293,24 +300,13 @@ function judgeVariants(
 }
 
 /**
- * The view's display name, or its raw code when we have none.
- *
- * `SONO.viewNames` is tried store-scoped first (`"66:01"`), then global (`"01"`),
- * because the survey has to tell us which one the site means (`debug-sono.ts
- * variants`, Part 1). An unknown code is reported through `diag` and shown as
- * itself — the same rule the Oakvalley parser applies to an unregistered room
- * type. A guessed name would be an error nobody can see.
+ * The variant's display name from `room/detail`, or its raw `rmTypeCd` when we
+ * have none. An unnamed code is reported through `diag` and shown as itself —
+ * the same rule the Oakvalley parser applies to an unregistered room type.
  */
-function variantLabel(
-  branch: SonoBranch,
-  entry: { viewCd?: string; rmTypeCd?: string },
-  diag?: ParseDiagnostics,
-): string {
-  const viewCd = entry.viewCd?.trim();
-  if (!viewCd) return entry.rmTypeCd?.trim() || "(구분 없음)";
-  const names: Readonly<Record<string, string>> = SONO.viewNames;
-  const name = names[`${branch.storeCd}:${viewCd}`] ?? names[viewCd];
+function variantLabel(code: string, names: VariantNames | undefined, diag?: ParseDiagnostics): string {
+  const name = names?.get(code);
   if (name) return name;
-  diag?.unnamedViewCds.add(viewCd);
-  return viewCd;
+  diag?.unnamedRmTypeCds.add(code);
+  return code;
 }

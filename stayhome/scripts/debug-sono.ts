@@ -1399,6 +1399,13 @@ async function main() {
     };
     const entriesOf = (json: Entry | null): Entry[] =>
       ((json?.body ?? []) as Entry[]).flatMap((s) => (s.rmTypeList ?? []) as Entry[]);
+    // `room/detail`은 한 층 더 깊다: body[](객실유형) > viewList[] > rmTypeList[].
+    // 2026-09-13 첫 실행은 이걸 `entriesOf`로 세어 **열린 콜을 "안 열림"으로 판정**했다
+    // (10KB 200 success=true에 leaves=0). 모양을 모르는 채 센 0은 '없다'가 아니다.
+    const detailLeavesOf = (json: Entry | null): Entry[] =>
+      ((json?.body ?? []) as Entry[]).flatMap((r) =>
+        ((r.viewList ?? []) as Entry[]).flatMap((v) => (v.rmTypeList ?? []) as Entry[]),
+      );
 
     const listPc = async (checkin: Date, nights: number, storeCds: string[], rmTypeCode = "") => {
       const r = await postJson("memberReservation/room/list/pc", {
@@ -1759,7 +1766,7 @@ async function main() {
         }
         const r1 = await postJson("memberReservation/room/detail", cap.post ?? "{}", 30_000);
         console.log(`      detail: ${describe(r1)}`);
-        detailOpensStandalone = r1.status === 200 && r1.json?.success !== false && entriesOf(r1.json).length > 0;
+        detailOpensStandalone = r1.status === 200 && r1.json?.success !== false && detailLeavesOf(r1.json).length > 0;
         if (!detailJson && detailOpensStandalone) detailJson = r1.json;
 
         // 재생 ② detail 단독 · 본문 보강
@@ -1889,7 +1896,7 @@ async function main() {
         const all = SONO.branches.map((b) => b.storeCd);
         for (const n of [1, 4, 8]) {
           const r = await postJson("memberReservation/room/detail", { ...base, storeCdList: all.slice(0, n) }, 60_000);
-          const leaves = entriesOf(r.json);
+          const leaves = detailLeavesOf(r.json);
           const storesAnswered = new Set(((r.json?.body ?? []) as Entry[]).map((s) => str(s, "storeCd"))).size;
           const dates = [...new Set(leaves.map((l) => str(l, "ciYmd")).filter(Boolean))].sort();
           console.log(`    ${n}지점: ${describe(r)} · 답한 지점 ${storesAnswered} · 말단 ${leaves.length} · 날짜 ${dates.length}개 ${dates[0] ?? ""}→${dates[dates.length - 1] ?? ""}`);

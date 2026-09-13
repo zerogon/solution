@@ -4,6 +4,7 @@ import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { SONO, type SonoBranch } from "./config";
 import { formatDateCompact } from "./format";
 import { fetchMemberNo } from "./login";
+import { loadVariantNames } from "./names";
 import { parseRoomList, type ParseDiagnostics, type RoomListPayload } from "./parse";
 import { SessionLostError } from "../_shared/errors";
 
@@ -54,11 +55,17 @@ export async function performSearch(
     const batch = branches.slice(i, i + SONO.batchSize);
     try {
       const payload = await fetchRoomList(ctx, memNo, batch, { ciYmd, coYmd, nights });
+      // 변형 이름은 list/pc에 없다 — 같은 배치의 room/detail에서 온다(`names.ts`).
+      // 패스당 배치마다 한 번이고, 실패해도 던지지 않아 이 배치의 행은 코드 라벨로 남는다.
+      const codes = (payload.body ?? []).flatMap((s) =>
+        (s.rmTypeList ?? []).map((e) => e.rmTypeCd?.trim() ?? "").filter(Boolean),
+      );
+      const names = await loadVariantNames(ctx, memNo, batch, { ciYmd, coYmd, nights }, codes);
       let rows = 0;
       const dates = new Set<string>();
-      const diag: ParseDiagnostics = { unnamedViewCds: new Set() };
+      const diag: ParseDiagnostics = { unnamedRmTypeCds: new Set() };
       for (const branch of batch) {
-        const parsed = parseRoomList(payload, branch, { nights }, diag);
+        const parsed = parseRoomList(payload, branch, { nights }, names, diag);
         rows += parsed.length;
         for (const r of parsed) if (r.stay) dates.add(toIsoDate(r.stay.checkin));
         out.push(...parsed);
@@ -71,12 +78,12 @@ export async function performSearch(
         // collapses to 1 the scheduler quietly goes back to 60 requests.
         checkinDates: dates.size,
       });
-      // A view code without a name reaches the screen as the bare code. That is
+      // A variant without a name reaches the screen as its bare rmTypeCd. That is
       // the intended degradation, but it must be visible here first — the crawl
-      // log is the only place that can say "a new viewCd appeared" by name.
-      if (diag.unnamedViewCds.size) {
-        log("[sono] unnamed viewCd — SONO.viewNames에 없다, 화면에는 코드가 그대로 보인다", {
-          codes: [...diag.unnamedViewCds].sort(),
+      // log is the only place that can say "these codes went unnamed" by name.
+      if (diag.unnamedRmTypeCds.size) {
+        log("[sono] unnamed rmTypeCd — room/detail이 이름을 주지 않았다, 화면에는 코드가 그대로 보인다", {
+          codes: [...diag.unnamedRmTypeCds].sort(),
         });
       }
     } catch (e) {
