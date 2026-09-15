@@ -1,7 +1,7 @@
 import { BedDouble, CircleCheck, Clock, HelpCircle } from "lucide-react";
 
 import { diffDaysIso, formatKoMd } from "@/lib/utils";
-import { TONE_TEXT, toneOf } from "@/lib/availability-tone";
+import { TONE_TEXT, isBookable, toneOf } from "@/lib/availability-tone";
 import { Badge } from "@/components/ui/badge";
 import { StatCard } from "@/components/stat-card";
 import {
@@ -36,9 +36,7 @@ export function AvailabilitySummary({
   // `r.available`이 아니라 **확인된** 가용이어야 한다 — 13일 전에 가능했던 행을
   // 여기 합산하면 아래 목록을 아무리 정확히 고쳐도 사용자는 이 숫자를 먼저 믿는다.
   const tones = rows.map((r) => toneOf(r, now));
-  const available = tones.filter(
-    (t) => t === "available" || t === "closingSoon",
-  ).length;
+  const available = tones.filter(isBookable).length;
   const closingSoon = tones.filter((t) => t === "closingSoon").length;
   const unverified = tones.filter((t) => t === "unverified").length;
 
@@ -49,7 +47,7 @@ export function AvailabilitySummary({
   // 분모가 전국 지점 수면 비율이 아무 의미가 없다.
   const branchesWithAvailability = new Set(
     rows
-      .filter((_, i) => tones[i] === "available" || tones[i] === "closingSoon")
+      .filter((_, i) => isBookable(tones[i]))
       .map((r) => r.branchName),
   ).size;
   const branchesInScope = candidateProperties(place, catalog).length;

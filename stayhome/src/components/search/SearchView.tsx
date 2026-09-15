@@ -6,9 +6,10 @@ import { toast } from "sonner";
 import { CalendarSearch, RefreshCw, Search, SearchX, TriangleAlert } from "lucide-react";
 
 import { addDaysIso, diffDaysIso, todayKstIso } from "@/lib/utils";
-import { toneOf } from "@/lib/availability-tone";
+import { isBookable, toneOf } from "@/lib/availability-tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/empty-state";
 import { DateRangeField } from "./DateRangeField";
 import { NightsStepper } from "./NightsStepper";
@@ -23,6 +24,7 @@ import {
   type PlaceSelection,
 } from "./place-selection";
 import { indexRates, withManualRates, type ManualRate } from "./manual-rates";
+import { useAvailableOnly } from "./use-available-only";
 import type { Committed, InventoryRow, ResortCatalogEntry } from "./types";
 
 /**
@@ -75,6 +77,7 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
   const [nights, setNights] = useState(1);
   const [place, setPlace] = useState<PlaceSelection>(ALL_PLACES);
   const [committed, setCommitted] = useState<Committed | null>(null);
+  const [availableOnly, setAvailableOnly] = useAvailableOnly();
 
   const queryClient = useQueryClient();
   const [refreshing, startRefresh] = useTransition();
@@ -135,8 +138,7 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
     if (!rows) return undefined;
     const acc: PlaceCounts = { byProperty: {}, byRegion: {}, byResort: {} };
     for (const row of rows) {
-      const tone = toneOf(row, dataUpdatedAt);
-      if (tone !== "available" && tone !== "closingSoon") continue;
+      if (!isBookable(toneOf(row, dataUpdatedAt))) continue;
       acc.byProperty[row.branchName] = (acc.byProperty[row.branchName] ?? 0) + 1;
       acc.byRegion[row.region] = (acc.byRegion[row.region] ?? 0) + 1;
       acc.byResort[row.resortSlug] = (acc.byResort[row.resortSlug] ?? 0) + 1;
@@ -323,6 +325,8 @@ export function SearchView({ catalog }: { catalog: ResortCatalogEntry[] }) {
           onRateSaved={onRateSaved}
           now={dataUpdatedAt}
           hasTarget={target != null}
+          availableOnly={availableOnly}
+          onAvailableOnlyChange={setAvailableOnly}
           isFetching={isFetching}
           isError={isError}
           error={error}
@@ -341,6 +345,8 @@ function Results({
   onRateSaved,
   now,
   hasTarget,
+  availableOnly,
+  onAvailableOnlyChange,
   isFetching,
   isError,
   error,
@@ -355,6 +361,9 @@ function Results({
   /** 행 신선도를 재는 기준 시각 — 이 행들을 받은 순간(React Query의 `dataUpdatedAt`). */
   now: number;
   hasTarget: boolean;
+  /** "예약 가능만 보기". 목록만 좁히고 요약 스탯은 필터 전 행으로 센다. */
+  availableOnly: boolean;
+  onAvailableOnlyChange: (next: boolean) => void;
   isFetching: boolean;
   isError: boolean;
   error: unknown;
@@ -407,7 +416,17 @@ function Results({
     );
   }
 
-  const groups = groupByBranch(rows);
+  // "예약 가능만 보기"는 표시 필터다 — 서버 축도 쿼리 키도 아니다(지역·지점 필터와 같은 자리).
+  // 판정은 요약 스탯·칩 건수와 **같은 술어**(`isBookable`)라서, 켰을 때 남는 행 수가 위의
+  // "예약 가능 N건"과 정확히 같다. 요약에는 필터 전 `rows`를 계속 넘긴다 — 필터를 켰다고
+  // "확인 필요" 타일이 0이 되면 그 칸이 존재하는 이유(낡은 행을 드러내기)가 사라진다.
+  const bookableCount = rows.filter((r) => isBookable(toneOf(r, now))).length;
+  const hiddenCount = rows.length - bookableCount;
+  const unverifiedCount = rows.filter((r) => toneOf(r, now) === "unverified").length;
+
+  const groups = groupByBranch(rows).filter(
+    (group) => !availableOnly || group.some((r) => isBookable(toneOf(r, now))),
+  );
 
   // 요금은 숙박 총액으로 저장되므로 1박 환산에 박수가 필요하다. 화면 상태(`nights`)가
   // 아니라 **실제로 조회된 조건**에서 구한다 — 사용자가 박수를 바꾸고 아직 조회를
@@ -416,8 +435,9 @@ function Results({
 
   // 지역을 좁히지 않은 상태에서 결과가 여러 지역에 걸쳐 있을 때만 구분선을 넣는다.
   // 행이 이미 region 우선으로 정렬돼 오므로 값이 바뀌는 지점만 보면 된다.
+  // **남은 그룹**으로 판정한다 — 필터가 한 지역을 통째로 비우면 그 구분선도 없어야 한다.
   const showRegionDividers =
-    place.region === null && new Set(rows.map((r) => r.region)).size >= 2;
+    place.region === null && new Set(groups.map((g) => g[0].region)).size >= 2;
 
   return (
     <div className="space-y-6">
@@ -428,6 +448,43 @@ function Results({
         place={place}
         catalog={catalog}
       />
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-0.5">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <Checkbox
+            checked={availableOnly}
+            onCheckedChange={(checked) => onAvailableOnlyChange(checked)}
+          />
+          예약 가능만 보기
+        </label>
+        {availableOnly && hiddenCount > 0 && (
+          <span className="font-mono text-xs tabular-nums text-muted-foreground">
+            마감·확인 필요 {hiddenCount}건 숨김
+          </span>
+        )}
+      </div>
+      {groups.length === 0 && (
+        <Card>
+          <CardContent>
+            <EmptyState
+              icon={SearchX}
+              title="예약 가능한 객실이 없습니다"
+              description={
+                // 3박 이상은 핫 윈도우 밖이라 정기 수집이 닿지 않고, 그래서 이 빈 화면이 자주 나온다.
+                // "없다"와 "아직 모른다"를 구별해 다음 행동을 알려준다.
+                unverifiedCount > 0
+                  ? `확인 필요 ${unverifiedCount}건은 최신화 후 확인할 수 있습니다.` +
+                    (hasTarget ? "" : " 지점을 선택하면 최신화할 수 있습니다.")
+                  : "이 조건에서 확인된 예약 가능 객실이 없습니다."
+              }
+              action={
+                <Button variant="outline" size="sm" onClick={() => onAvailableOnlyChange(false)}>
+                  전체 보기
+                </Button>
+              }
+            />
+          </CardContent>
+        </Card>
+      )}
       {groups.map((group, i) => {
         const region = group[0].region;
         const newRegion = i === 0 || groups[i - 1][0].region !== region;
@@ -445,6 +502,7 @@ function Results({
               nights={committedNights}
               rates={rates}
               onRateSaved={onRateSaved}
+              availableOnly={availableOnly}
             />
           </Fragment>
         );

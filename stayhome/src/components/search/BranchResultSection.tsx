@@ -7,6 +7,7 @@ import {
   TONE_DOT,
   TONE_LABEL,
   TONE_ORDER,
+  isBookable,
   showsPrice,
   toneOf,
 } from "@/lib/availability-tone";
@@ -30,6 +31,7 @@ export function BranchResultSection({
   nights,
   rates,
   onRateSaved,
+  availableOnly,
 }: {
   rows: InventoryRow[];
   /**
@@ -49,17 +51,24 @@ export function BranchResultSection({
   rates: Map<string, ManualRate>;
   /** 저장·삭제 후 호출. 호출부가 `["room-rates"]`를 무효화한다. */
   onRateSaved: () => void;
+  /**
+   * "예약 가능만 보기". 좁히는 것은 **목록뿐**이다 — 헤더의 `예약 가능 N/M`·`확인 필요`·
+   * 갱신 시각은 지점 전체의 요약이라 필터와 무관하게 전체 `rows`로 센다.
+   */
+  availableOnly: boolean;
 }) {
   const head = rows[0];
 
   const tones = new Map(rows.map((r) => [r.id, toneOf(r, now)]));
-  const availableCount = rows.filter(
-    (r) => tones.get(r.id) === "available" || tones.get(r.id) === "closingSoon",
-  ).length;
+  const availableCount = rows.filter((r) => isBookable(tones.get(r.id)!)).length;
   const unverifiedCount = rows.filter((r) => tones.get(r.id) === "unverified").length;
 
+  const listed = availableOnly
+    ? rows.filter((r) => isBookable(tones.get(r.id)!))
+    : rows;
+
   // 확인된 가용 → 마감임박 → 확인 필요 → 마감. 같은 상태 안에서는 객실명 가나다순.
-  const sorted = [...rows].sort((a, b) => {
+  const sorted = [...listed].sort((a, b) => {
     const d = TONE_ORDER[tones.get(a.id)!] - TONE_ORDER[tones.get(b.id)!];
     return d !== 0 ? d : a.roomType.localeCompare(b.roomType, "ko");
   });
@@ -80,9 +89,12 @@ export function BranchResultSection({
   // ⚠️ 렌더 게이트와 **같은 술어**여야 한다(`showsRowPrice`). 어긋나면 증상이 에러가 아니라
   // "라벨 없는 숫자"이거나 "숫자 없는 라벨"이다 — 수동 요금은 낡은·매진 행에서도 그려지므로
   // 여기서 `showsPrice`만 보면 그 섹션의 라벨이 통째로 사라진다.
+  //
+  // 같은 이유로 `rows`가 아니라 **`listed`**에서 구한다. 매진 행의 수동 요금은 그려지므로,
+  // "예약 가능만 보기"가 그 행을 숨겼는데 헤더에 "수동 입력"이 남으면 숫자 없는 라벨이다.
   const priceKinds = [
     ...new Set(
-      rows
+      listed
         .filter((r) => showsRowPrice(r.price, showsPrice(tones.get(r.id)!)))
         .map((r) => r.price!.kind),
     ),
