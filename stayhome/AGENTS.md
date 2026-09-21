@@ -566,6 +566,13 @@ POST {apiBase}/memberReservation/room/list/pc     잔여 객실
 
 ### 요금은 없다 — 재고 응답에도, 그 **다음 화면**에도 (금액 조사 2026-08-24 · Q2 보강 08-25)
 
+⚠️ **이 절의 결론은 2026-09-21에 뒤집혔다.** 여기 적힌 관측은 전부 그대로 참이지만
+(재고 응답 15키에도 `room/detail` 34키에도 돈이 없다), **소노에는 요금이 있다** —
+객실 선택보다 한 홉 더 뒤의 `room/detail/price`가 답한다. 아래 "### 요금은 있었다"를
+먼저 볼 것. 이 절을 지우지 않는 이유는 그 조사가 어디까지 물었고 어디서 멈췄는지가
+다음 조사의 출발점이기 때문이다 — 실제로 그 경계(📌 "이 조사는 객실 선택까지다")가
+09-21 조사가 시작된 자리다.
+
 **Q1 — 우리가 읽는 응답.** `rmTypeList`의 한 엔트리는 키 **15개**이고 그중 돈은 하나도
 없다 — 240엔트리 전수: `ciYmd errorId errorMsg levelYn pyeongCd resortTypeCd resortTypeNm
 rmTypeCd roomTypeCd roomTypeNm rsvRmCnt rsvStatusCd rsvStatusNm storeCd viewCd`.
@@ -738,6 +745,120 @@ select count(*) from resort_inventory where resort_name like '소노%' and avail
    and not exists (select 1 from jsonb_array_elements(variants) v where (v->>'available')::bool); -- 0 (행≠변형 모순)
 ```
 
+### 요금은 있었다 — `detail/price`는 `rmTypeCd` 하나로 열린다 (`prices` 스텝, 2026-09-21)
+
+08-25 `flow`는 객실 선택(`room/detail`)까지 걸었고 거기 요금이 없어 "소노는 금액을 주지
+않는다"로 닫혔다. 그 결론은 **그 조사의 경계 안에서만** 참이었다. 번들은 그 뒤로 셋을
+선언하고 있었고(`Pt = "/memberReservation/room"`), 이 저장소는 셋 중 어느 것도 한 번도
+부른 적이 없다:
+
+```
+POST {apiBase}/memberReservation/room/detail/price          ← 열린다. 총액·밤별·시즌
+POST {apiBase}/memberReservation/room/detail/price-detail   ← 열린다. 밤마다 9개 금액 칸
+POST {apiBase}/memberReservation/room/detail/coin-price     ← 400 W76M2S1 "AIRCOIN 정보가 존재하지 않습니다"
+```
+
+**문을 연 것은 `rmTypeCd` 하나다.** 그리고 이번에는 사이트가 **빠진 칸의 이름을 직접
+댔다** — `storeCd 는 필수값입니다` → (채우면) `rmTypeCd 는 필수값입니다` → (채우면) 200.
+`room/detail`의 `W22M3S4`처럼 "무엇이 빠졌는지 말하지 않는" 거절이 아니었으므로, `prices`
+스텝의 사다리(Part 1b)는 **이름을 서버에서, 값을 `list/pc` 표본에서만** 가져온다. 지어낸
+값은 한 칸도 없고, 관측에 없는 이름을 요구하면 그 자리에서 멈춘다.
+
+- **`room/detail`과 다른 계열이다.** 이쪽은 `storeCd`·`rmTypeCd`를 **단수 문자열**로
+  받는다. 배열을 주면 500 `Cannot deserialize value of type java.lang.String from Array`,
+  `storeCdList`는 실어도 무시된다. 즉 **배치가 구조적으로 불가능하다.**
+- 나머지 본문은 `names.ts`가 쓰는 것과 같다(`memNo` + **`actualMemNo`** + `userIndCd`
+  `rsvIndCd` `ciYmd` `coYmd` `nights` `rmCnt` `adultCnt` `childCnt`).
+
+**응답** (`detail/price`, 소노벨 청송 `00I00212` 2026-10-05 1박):
+
+```json
+{"dcAmt":0,"levelAmt":25000,"totAmt":146000,"originAmt":171000,
+ "preAftPayAmt":146000,"longSbscrbAmt":null,"speclBnftAmt":null,
+ "benefitDiscountList":[],"dailyPreAftPayList":[],
+ "daysAmtInfoList":[{"stndYmd":"20261005","totAmt":171000,"levelAmt":25000,"dcAmt":null,"seasonCd":"41"}]}
+```
+
+읽을 때 반드시 지킬 것 넷 — 전부 실측이다:
+
+1. **쓸 값은 `body.totAmt`다.** `originAmt − levelAmt = totAmt`(171,000 − 25,000 = 146,000)이고
+   `levelAmt`가 회원 등급 할인이다. ⚠️ **`daysAmtInfoList[].totAmt`의 합은 총액이 아니다** —
+   그 배열은 밤마다 **할인 전** 금액을 싣는다(1박 밤합 171,000 vs 총액 146,000). 밤별 합을
+   총액으로 쓰면 할인이 통째로 사라진다.
+2. **곱하지 않는다.** 응답이 숙박 **전체**의 총액을 준다 — 1·2·3박이 146,000 → 292,000 →
+   438,000이고 밤 배열도 1·2·3개로 늘었다. 롯데 `roomAvgAmt`(1박 평균 × 박수)와 반대이고
+   리솜 `totalRmAmt`와 같다.
+3. **예약할 수 없는 변형에도 값이 온다.** 마감임박(`E`) 146,000, **예약대기(`W`) 392,000**.
+   응답에 리솜 `isPossible` 같은 자기 부인 칸이 없으므로 가용성 게이트는 **우리 쪽**에
+   있어야 한다(롯데 `parse.ts`가 `available ? priceOf(...) : null`을 하는 그 자리).
+4. **날짜를 지킨다**(오크밸리 `probe` 교훈 통과). ci+0 146,000/시즌 41, ci+30 171,000/시즌 41
+   (그날은 `levelAmt` 0), ci+60 170,000/**시즌 43**. 파라미터를 무시하는 응답이 아니다.
+
+**조인 단위는 `rmTypeCd` — 즉 변형이다.** 이 크롤러의 행은 변형을 접은 행이고(570그룹 중
+300개), 그래서 "그 방의 값"이 하나가 아니다. 08-24에 이 파일이 "요금이 나왔더라도 행에
+붙일 수 없었다"고 적어둔 그 문제가 그대로 살아 있다. 다만 **09-11에 `variants` 컬럼이
+생겨 선택지가 하나 늘었다** — 변형마다 요금을 싣고 행에는 최저가 + "부터".
+
+**비용이 배선 형태를 정한다.** 콜당 **166ms**(16콜 2.65초, 한 지점 하루 전 변형).
+리솜(0.2~1.8초)보다 빠르지만 구조는 같다 — **(변형 × 날짜 × 박수)마다 1콜**이다.
+핫 윈도우 전체는 32지점 × 60윈도우 × ~16변형 ≈ **30,000콜 ≈ 80분**으로 패스 예산(30초)
+밖이다. 반대로 "최신화"가 지목하는 **지점 1곳 · 윈도우 1개는 2.6초**라 50초 예산 안에
+여유가 크다. ⇒ 가능한 형태는 리솜과 같은 **`withPrices` 게이트 아래 최신화 전용**이다.
+
+**GO 조건 4개 중 3개 충족** — 열린다 · 값이 있다 · 조인된다(변형 단위) · **배치는 불가능**.
+`price-detail`은 밤마다 `{originAmt, dcAmt, levelAmt, billingAmt, companyAmt, preAftPayAmt,
+totAmt, speclBnftAmt, longSbscrbAmt}` 9칸을 주고 **`companyAmt`가 리솜 `totalCmpnyRmAmt`와
+같은 자리**다(관측 0). 0이 아닌 계정에서는 `totAmt`가 직원 실부담액이 아니므로, 리솜
+`price.ts`가 그때 요금을 붙이지 않는 것과 같은 판단이 필요해진다 — 고칠 자리는
+`prices.ts`의 `readAmount`이고 읽을 곳은 `price-detail`이다.
+
+### 요금 수집 — 변형마다 붙는다, 최신화 경로에서만 (`prices.ts`, 2026-09-21 배선)
+
+수집기는 `src/crawlers/sono/prices.ts`이고 `names.ts`와 같은 모양이다(패스 안에서 한 번,
+`ctx.deadlineAt`에서 유도, **절대 던지지 않음**). 다른 넷과 갈리는 점은 하나 — **요금이
+행이 아니라 `variants[]`에 붙는다.**
+
+- **왜 변형인가**: 사이트가 `rmTypeCd`(변형) 하나를 묻는 콜로 답하고, 이 크롤러의 행은
+  변형을 여럿 접은 것이다. 같은 행의 변형끼리 요금이 다르다 — 실측 `리조트 패밀리`
+  한 행에서 `스탠다드 취사/더블` 97,000원과 `파크뷰 클린/트윈` 137,000원. 행에 하나를
+  고르면 나머지는 틀린 값이고, 최저가로 접으면 행이 "부터"라고 말해야 하는데 그 말은
+  행이 하는 다른 모든 말(잔여·상태)과 단위가 어긋난다.
+- **게이트는 리솜과 같다** — 라우트가 `branch` 유무로 `withPrices`를 세우고(`refresh/route.ts`),
+  `search.ts`가 `withPrices && branches.length === 1`을 다시 본다. 어긋났을 때의 증상이
+  항상 "요금이 안 나옴"(안전)이지 "예산 초과"(위험)가 아니다.
+- **예약 가능한 변형에만.** 사이트는 마감임박·예약대기 변형에도 금액을 답하고 응답에
+  리솜 `isPossible` 같은 자기 부인 칸이 없어서, 가용성 게이트가 우리 쪽에 있어야 한다.
+- **응답 하나에서 총액만 읽는다.** `body.totAmt`이고, 밤 배열은 **할인 전** 값이라 금액의
+  출처가 아니라 *우리가 물은 숙박이 맞는지* 확인하는 자료다(`readAmount`가 밤 수 ·
+  첫 날짜 · `밤합 === originAmt` · `originAmt − levelAmt === totAmt` 넷을 본다).
+  `dcAmt`는 관측 전부 0이라 이 산술에 없고, 0이 아닌 날이 오면 등식이 깨져 **요금을
+  만들지 않는다** — 모르는 할인을 우리가 해석하는 것보다 빈칸이 낫다.
+- **`pricedRows`가 변형 요금도 센다**(`run.ts`의 `hasPrice`). 행만 세면 이 리조트에서
+  그 숫자가 영원히 0이라, 예산에 걸려 일부만 붙은 절단이 보이지 않는다. Hobby는 런타임
+  로그를 보관하지 않으므로 `crawl_logs`의 그 칸이 유일한 지속 증거다.
+- `/api/inventory`·스키마·`run.ts`의 upsert는 **무변경**이다 — 요금이 이미 있던
+  `variants` jsonb 안에 들어간다. 다만 변형 객체의 모양이 바뀌었으므로 `sw.js`의
+  `CACHE_VERSION`이 v5 → **v6**이고, `isVariantList`가 `price`를 검사한다(없으면 통과 —
+  09-21 이전에 쓰인 행이 세부 목록을 통째로 잃으면 안 된다).
+
+실사이트 검증(2026-09-21):
+
+```
+run-crawl SONO "소노벨 청송"   콜드 로그인 포함 60행 16.8초 · 변형 이름 16/16
+                               [sono] variant prices attached
+                                 priced 13 / candidates 13 / calls 13 / 2.37초 / 최장 253ms
+run-crawl SONO (전 지점)       2,080행 14.0초 · pricedRows 0 · 앞의 요금 13건이 null로 덮임
+```
+
+DB 불변식 위반 0건 — 예약 불가 변형에 요금 0 · 금액 ≤ 0 0 · `kind`가 `member` 아닌 것 0 ·
+**소노 행의 `price_kind` 0**(요금은 행이 아니라 변형에 있다) · 비소노 행에 `variants` 0 ·
+행↔변형 모순 0 · 이름 못 받은 변형 0(변형 31,324개). `tsc`·`eslint`·`next build` 통과,
+번들 유출 0건(`storeCd|rmTypeCd|actualMemNo|memberReservation|detail/price`).
+
+⚠️ **전 지점 크롤이 요금을 지우는 것은 버그가 아니라 정의다.** upsert가 한 행을 한 문장으로
+쓰므로 **요금의 나이 = `synced_at`**이고, 이 등식은 변형 안의 요금에도 그대로 적용된다
+(`run.ts`의 COALESCE 금지 주석). 요금은 최신화의 산물이지 재고의 속성이 아니다.
+
 ## 로컬 검증
 
 ```bash
@@ -755,7 +876,19 @@ npx tsx scripts/debug-sono.ts flow ["지점명"]   # 금액 조사 Q2 — 예약
 SONO_FLOW_MANUAL=1 NET_WAIT_MS=180000 npx tsx scripts/debug-sono.ts flow   # 손으로 몰기
 npx tsx scripts/debug-sono.ts variants ["지점,지점"]   # 변형 조사 — viewCd 어휘 · 2박 오판 수 · room/detail 재현
 SONO_FLOW_MANUAL=1 CRAWLER_HEADLESS=false npx tsx scripts/debug-sono.ts variants   # Part 3c를 손으로
+npx tsx scripts/debug-sono.ts prices ["지점,지점"]     # 금액 조사 Q4 — detail/price 사다리 · 비용 · 조인 단위
+SONO_FLOW_MANUAL=1 NET_WAIT_MS=240000 CRAWLER_HEADLESS=false npx tsx scripts/debug-sono.ts prices   # Part 3을 손으로
+npx tsx scripts/run-crawl.ts SONO                      # 전 지점 → 요금 없음(정기 수집과 같은 경로)
+npx tsx scripts/run-crawl.ts SONO "소노벨 청송"          # 지점 하나 → 변형별 요금까지 (최신화 버튼과 같은 경로)
 ```
+
+**`prices` 스텝이 존재하는 이유**: `flow`는 *그 화면이 부르는 콜*을 물었고 객실 선택에서
+멈췄다. 이건 **"그 화면이 부르는 콜이 우리가 걸어본 홉의 전부는 아니다"**를 묻는다 —
+계보의 네 번째 질문이다(`probe` → `keys` → `flow` → `prices`). Part 1b의 사다리가 이
+스텝의 핵심이고, 규칙은 하나다: **이름은 서버가 대고 값은 관측에서만 온다.** 관측에 없는
+이름을 요구하면 멈춘다 — 거기서부터는 조사가 아니라 추측이다.
+⚠️ Part 3의 자동 클릭은 달력 셀과 "확인" 모달까지만 누른다. 결제·확정 라벨은 후보에서
+빼 두었고(`FORBID`), 그래도 **법인 실계정이므로** 손으로 몰 때는 결제 단계로 넘어가지 말 것.
 
 **`flow` 스텝이 존재하는 이유**: `keys`는 *우리가 읽는 응답*의 키를 전수 조사한다.
 그건 "이 응답에 요금이 없다"까지만 답하고, 리솜은 정확히 그 너머에서 뒤집혔다.

@@ -125,6 +125,12 @@ export interface RunResult {
    * 화면에 그대로 보여주기 위한 값이다. 요금 수집은 예산에 걸리면 조용히 일부만
    * 붙이고 끝나는데, 그 절단이 숫자로 드러나지 않으면 "요금이 없는 방"과
    * "시간이 모자라 못 물어본 방"이 화면에서 똑같이 빈칸으로 보인다.
+   *
+   * **행의 요금과 변형의 요금을 함께 센다**(`hasPrice`). 소노는 사이트가 변형
+   * 하나를 묻는 콜로 답하므로 요금이 `variants[]`에만 붙는데(`sono/prices.ts`),
+   * 행만 세면 그 리조트에서 이 숫자가 **영원히 0**이 되어 위 문장이 겨냥한 절단이
+   * 정확히 보이지 않게 된다. 그리고 Vercel Hobby는 런타임 로그를 보관하지 않으므로
+   * `crawl_logs`의 이 칸이 "요금을 물어봤다"는 **유일한 지속적 증거**다.
    */
   pricedRows: number;
 }
@@ -423,7 +429,7 @@ export async function runResortCrawl(
 
       stage = CrawlStage.UPSERT;
       rowsUpserted += await upsertInventory(resort.id, resort.name, rows, window);
-      pricedRows += rows.filter((r) => r.price).length;
+      pricedRows += rows.filter(hasPrice).length;
       windowsCompleted++;
 
       // Only after the rows are committed: a window is "covered" when its data
@@ -535,6 +541,21 @@ export async function runResortCrawl(
     windowsRequested: windows.length,
     pricedRows,
   };
+}
+
+/**
+ * 이 행이 요금을 하나라도 들고 있는가 — 행 자신의 것이든, 변형의 것이든.
+ *
+ * 요금이 붙는 자리가 리조트마다 다르다. 롯데·리솜·오크밸리는 행에 붙이고(`price`),
+ * 소노는 사이트가 변형(`rmTypeCd`) 하나를 묻는 콜로 답하므로 `variants[]`에 붙인다
+ * (`sono/prices.ts`). 세는 쪽이 한 모양만 알면 다른 쪽은 "요금을 한 번도 못 붙였다"와
+ * 구별되지 않는다.
+ *
+ * **행 수를 센다(변형 수가 아니라).** `pricedRows`의 단위가 행이고, 한 행의 변형 다섯 중
+ * 셋에만 요금이 붙은 경우를 "3"으로 세면 이 숫자가 `rowsUpserted`와 같은 단위가 아니게 된다.
+ */
+function hasPrice(row: InventoryRow): boolean {
+  return row.price != null || (row.variants?.some((v) => v.price != null) ?? false);
 }
 
 /**

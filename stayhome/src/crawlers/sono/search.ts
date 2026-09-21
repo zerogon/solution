@@ -6,6 +6,7 @@ import { formatDateCompact } from "./format";
 import { fetchMemberNo } from "./login";
 import { loadVariantNames } from "./names";
 import { parseRoomList, type ParseDiagnostics, type RoomListPayload } from "./parse";
+import { attachVariantPrices } from "./prices";
 import { SessionLostError } from "../_shared/errors";
 
 /**
@@ -95,6 +96,28 @@ export async function performSearch(
       });
     }
   }
+
+  // 요금은 변형마다 콜 하나라(`prices.ts`) 정기 수집 예산에 들어가지 않는다. 게이트가
+  // 둘인 것도 리솜과 같은 이유다 — 라우트가 `branch`의 유무로 "사람이 지목하고 기다리는
+  // 상황"을 세우고(`withPrices`), 크롤러가 자기 비용을 아는 자리에서 다시 판정한다.
+  // 어긋났을 때의 증상은 항상 "요금이 안 나옴"(안전)이지 "예산 초과"(위험)가 아니다.
+  if (params.withPrices === true && branches.length === 1) {
+    try {
+      await attachVariantPrices(ctx, {
+        memNo,
+        branch: branches[0],
+        rows: out,
+        checkin: params.checkin,
+        nights,
+      });
+    } catch (e) {
+      // `attachVariantPrices`는 던지지 않지만, 그 약속이 깨져도 재고를 잃지 않게 한 겹 더.
+      log("[sono] variant prices failed, continuing", {
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
   return out;
 }
 

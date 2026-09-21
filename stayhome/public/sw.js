@@ -32,7 +32,7 @@
 // v5: 행에 variants(접힌 변형 목록, 소노)가 추가됐다. v3·v4와 같은 이유 — 낡은 본문은
 //     크래시하지 않고 세부 목록만 안 보인다.
 // 올리면 activate 핸들러가 이전 접두사 캐시를 지운다.
-const CACHE_VERSION = "v5";
+const CACHE_VERSION = "v6";
 const STATIC_CACHE = `welfarestay-static-${CACHE_VERSION}`;
 const DATA_CACHE = `welfarestay-data-${CACHE_VERSION}`;
 const OFFLINE_CACHE = `welfarestay-offline-${CACHE_VERSION}`;

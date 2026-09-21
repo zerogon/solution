@@ -32,6 +32,9 @@ import { launchBrowser, newContextFromState } from "../src/crawlers/_shared/brow
  *   variants  변형 조사(2026-09-11) — 접힌 행이 무엇을 접고 있나. viewCd 어휘,
  *             rmTypeCd 정체, 2박 접기 오판 수, viewCd 이름표 출처, room/detail 재현.
  *             인자: 지점 value 쉼표 구분(기본 청송·비발디A·고양·제주).
+ *   prices    금액 조사 Q4(2026-09-21) — `flow`가 멈춘 홉 **너머**. 번들이 선언해 둔
+ *             `detail/price` · `detail/price-detail` · `detail/coin-price` 셋을 이
+ *             저장소가 한 번도 부른 적이 없다. 직접 호출 → 번들 조립부 → SPA 한 홉 더.
  *   diff      compare site property list against SONO.branches
  *
  * Credentials: `SONO_ID`/`SONO_PW` env if set, otherwise the primary
@@ -1914,6 +1917,535 @@ async function main() {
     console.log("  3. rmTypeCd 조인 ≥99%                            → Part 4");
     console.log("  4. viewNm/bedNm/cookNm non-null ≥95%             → Part 4");
     console.log("  하나라도 아니면 뷰 축만 배선하고 실패한 기준을 AGENTS.md에 적는다.");
+    console.log(`\n(JSON 왕복 ${captures.length}건 기록 · today=${todayKstIso()})`);
+  } else if (step === "prices") {
+    // ── 금액 조사 Q4 (2026-09-21) ───────────────────────────────────────────
+    //
+    // 계보가 한 단계씩 깊어져 왔고 이건 네 번째다:
+    //   oakvalley `probe`  "성공한 응답이 옳은 응답은 아니다"
+    //   sono `keys`        "우리가 읽는 필드가 응답의 전부는 아니다"
+    //   sono `flow`        "우리가 읽는 응답이 그 화면의 전부는 아니다"
+    //   **이 스텝**        "그 화면이 부르는 콜이 우리가 걸어본 홉의 전부는 아니다"
+    //
+    // 08-25 `flow`는 객실 선택(`room/detail`)까지 걸었고 거기 요금이 없어 "소노는
+    // 금액을 주지 않는다"로 닫혔다. 그 결론은 **그 조사의 경계 안에서만** 참이다 —
+    // 번들에는 그 뒤로 `${Pt}/detail/price` · `/detail/price-detail` ·
+    // `/detail/coin-price`가 선언돼 있고(`Pt = "/memberReservation/room"`), 이
+    // 저장소는 셋 중 어느 것도 **한 번도 부른 적이 없다**(09-13 Part 3b는 정규식으로
+    // 이름만 봤다). 같은 계열의 `room/detail`도 오래 막힌 줄 알았다가 본문의
+    // `actualMemNo` 한 칸으로 열렸고, 8지점을 1.0초에 답하는 배치형이었다.
+    //
+    //   Part 1  세 엔드포인트 직접 호출 — `names.ts`가 쓰는 그 본문 그대로
+    //   Part 2  번들에서 **조립부**를 읽는다 (파라미터를 추측하지 않기 위해)
+    //   Part 3  SPA를 객실 선택 **다음 홉**까지 몰아 녹화 — 🚨 실예약 금지
+    //   Part 4  값이 있다면 붙일 수 있는가 — 조인 단위 · 비용 · 요금 트랙
+    //   Part 5  GO 조건 넷
+    const { SONO } = await import("../src/crawlers/sono/config");
+    const { fetchMemberNo } = await import("../src/crawlers/sono/login");
+    const { todayKstIso, parseDate, addDaysUtc } = await import("../src/lib/utils");
+    const { formatDateCompact } = await import("../src/crawlers/sono/format");
+
+    type Entry = Record<string, unknown>;
+    type Branch = (typeof SONO.branches)[number];
+    const str = (e: Entry, k: string) => (e[k] == null ? "" : String(e[k]));
+
+    /** 번들이 선언해 둔 셋. 경로는 `Pt = "/memberReservation/room"` 기준. */
+    const PRICE_EPS = [
+      "memberReservation/room/detail/price",
+      "memberReservation/room/detail/price-detail",
+      "memberReservation/room/detail/coin-price",
+    ];
+
+    const wanted = (urlArg ?? "소노벨 청송,소노벨 A 비발디파크").split(",").map((x) => x.trim());
+    const stores = wanted
+      .map((v) => SONO.branches.find((b) => b.value === v))
+      .filter((b): b is Branch => !!b);
+    if (!stores.length) throw new Error(`no matching store in ${JSON.stringify(wanted)}`);
+    // 실계정 반복 로그인은 잠금 위험이라 이 스텝은 절대 스스로 로그인하지 않는다.
+    if (!saved) throw new Error("저장된 세션이 없다 — `npx tsx scripts/debug-sono.ts doLogin` 먼저");
+
+    let phase = "boot";
+    const captures = recordFlow(context, () => phase);
+    const ctx = {
+      resortId: "debug",
+      slug: "sono",
+      context,
+      page,
+      credentials: { id: "", pw: "" },
+      log: (m: string, meta?: Record<string, unknown>) => console.log(m, meta ?? ""),
+      deadlineAt: Date.now() + 10 * 60_000,
+    };
+    await page.goto(SITE.home, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    const memNo = await fetchMemberNo(ctx);
+    if (!memNo) throw new Error("no memNo — run `doLogin` first");
+    console.log(`stores: ${stores.map((b) => `${b.value}(${b.storeCd})`).join(" · ")}`);
+
+    const postJson = async (path: string, data: unknown, timeout = 60_000) => {
+      const t0 = Date.now();
+      const res = await page.request.post(
+        `${SONO.apiBase}/${path}?lang=ko&deviceType=PC&mobileAppYn=N`,
+        {
+          timeout,
+          headers: { "content-type": "application/json", Accept: "application/json", Referer: SONO.bookingUrl },
+          data,
+        },
+      );
+      const text = await res.text();
+      let json: Entry | null = null;
+      try {
+        json = JSON.parse(text) as Entry;
+      } catch {
+        /* not json */
+      }
+      return { status: res.status(), ms: Date.now() - t0, bytes: text.length, json, text };
+    };
+    const describe = (r: Awaited<ReturnType<typeof postJson>>) => {
+      const err = r.json?.error as Entry | string | undefined;
+      const errText = err
+        ? typeof err === "string"
+          ? err
+          : `${str(err, "code") || str(err, "errorId")} ${str(err, "message") || str(err, "errorMsg") || str(err, "msg")}`.trim()
+        : "";
+      return `HTTP ${r.status} · ${r.ms}ms · ${r.bytes}B · success=${String(r.json?.success)}` +
+        (errText ? ` · error=${errText.slice(0, 120)}` : "");
+    };
+    const entriesOf = (json: Entry | null): Entry[] =>
+      ((json?.body ?? []) as Entry[]).flatMap((s) => (s.rmTypeList ?? []) as Entry[]);
+    const detailLeavesOf = (json: Entry | null): Entry[] =>
+      ((json?.body ?? []) as Entry[]).flatMap((r) =>
+        ((r.viewList ?? []) as Entry[]).flatMap((v) => (v.rmTypeList ?? []) as Entry[]),
+      );
+    /**
+     * 말단을 **세 가지 모양으로 전부** 센다.
+     *
+     * 09-13에 열린 `room/detail` 응답(10KB·200·success=true)을 `list/pc` 모양으로만
+     * 세어 0을 얻고 "안 열림"으로 판정한 적이 있다. **모양을 모르는 채 센 0은
+     * '없다'가 아니다** — 그래서 셋 다 세고, 셋 다 0이면 본문을 직접 보여준다.
+     */
+    const leafShapes = (json: Entry | null) => ({
+      listPc: entriesOf(json).length,
+      detail: detailLeavesOf(json).length,
+      largest: largestArray(json)?.rows.length ?? 0,
+    });
+
+    const today = parseDate(todayKstIso());
+    const ci = addDaysUtc(today, 14);
+    /** `names.ts:116-129`가 쓰는 본문 그대로 — 지금 실제로 열리는 유일한 본문이다. */
+    const baseBody = (over: Entry = {}): Entry => ({
+      storeCdList: stores.map((b) => b.storeCd),
+      memNo,
+      // 이것이 없으면 `W22M3S4 이용회원번호는 필수입니다`. `names.ts`의 머리말.
+      actualMemNo: memNo,
+      userIndCd: SONO.request.userIndCd,
+      rsvIndCd: SONO.request.rsvIndCd,
+      ciYmd: formatDateCompact(ci),
+      coYmd: formatDateCompact(addDaysUtc(ci, 1)),
+      nights: 1,
+      rmCnt: SONO.request.rmCnt,
+      adultCnt: SONO.request.adultCnt,
+      childCnt: SONO.request.childCnt,
+      ...over,
+    });
+
+    const opened = new Map<string, { json: Entry; text: string }>();
+
+    // ── Part 1 ──────────────────────────────────────────────────────────────
+    try {
+      console.log("\n\n=== Part 1 · 세 엔드포인트 직접 호출 (names.ts의 본문 그대로) ===");
+      phase = "direct";
+      for (const ep of PRICE_EPS) {
+        console.log(`\n--- ${ep} ---`);
+        const r = await postJson(ep, baseBody(), 30_000);
+        console.log(`  ${describe(r)}`);
+        if (!r.json) {
+          console.log(`  (JSON 아님) 본문 앞 2KB:\n${r.text.slice(0, 2000)}`);
+          continue;
+        }
+        const shapes = leafShapes(r.json);
+        console.log(`  말단: list/pc모양=${shapes.listPc} · detail모양=${shapes.detail} · 최대배열=${shapes.largest}`);
+        if (shapes.listPc + shapes.detail + shapes.largest === 0) {
+          console.log(`  ⚠️ 말단 0 — 모양을 모르는 채 센 0은 '없다'가 아니다. 본문 앞 2KB:`);
+          console.log(`  ${r.text.slice(0, 2000)}`);
+        }
+        envelopeKeys(ep, r.json);
+        reportMoney(ep, r.json);
+        const big = largestArray(r.json);
+        if (big && big.rows.length) keyCensus(`${ep} ${big.path}`, big.rows);
+        if (r.status === 200 && r.json.success !== false) opened.set(ep, { json: r.json, text: r.text });
+      }
+
+      // ⚠️ 오크밸리 `probe`의 교훈 — 200이 "반영됨"의 증거가 아니다. 파라미터를
+      // 바꿔도 같은 바이트가 오면 그 응답은 우리 질문을 듣지 않은 것이다.
+      for (const [ep, got] of opened) {
+        const far = addDaysUtc(today, 45);
+        const a = await postJson(ep, baseBody({ ciYmd: formatDateCompact(far), coYmd: formatDateCompact(addDaysUtc(far, 1)) }), 30_000);
+        const b = await postJson(ep, baseBody({ storeCdList: [stores[0].storeCd] }), 30_000);
+        console.log(
+          `\n  [probe] ${ep}: 날짜 바꾸면 ${a.text === got.text ? "**같은 답(무시됨)**" : "다른 답"}` +
+            ` · 지점 줄이면 ${b.text === got.text ? "**같은 답(무시됨)**" : "다른 답"}`,
+        );
+      }
+      // ── Part 1b · 서버가 이름을 대는 사다리 ──────────────────────────────
+      //
+      // 2026-09-21 첫 실행의 거절은 `W22M3S4`가 **아니었다**: `storeCd 는
+      // 필수값입니다`. 즉 이 셋은 `room/detail`과 달리 `storeCdList`(배열)가 아니라
+      // `storeCd`(단수)를 받는 다른 계열이고, 무엇보다 **서버가 빠진 칸의 이름을
+      // 직접 댄다.** 그래서 이 사다리는 추측이 아니다 — 이름은 서버가, 값은 전부
+      // `list/pc` 표본과 우리 요청이 준다. 지어낸 값은 한 칸도 없다.
+      //
+      // 멈추는 자리 셋: 이름을 못 읽었을 때 · 관측에 없는 필드를 요구할 때 ·
+      // 이미 보낸 필드를 또 요구할 때(값이 틀렸다는 뜻이라 더 올라가면 추측이 된다).
+      if (!opened.size) {
+        console.log("\n\n--- Part 1b · 서버가 이름을 대는 사다리 ---");
+        const lp = await postJson(
+          "memberReservation/room/list/pc",
+          { memNo, ...SONO.request, ciYmd: formatDateCompact(ci), coYmd: formatDateCompact(addDaysUtc(ci, 1)), nights: 1, storeCdList: [stores[0].storeCd], rmTypeCode: "" },
+          30_000,
+        );
+        const leaves = entriesOf(lp.json);
+        const sample = leaves.find((e) => str(e, "rsvStatusCd") === "A") ?? leaves[0];
+        console.log(`  list/pc 표본: ${lp.status} · 말단 ${leaves.length} · ${sample ? JSON.stringify(sample).slice(0, 300) : "(없음)"}`);
+        if (sample) {
+          /** 값의 출처는 표본과 우리 요청뿐이다. 여기 없는 이름을 요구하면 멈춘다. */
+          const DICT: Entry = {
+            storeCd: stores[0].storeCd,
+            storeCdList: [stores[0].storeCd],
+            memNo,
+            actualMemNo: memNo,
+            ciYmd: formatDateCompact(ci),
+            coYmd: formatDateCompact(addDaysUtc(ci, 1)),
+            nights: 1,
+            rmCnt: SONO.request.rmCnt,
+            adultCnt: SONO.request.adultCnt,
+            childCnt: SONO.request.childCnt,
+            userIndCd: SONO.request.userIndCd,
+            rsvIndCd: SONO.request.rsvIndCd,
+            rmTypeCd: sample.rmTypeCd,
+            roomTypeCd: sample.roomTypeCd,
+            viewCd: sample.viewCd,
+            pyeongCd: sample.pyeongCd,
+            resortTypeCd: sample.resortTypeCd,
+          };
+          for (const ep of PRICE_EPS) {
+            console.log(`\n  === ${ep} ===`);
+            const body: Entry = {
+              storeCd: stores[0].storeCd,
+              memNo,
+              actualMemNo: memNo,
+              ciYmd: formatDateCompact(ci),
+              coYmd: formatDateCompact(addDaysUtc(ci, 1)),
+              nights: 1,
+              rmCnt: SONO.request.rmCnt,
+              adultCnt: SONO.request.adultCnt,
+              childCnt: SONO.request.childCnt,
+              userIndCd: SONO.request.userIndCd,
+              rsvIndCd: SONO.request.rsvIndCd,
+            };
+            for (let i = 1; i <= 10; i++) {
+              const r = await postJson(ep, body, 30_000);
+              const msg = String(((r.json?.error ?? {}) as Entry).message ?? "");
+              console.log(`    [${i}] ${describe(r)}`);
+              if (r.status === 200 && r.json && r.json.success !== false) {
+                console.log(`    ✔ 열렸다. 본문 앞 3000자:\n${r.text.slice(0, 3000)}`);
+                envelopeKeys(`${ep} (ladder)`, r.json);
+                reportMoney(`${ep} (ladder)`, r.json);
+                opened.set(ep, { json: r.json, text: r.text });
+                break;
+              }
+              const field = msg.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(?:는|은|이|가)?\s*필수/)?.[1];
+              if (!field) {
+                console.log(`    멈춤 — 필드 이름을 못 읽었다: "${msg}"`);
+                break;
+              }
+              if (!(field in DICT)) {
+                console.log(`    멈춤 — **관측에 없는 필드**를 요구한다: ${field} (값을 지어내지 않는다)`);
+                break;
+              }
+              if (field in body) {
+                console.log(`    멈춤 — 이미 보낸 ${field}를 또 요구한다 (이름이 아니라 값이 틀렸다)`);
+                break;
+              }
+              body[field] = DICT[field];
+              console.log(`        + ${field} = ${JSON.stringify(DICT[field])}`);
+            }
+          }
+        }
+      }
+      if (!opened.size) console.log("\n  세 엔드포인트 모두 닫혔다. 빠진 본문 필드는 Part 2·3의 **관측**에서만 가져온다(추측 금지).");
+    } catch (e) {
+      console.log("!!! Part 1 실패:", e instanceof Error ? e.message : e);
+    }
+
+    // ── Part 2 ──────────────────────────────────────────────────────────────
+    try {
+      console.log("\n\n=== Part 2 · 번들에서 조립부를 읽는다 (파라미터를 추측하지 않기 위해) ===");
+      // 근거: 오크밸리 `api/v1/room`의 `idCondo`는 번들의 요청 조립부에서 읽었다.
+      // 추측했다면 이름이 틀린 것과 값이 틀린 것이 똑같은 400으로 와서 구별되지
+      // 않았다 — 소노는 `W22M3S4` 하나가 그 두 경우를 겹쳐 놓는다.
+      phase = "bundle";
+      await page.goto(SITE.booking, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.waitForTimeout(6_000);
+      await dismissLayers(page);
+      const scriptUrls: string[] = await page.evaluate(() => {
+        const fromTags = Array.from(document.scripts).map((s) => s.src);
+        const fromPerf = performance.getEntriesByType("resource").map((e) => e.name);
+        return Array.from(new Set(fromTags.concat(fromPerf))).filter((u) => /\.js(\?|$)/.test(u));
+      });
+      console.log(`  스크립트 ${scriptUrls.length}개`);
+      // ⚠️ 접근자 이름만 보고 고르지 말 것 — 리솜에서 회원 객실과 **패키지**의
+      // 접근자가 둘 다 `selectRoomPrice`였고, 이름으로 골랐다면 다른 상품의 요금을
+      // 재고 옆에 붙였을 것이다. 그래서 호출부 주변 440자를 통째로 찍는다.
+      const PATTERNS: Array<[string, RegExp]> = [
+        ["detail/price", /detail\/price(-detail)?|coin-price/g],
+        ["본문 빌더", /actualMemNo/g],
+        ["접근자", /selectRoomPrice|roomPrice|priceDetail|coinPrice|getPrice/g],
+      ];
+      let totalHits = 0;
+      for (const url of scriptUrls) {
+        let text: string;
+        try {
+          text = await (await page.request.get(url, { timeout: 30_000 })).text();
+        } catch {
+          continue;
+        }
+        const hits: string[] = [];
+        for (const [name, re] of PATTERNS) {
+          re.lastIndex = 0;
+          let m: RegExpExecArray | null;
+          let n = 0;
+          while ((m = re.exec(text)) && n < 6) {
+            n++;
+            hits.push(`  [${name}] …${text.slice(Math.max(0, m.index - 220), m.index + 220).replace(/\s+/g, " ")}…`);
+          }
+        }
+        if (hits.length) {
+          totalHits += hits.length;
+          console.log(`\n--- ${url.slice(0, 150)} (${text.length}B) ---`);
+          console.log(hits.join("\n"));
+        }
+      }
+      console.log(`\n  번들 히트 ${totalHits}건`);
+    } catch (e) {
+      console.log("!!! Part 2 실패:", e instanceof Error ? e.message : e);
+    }
+
+    // ── Part 3 ──────────────────────────────────────────────────────────────
+    let spaEp: string | null = null;
+    try {
+      console.log("\n\n=== Part 3 · SPA를 객실 선택 다음 홉까지 (🚨 실예약 금지) ===");
+      const manual = process.env.SONO_FLOW_MANUAL === "1";
+      const isPrice = (c: Capture) => /\/detail\/(price|price-detail|coin-price)(\?|$)/.test(c.url);
+      phase = "search";
+      await page.goto(SITE.home, { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.waitForTimeout(4_000);
+      await dismissLayers(page);
+
+      if (manual) {
+        const waitMs = Number(process.env.NET_WAIT_MS ?? 240_000);
+        phase = "manual";
+        console.log(">>> 지점·날짜를 고르고 검색한 뒤 **객실을 선택해 인원/옵션 단계까지** 들어가세요.");
+        console.log(">>> 🚨 결제·예약 확정은 누르지 마세요 — 법인 실계정입니다.");
+        console.log(`>>> ${Math.round(waitMs / 1000)}초 기록합니다 (요금 콜이 잡히면 바로 넘어갑니다).`);
+        const until = Date.now() + waitMs;
+        while (Date.now() < until && !captures.some(isPrice)) await page.waitForTimeout(2_000);
+      } else {
+        try {
+          await page.getByRole("button", { name: "지역 또는 숙소 선택" }).first().click({ timeout: 10_000 });
+          await page.waitForTimeout(2_500);
+          await page.getByText(stores[0].value, { exact: true }).first().click({ timeout: 8_000 });
+          await page.waitForTimeout(2_000);
+          await page.getByRole("button", { name: "검색", exact: true }).first().click({ timeout: 8_000 });
+          await page.waitForTimeout(10_000);
+          console.log(`  검색 실행: ${stores[0].value}`);
+        } catch (e) {
+          console.log("  자동 검색 실패:", e instanceof Error ? e.message.slice(0, 160) : e);
+        }
+        // 🚨 결제·확정으로 가는 라벨은 후보에서 뺀다. 이 계정은 실제로 예약이 된다.
+        const FORBID = /결제|확정|입금|카드|예약완료|동의하고/;
+        phase = "roomclick";
+        for (let hop = 1; hop <= 7 && !captures.some(isPrice); hop++) {
+          const target = context.pages()[context.pages().length - 1];
+          await dismissLayers(target).catch(() => undefined);
+          const before = captures.length;
+          const modalOk = target.getByRole("button", { name: /^(확인|예|진행)$/ }).filter({ visible: true }).first();
+          const dayCell = target.locator("div.calendar td").filter({ hasText: /마감임박|예약가능/ }).first();
+          const roomPick = target
+            .getByRole("button", { name: /선택|다음|계속|객실선택|인원/ })
+            .or(target.getByRole("link", { name: /선택|다음|계속/ }))
+            .or(target.locator("[class*=room] [class*=btn], [class*=roomList] button, li[class*=room]"))
+            .filter({ visible: true })
+            .first();
+          let label = "";
+          try {
+            if (await modalOk.count()) {
+              label = `모달 "${(await modalOk.textContent())?.trim().slice(0, 20)}"`;
+              await modalOk.click({ timeout: 6_000 });
+            } else if (await dayCell.count()) {
+              label = `달력 셀 "${(await dayCell.textContent())?.trim().replace(/\s+/g, " ").slice(0, 30)}"`;
+              await dayCell.click({ timeout: 6_000 });
+            } else if (await roomPick.count()) {
+              const text = (await roomPick.textContent())?.trim().replace(/\s+/g, " ") ?? "";
+              if (FORBID.test(text)) {
+                console.log(`  [hop ${hop}] 🚨 "${text.slice(0, 30)}" — 결제/확정 라벨이라 멈춥니다.`);
+                break;
+              }
+              label = `객실/진행 "${text.slice(0, 30)}"`;
+              await roomPick.click({ timeout: 6_000 });
+            } else {
+              console.log(`  [hop ${hop}] 누를 것이 없습니다.`);
+              await dump(target, `prices-hop${hop}`);
+              console.log(await probeClickables(target).catch((e) => `  probe 실패: ${e}`));
+              break;
+            }
+          } catch (e) {
+            console.log(`  [hop ${hop}] 클릭 실패:`, e instanceof Error ? e.message.slice(0, 140) : e);
+            break;
+          }
+          await page.waitForTimeout(6_000);
+          const fresh = captures.slice(before);
+          console.log(`  [hop ${hop}] ${label} → 새 JSON ${fresh.length}건: ${fresh.map((c) => `${c.status} ${endpointOf(c.url).split("/user/")[1] ?? c.url}`).join(" · ").slice(0, 400)}`);
+        }
+      }
+
+      const cap = captures.find(isPrice);
+      if (!cap) {
+        // 자동이 실패한 것과 콜이 없는 것은 **구별되지 않는다.** `flow` 스텝이 같은
+        // 경고를 달고 있는 이유이고, 그래서 이것은 "없다"의 증거가 아니다.
+        console.log("\n  !!! 요금 콜을 잡지 못했다. 이것은 '없다'의 증거가 아니다 — 셀렉터 문제와 구별되지 않는다.");
+        console.log("  !!! SONO_FLOW_MANUAL=1 NET_WAIT_MS=240000 CRAWLER_HEADLESS=false 로 손으로 몰 것.");
+        const seen = [...new Set(captures.filter((c) => c.phase === "roomclick" || c.phase === "manual").map((c) => endpointOf(c.url)))];
+        console.log(`  이 구간에 관측된 엔드포인트 ${seen.length}종:\n${seen.map((e) => `    ${e}`).join("\n")}`);
+        // 요금 콜이 아니어도 이 구간의 **새** JSON은 전부 돈으로 훑는다 — 이름이
+        // `amt1`이면 우리가 만든 목록에는 없다.
+        for (const c of captures.filter((c) => (c.phase === "roomclick" || c.phase === "manual") && c.status === 200)) {
+          try {
+            reportMoney(endpointOf(c.url).split("/user/")[1] ?? c.url, JSON.parse(c.body));
+          } catch {
+            /* not json */
+          }
+        }
+      } else {
+        spaEp = new URL(cap.url).pathname.split("/user/")[1] ?? null;
+        console.log(`\n  ✔ SPA가 요금 콜을 불렀다: ${cap.status} ${cap.ms}ms ${cap.body.length}B`);
+        console.log(`    경로: ${spaEp}`);
+        console.log(`    요청 본문: ${maskPost(cap.post)}`);
+        console.log(`    요청 헤더 이름: ${cap.reqHeaders.join(", ")}`);
+        let capJson: Entry | null = null;
+        try {
+          capJson = JSON.parse(cap.body) as Entry;
+        } catch {
+          /* not json */
+        }
+        if (capJson) {
+          envelopeKeys(`${spaEp} (SPA)`, capJson);
+          reportMoney(`${spaEp} (SPA)`, capJson);
+        }
+        // 저장된 세션만으로 재현되는가 — 되면 크롤러의 storageState로 충분하다.
+        if (spaEp) {
+          const r = await postJson(spaEp, cap.post ?? "{}", 30_000);
+          console.log(`\n  재생(page.request, 같은 본문): ${describe(r)} · 말단 ${JSON.stringify(leafShapes(r.json))}`);
+          if (r.status === 200 && r.json && r.json.success !== false) opened.set(spaEp, { json: r.json, text: r.text });
+        }
+      }
+    } catch (e) {
+      console.log("!!! Part 3 실패:", e instanceof Error ? e.message : e);
+    }
+
+    // ── Part 4 ──────────────────────────────────────────────────────────────
+    let joinUnit = "미확인";
+    let batched = false;
+    try {
+      console.log("\n\n=== Part 4 · 붙일 수 있는가 — 조인 단위 · 비용 · 요금 트랙 ===");
+      const pick = (spaEp && opened.has(spaEp) ? spaEp : [...opened.keys()][0]) ?? null;
+      if (!pick) {
+        console.log("  (열린 요금 응답이 없어 건너뜀)");
+      } else {
+        console.log(`  대상: ${pick}`);
+        // **조인 단위는 서버가 정했다.** 이 엔드포인트는 `storeCd`와 `rmTypeCd`를
+        // 각각 **단수 문자열**로 요구하고(배열을 주면 500 `Cannot deserialize value
+        // of type java.lang.String from Array`), `storeCdList`는 있어도 무시한다.
+        // 즉 요금은 **변형 하나 · 숙박 하나**를 묻는 콜이고, 우리 행은 변형을 접은
+        // 행이라(570그룹 중 300개) 행에 고를 값이 하나가 아니다.
+        joinUnit = "rmTypeCd(변형) · 콜당 변형 1개";
+        console.log(`  → 조인 단위: ${joinUnit}`);
+
+        const lp = await postJson(
+          "memberReservation/room/list/pc",
+          { memNo, ...SONO.request, ciYmd: formatDateCompact(ci), coYmd: formatDateCompact(addDaysUtc(ci, 1)), nights: 1, storeCdList: [stores[0].storeCd], rmTypeCode: "" },
+          30_000,
+        );
+        const onDay = entriesOf(lp.json).filter((e) => str(e, "ciYmd") === formatDateCompact(ci));
+        const byStatus = new Map<string, Entry>();
+        for (const e of onDay) if (!byStatus.has(str(e, "rsvStatusCd"))) byStatus.set(str(e, "rsvStatusCd"), e);
+        console.log(`  표본일 ${formatDateCompact(ci)} 말단 ${onDay.length} · 상태코드 ${[...byStatus.keys()].join(",")}`);
+
+        const priceBody = (over: Entry = {}): Entry => ({
+          storeCd: stores[0].storeCd,
+          memNo,
+          actualMemNo: memNo,
+          ciYmd: formatDateCompact(ci),
+          coYmd: formatDateCompact(addDaysUtc(ci, 1)),
+          nights: 1,
+          rmCnt: SONO.request.rmCnt,
+          adultCnt: SONO.request.adultCnt,
+          childCnt: SONO.request.childCnt,
+          userIndCd: SONO.request.userIndCd,
+          rsvIndCd: SONO.request.rsvIndCd,
+          ...over,
+        });
+        const shot = (label: string, r: Awaited<ReturnType<typeof postJson>>) => {
+          const b = (r.json?.body ?? null) as Entry | null;
+          const days = (b?.daysAmtInfoList ?? []) as Entry[];
+          const sum = days.reduce((a, x) => a + (asNumber(x.totAmt) ?? 0), 0);
+          console.log(
+            `    ${label}: ${r.status} ${r.ms}ms tot=${b?.totAmt ?? "-"} origin=${b?.originAmt ?? "-"}` +
+              ` level=${b?.levelAmt ?? "-"} company=${b?.companyAmt ?? "-"} 밤${days.length} 밤합=${sum}` +
+              ` [${days.map((x) => `${str(x, "stndYmd")}:${str(x, "totAmt")}/s${str(x, "seasonCd")}`).join(" ")}]` +
+              (r.json?.success === false ? ` ERR ${r.text.slice(0, 90)}` : ""),
+          );
+        };
+        const anyCd = onDay.length ? onDay[0].rmTypeCd : null;
+        if (anyCd) {
+          // 1) 예약할 수 없는 변형에도 값이 오는가 — 리솜 `isPossible`에 해당하는 게이트가
+          //    필요한지가 여기서 갈린다. 매진 방의 요금은 정보가 아니라 잡음이다.
+          console.log("\n  1) 상태별 — 예약 못 하는 변형에도 값이 오는가");
+          for (const [cd, e] of byStatus) shot(`상태 ${cd}`, await postJson(pick, priceBody({ rmTypeCd: e.rmTypeCd }), 30_000));
+          // 2) 밤별 합 = 총액인가. 롯데는 1박 평균이라 곱해야 했고 리솜은 총액을 줬다.
+          console.log("\n  2) 박수 — 밤별 합이 총액과 맞는가 (곱하기 금지 확인)");
+          for (const n of [1, 2, 3]) {
+            shot(`${n}박`, await postJson(pick, priceBody({ rmTypeCd: anyCd, coYmd: formatDateCompact(addDaysUtc(ci, n)), nights: n }), 30_000));
+          }
+          // 3) 오크밸리 `probe`의 교훈 — 날짜를 바꿨는데 같은 답이면 안 듣고 있는 것이다.
+          console.log("\n  3) 날짜를 바꾸면 달라지는가");
+          for (const n of [0, 30, 60]) {
+            shot(`ci+${n}`, await postJson(pick, priceBody({ rmTypeCd: anyCd, ciYmd: formatDateCompact(addDaysUtc(ci, n)), coYmd: formatDateCompact(addDaysUtc(ci, n + 1)) }), 30_000));
+          }
+          // 4) 비용 — 배치가 불가능하므로 남는 질문은 "한 지점 하루가 몇 초인가"다.
+          console.log("\n  4) 비용 — 이 지점 그날 전 변형 순차");
+          const t0 = Date.now();
+          let okN = 0;
+          for (const e of onDay) {
+            const r = await postJson(pick, priceBody({ rmTypeCd: e.rmTypeCd }), 30_000);
+            if (r.status === 200 && r.json?.success !== false) okN++;
+          }
+          const spent = Date.now() - t0;
+          console.log(`    ${onDay.length}콜 ${spent}ms · 성공 ${okN} · 콜당 ${Math.round(spent / Math.max(1, onDay.length))}ms`);
+          batched = false;
+        }
+        console.log("\n  요금 트랙: `originAmt − levelAmt = totAmt`면 회원 등급 할인이 적용된 값이다(= 회원가).");
+        console.log("            `companyAmt`는 리솜 `totalCmpnyRmAmt`와 같은 자리 — 0이 아니면 직원 실부담액이 따로 있다.");
+      }
+    } catch (e) {
+      console.log("!!! Part 4 실패:", e instanceof Error ? e.message : e);
+    }
+
+    // ── Part 5 ──────────────────────────────────────────────────────────────
+    console.log("\n\n=== 요금 배선 GO 조건(넷 다) ===");
+    console.log(`  1. 저장된 세션의 page.request로 열린다        → ${opened.size ? `예 (${[...opened.keys()].join(", ")})` : "아니오/미확인"}`);
+    console.log("  2. 값이 실제로 있다(필드 존재가 아니라 값)    → 위 money scan의 `(값)` 판정");
+    console.log(`  3. 우리 행에 조인된다                        → ${joinUnit}`);
+    console.log(`  4. 비용이 배치형이다                         → ${batched ? "예(8지점 1콜)" : "아니오/미확인"}`);
+    console.log("  하나라도 아니면 배선하지 않고 실패한 기준을 AGENTS.md 소노 절에 적는다.");
     console.log(`\n(JSON 왕복 ${captures.length}건 기록 · today=${todayKstIso()})`);
   } else if (step === "diff") {
     // Drift watchdog: the config list is the runtime source of truth, so the

@@ -6,6 +6,7 @@ import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
+  showsPrice,
   TONE_BADGE,
   TONE_DOT,
   TONE_LABEL,
@@ -13,6 +14,7 @@ import {
   toneOf,
   type AvailabilityTone,
 } from "@/lib/availability-tone";
+import { formatKrw } from "@/lib/price";
 import { checkedLabel } from "@/lib/freshness";
 import type { InventoryVariant } from "@/lib/variants";
 
@@ -85,6 +87,16 @@ export function RoomRow({
               <li key={v.code} className="flex items-center gap-2 text-xs">
                 <span className={cn("size-1.5 shrink-0 rounded-full", TONE_DOT[vt])} aria-hidden />
                 <span className="min-w-0 flex-1 truncate">{v.label}</span>
+                {/* 요금은 변형마다 다르다 — 그래서 행이 아니라 여기 있다(`@/lib/variants`).
+                    `showsPrice`를 행과 똑같이 거는 이유도 같다: 낡은 행의 요금은 숫자만으로
+                    자기를 부인할 수 없고, 변형은 행과 같은 `syncedAt`을 쓴다.
+                    종류 라벨("회원가")은 섹션 헤더가 한 번 말한다 — 이 줄에 반복하면
+                    좁은 화면에서 변형 이름을 잡아먹는다. */}
+                {v.price && showsPrice(vt) && (
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums">
+                    {formatKrw(v.price.amount)}
+                  </span>
+                )}
                 {/* 잔여는 `available`일 때만 온다(`InventoryVariant.remaining`) — 매진의 0과
                     대기의 음수는 수가 아니라 상태다. 그 자리는 칩이 말한다. */}
                 <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">

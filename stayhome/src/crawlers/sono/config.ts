@@ -136,6 +136,30 @@ export const SONO = {
   },
 
   /**
+   * 변형별 요금(`prices.ts`, `room/detail/price`). **최신화 경로 전용**이다.
+   *
+   * 이 엔드포인트는 `storeCd`·`rmTypeCd`를 단수로 받는다 — 배열을 주면 500이고
+   * `storeCdList`는 무시된다. 즉 배치가 구조적으로 불가능하고, 비용은 **변형 하나에
+   * 콜 하나**다(실측 166ms). 핫 윈도우 전체는 32지점 × 60윈도우 × ~16변형 ≈ 30,000콜
+   * ≈ 80분이라 정기 수집 예산 밖이고, 최신화 한 번(지점 1 · 윈도우 1)은 2.6초다.
+   * 리솜 요금과 같은 결론에 같은 이유로 도달한다.
+   */
+  prices: {
+    /**
+     * 여유가 있어도 사용자를 이보다 오래 세워두지 않는다. `ctx.deadlineAt`과는 다른
+     * 판단이다 — 저쪽은 넘기면 재고를 잃는 진짜 한계이고, 이건 응답 시간의 상한이다.
+     */
+    maxMs: 12_000,
+    /** 마지막 콜이 끝나고 행을 돌려주기까지 남겨두는 몫. */
+    returnReserveMs: 3_000,
+    /**
+     * 한 최신화에서 물어볼 변형 수 상한. 실측으로 한 지점 하루가 16변형이라 닿지 않는
+     * 값이고, 사이트가 변형을 폭발적으로 늘렸을 때를 위한 안전핀이다(리솜 `priceMaxRooms`).
+     */
+    maxVariants: 60,
+  },
+
+  /**
    * Stores per room-list request. 8 keeps a batch around 0.7MB / 2s, so one
    * failing batch costs a quarter of the pass rather than all of it — the same
    * isolation Lotte gets from its per-branch try/catch, at the granularity
@@ -152,6 +176,12 @@ export const SONO = {
     /** One `room/detail` batch (변형 이름, `names.ts`). 8 stores measured 1.0s. An upper bound —
      *  the real timeout is derived from `ctx.deadlineAt`. */
     detail: 10_000,
+    /**
+     * One `room/detail/price` call (변형 하나, `prices.ts`). Measured 166ms.
+     * `api`(30s)가 아니라 이 값인 이유는 리솜과 같다 — 30초짜리 한 콜이 요금 예산
+     * 전체를 무효화한다.
+     */
+    price: 8_000,
   },
 } as const;
 

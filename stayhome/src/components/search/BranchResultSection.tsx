@@ -92,11 +92,20 @@ export function BranchResultSection({
   //
   // 같은 이유로 `rows`가 아니라 **`listed`**에서 구한다. 매진 행의 수동 요금은 그려지므로,
   // "예약 가능만 보기"가 그 행을 숨겼는데 헤더에 "수동 입력"이 남으면 숫자 없는 라벨이다.
+  //
+  // **변형의 요금도 여기서 센다.** 소노는 요금이 행이 아니라 세부 목록에 붙는데
+  // (`@/lib/variants` — 사이트가 변형 하나를 묻는 콜로 답한다), 종류 라벨을 그 줄마다
+  // 반복하지 않기로 했으므로 그 숫자들을 설명하는 자리도 이 헤더뿐이다. 접힌 목록 안의
+  // 요금이라도 라벨 없는 숫자로 남으면 안 된다.
   const priceKinds = [
     ...new Set(
-      listed
-        .filter((r) => showsRowPrice(r.price, showsPrice(tones.get(r.id)!)))
-        .map((r) => r.price!.kind),
+      listed.flatMap((r) => {
+        const visible = showsPrice(tones.get(r.id)!);
+        const kinds = showsRowPrice(r.price, visible) ? [r.price!.kind] : [];
+        if (!visible) return kinds;
+        for (const v of r.variants ?? []) if (v.price) kinds.push(v.price.kind);
+        return kinds;
+      }),
     ),
   ];
 
