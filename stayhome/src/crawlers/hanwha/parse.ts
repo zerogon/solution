@@ -2,6 +2,7 @@ import { addDaysUtc, toIsoDate } from "@/lib/utils";
 import type { InventoryRow } from "../types";
 import { HANWHA, type HanwhaBranch } from "./config";
 import { parseDateCompact } from "./format";
+import { priceStay, type NightRate, type RateStats, type RateTable } from "./rates";
 
 /** One room type on one night, as 잔여객실 조회 reports it. */
 export interface CalendarEntity {
@@ -17,6 +18,10 @@ export interface CalendarEntity {
   RSRV_POSBL_YN?: string;
   /** 추첨등급 A/B/C on lottery dates. Not collected — a different product. */
   USER_CALC_GRAD_CD?: string;
+  /** 그 날의 시즌 코드. 공개 요금표(`rates.ts`)의 줄과 같은 코드다. */
+  SESN_CD?: string;
+  /** 날짜·객실별 프로모션 할인율(%). 사이트 달력의 "10%/9실". */
+  PP_DSCNT_RT?: number | string;
 }
 
 /** The service gateway's envelope. `Data.ds_result` is the calendar. */
@@ -35,6 +40,11 @@ export interface Night {
   bookable: boolean;
   /** bookable AND comfortably above the closing-soon threshold. */
   roomy: boolean;
+  /**
+   * 이 밤의 요금 키. null이면 이 밤은 요금을 판정할 수 없다 — 칸이 비었거나,
+   * 같은 (객실명, 날짜)가 서로 다른 코드·시즌·할인으로 두 번 왔다.
+   */
+  rate: NightRate | null;
 }
 
 /**
@@ -72,9 +82,14 @@ export function collectNights(
     const iso = toIsoDate(date);
     // Merge rather than overwrite, and only ever widen what is known: a repeated
     // key must not silently drop availability we already saw.
-    const night = byDate.get(iso) ?? { bookable: false, roomy: false };
+    const rate = nightRate(entity);
+    const existing = byDate.get(iso);
+    const night = existing ?? { bookable: false, roomy: false, rate };
     night.bookable ||= bookable;
     night.roomy ||= bookable && remaining > HANWHA.closingSoonThreshold;
+    // Availability only widens, but a rate key that disagrees with itself is not
+    // "more known" — it is two answers, and we do not pick one.
+    if (existing && !sameRate(existing.rate, rate)) night.rate = null;
     byDate.set(iso, night);
     into.set(roomType, byDate);
   }
@@ -101,6 +116,8 @@ export function buildRows(
   nights: NightMap,
   branch: HanwhaBranch,
   request: { nights: number },
+  rates?: RateTable,
+  stats?: RateStats,
 ): InventoryRow[] {
   const stayNights = Math.max(1, request.nights);
   const out: InventoryRow[] = [];
@@ -123,6 +140,17 @@ export function buildRows(
       }
       if (!complete) continue;
 
+      // 예약할 수 없는 방의 요금은 정보가 아니라 잡음이다 — 붙이지 않는다(롯데·오크밸리와 같다).
+      let price: InventoryRow["price"];
+      if (bookable) {
+        const quote = priceStay(byDate, checkin, stayNights, rates);
+        if ("amount" in quote) price = { amount: quote.amount, kind: "memberTable" };
+        if (stats) {
+          if ("amount" in quote) stats.priced++;
+          else stats[quote.miss]++;
+        }
+      }
+
       out.push({
         branchName: branch.value,
         roomType,
@@ -134,6 +162,7 @@ export function buildRows(
         // is the honest answer.
         detailUrl: HANWHA.bookingUrl,
         stay: { checkin, checkout: addDaysUtc(checkin, stayNights) },
+        ...(price ? { price } : {}),
       });
     }
   }
@@ -151,4 +180,19 @@ export function buildRows(
  */
 function roomTypeName(entity: CalendarEntity): string | null {
   return entity.ROOM_TYPE_NM?.trim() || entity.ROOM_TYPE_CD?.trim() || null;
+}
+
+/** An entity's rate key, or null when any part of it is missing or malformed. */
+function nightRate(entity: CalendarEntity): NightRate | null {
+  const roomCd = entity.ROOM_TYPE_CD?.trim();
+  const seasonCd = entity.SESN_CD?.trim();
+  const raw = entity.PP_DSCNT_RT;
+  const discount = raw === undefined || raw === null || raw === "" ? 0 : Number(raw);
+  if (!roomCd || !seasonCd || !Number.isFinite(discount)) return null;
+  return { roomCd, seasonCd, discount };
+}
+
+function sameRate(a: NightRate | null, b: NightRate | null): boolean {
+  if (!a || !b) return a === b;
+  return a.roomCd === b.roomCd && a.seasonCd === b.seasonCd && a.discount === b.discount;
 }

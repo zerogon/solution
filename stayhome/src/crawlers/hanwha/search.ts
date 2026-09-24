@@ -5,6 +5,7 @@ import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { HANWHA, type HanwhaBranch } from "./config";
 import { formatDateCompact } from "./format";
 import { buildRows, collectNights, type CalendarPayload, type NightMap } from "./parse";
+import { emptyRateStats, loadBranchRates, type RateTable } from "./rates";
 import { SessionLostError } from "../_shared/errors";
 import { chunk, mapPool } from "../_shared/pool";
 
@@ -20,6 +21,8 @@ interface BranchCalendar {
   from: string;
   to: string;
   nights: NightMap;
+  /** 이 달력이 예약 가능하다고 말한 (객실, 달)의 공개 요금표. 달력과 함께 캐시된다. */
+  rates: RateTable;
 }
 
 /** A booted booking-host session: who we are, and what we have already fetched. */
@@ -86,6 +89,8 @@ export async function performSearch(
   let fetched = 0;
   let cached = 0;
   let sessionLosses = 0;
+  const rateStats = emptyRateStats();
+  const searchDeadline = startedAt + budgetMs;
 
   // Properties go out in batches rather than one at a time. With sixteen of
   // them at roughly two seconds each, the serial loop spent ~32s on its first
@@ -132,7 +137,7 @@ export async function performSearch(
     // `mapPool` never rejects; it reports per item. One property failing must
     // not cost the others, and that rule has to survive the move to concurrency.
     const settled = await mapPool(group, group.length, (branch) =>
-      calendarFor(ctx, session, branch, params.checkin, nights, callTimeoutMs),
+      calendarFor(ctx, session, branch, params.checkin, nights, callTimeoutMs, searchDeadline),
     );
 
     settled.forEach((r, i) => {
@@ -148,7 +153,7 @@ export async function performSearch(
       }
       if (r.value.hit) cached++;
       else fetched++;
-      const rows = buildRows(r.value.nights, branch, { nights });
+      const rows = buildRows(r.value.nights, branch, { nights }, r.value.rates, rateStats);
       out.push(...rows);
       log("[hanwha] branch done", {
         branch: branch.value,
@@ -189,6 +194,10 @@ export async function performSearch(
     failed: failures.length,
     truncated,
   });
+  // 요금이 안 붙은 예약가능 행의 사유별 수. `unpublished`는 아직 공표되지 않은 달과
+  // 표가 없는 호텔 두 곳, `discount`는 프로모션 할인이 걸린 밤이라 평상시에도 0이
+  // 아니다. `season`·`night`·`noTable`이 늘면 조인이 깨지기 시작한 것이다.
+  log("[hanwha] rates", rateStats);
 
   // A `stay` stamp is a claim that this call answered its whole span for
   // everything. run.ts reads it and skips every hot window those dates cover,
@@ -243,13 +252,14 @@ async function calendarFor(
   checkin: Date,
   nights: number,
   timeoutMs: number = HANWHA.timeouts.api,
-): Promise<{ nights: NightMap; hit: boolean }> {
+  deadline: number = Date.now() + timeoutMs,
+): Promise<{ nights: NightMap; rates: RateTable; hit: boolean }> {
   const firstNight = toIsoDate(checkin);
   const lastNight = toIsoDate(addDaysUtc(checkin, Math.max(1, nights) - 1));
 
   const existing = session.calendars.get(branch.locCd);
   if (existing && existing.from <= firstNight && lastNight <= existing.to) {
-    return { nights: existing.nights, hit: true };
+    return { nights: existing.nights, rates: existing.rates, hit: true };
   }
 
   const to = addDaysUtc(checkin, HANWHA.calendarSpanDays);
@@ -270,9 +280,19 @@ async function calendarFor(
     ctx.log("[hanwha] calendar rows dropped", { branch: branch.value, dropped, entities });
   }
 
-  const calendar: BranchCalendar = { from: toIsoDate(checkin), to: toIsoDate(to), nights: map };
+  // 요금은 달력 뒤에 같은 지점 작업 안에서 받는다 — 배치의 벽시계는 이미 가장 느린
+  // 지점이 정하고(`slowestBatchMs`), 요금 콜은 지점당 ~0.4초라 그 안에 들어간다.
+  // 절대 던지지 않으므로 이 지점의 재고를 요금이 잃게 만들 수 없다.
+  const rates = await loadBranchRates(ctx, branch, map, deadline);
+
+  const calendar: BranchCalendar = {
+    from: toIsoDate(checkin),
+    to: toIsoDate(to),
+    nights: map,
+    rates,
+  };
   session.calendars.set(branch.locCd, calendar);
-  return { nights: map, hit: false };
+  return { nights: map, rates, hit: false };
 }
 
 /**
