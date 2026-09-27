@@ -45,8 +45,10 @@
 - 잔여 객실 상태색(`src/lib/availability-tone.ts`)만 테마 토큰이 아닌 Tailwind 리터럴 팔레트를
   쓴다. 브랜드가 아니라 의미색이고, primary 틸을 "예약 가능"에 쓰면 둘이 구분되지 않기 때문.
   JIT 때문에 클래스는 반드시 정적 리터럴.
-- 브랜드 마크 기하는 `src/lib/brand-mark.ts` 한 곳 — 인라인 SVG(`app-mark.tsx`)와
-  PWA 아이콘 PNG가 공유한다. 바꾸면 `npm run icons:generate` 재실행 필수.
+- 브랜드 로고의 원본은 `assets/brand/logo.png` 한 장(2026-09-27 고양이 로고, 그전엔
+  `brand-mark.ts`의 SVG 지붕+물결) — 앱 안 로고(`app-mark.tsx` → `logo-256.png`)·PWA 아이콘·
+  `favicon.ico`가 전부 거기서 구워진다. 바꾸면 `npm run icons:generate` 재실행 +
+  `sw.js`의 `CACHE_VERSION` 올리기 필수(`/icons/*`가 cache-first라 파일명이 같으면 안 바뀐다).
 
 ## 코드 스타일 주의
 

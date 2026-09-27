@@ -31,8 +31,10 @@
 //     크래시하지 않고 인원만 안 보인다.
 // v5: 행에 variants(접힌 변형 목록, 소노)가 추가됐다. v3·v4와 같은 이유 — 낡은 본문은
 //     크래시하지 않고 세부 목록만 안 보인다.
+// v7: 로고 교체(고양이). `/icons/*`는 cache-first이고 파일명이 그대로라, 안 올리면 설치된
+//     기기가 옛 아이콘을 캐시에서 계속 꺼낸다.
 // 올리면 activate 핸들러가 이전 접두사 캐시를 지운다.
-const CACHE_VERSION = "v6";
+const CACHE_VERSION = "v7";
 const STATIC_CACHE = `welfarestay-static-${CACHE_VERSION}`;
 const DATA_CACHE = `welfarestay-data-${CACHE_VERSION}`;
 const OFFLINE_CACHE = `welfarestay-offline-${CACHE_VERSION}`;
@@ -44,6 +46,8 @@ const PRECACHE_URLS = [
   OFFLINE_URL,
   "/icons/icon-192.png",
   "/icons/favicon.png",
+  // `AppMark`가 그리는 로고 — `/offline`이 완전 오프라인에서도 로고를 보이게.
+  "/icons/logo-256.png",
   "/manifest.json",
 ];
 
