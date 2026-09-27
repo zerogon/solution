@@ -3,6 +3,7 @@ import { ExternalLink, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import {
+  type AvailabilityTone,
   TONE_BADGE,
   TONE_DOT,
   TONE_LABEL,
@@ -13,6 +14,7 @@ import {
 } from "@/lib/availability-tone";
 import { PRICE_KIND_LABEL, formatKrw, perNightAverage, type PriceKind } from "@/lib/price";
 import { checkedLabel, relativeAge, syncedLabel } from "@/lib/freshness";
+import { variantPriceSummary } from "@/lib/variants";
 import { RoomRateCell } from "./RoomRateCell";
 import { RoomRow } from "./RoomRow";
 import { rateKey, showsRowPrice, type ManualRate } from "./manual-rates";
@@ -93,18 +95,14 @@ export function BranchResultSection({
   // 같은 이유로 `rows`가 아니라 **`listed`**에서 구한다. 매진 행의 수동 요금은 그려지므로,
   // "예약 가능만 보기"가 그 행을 숨겼는데 헤더에 "수동 입력"이 남으면 숫자 없는 라벨이다.
   //
-  // **변형의 요금도 여기서 센다.** 소노는 요금이 행이 아니라 세부 목록에 붙는데
-  // (`@/lib/variants` — 사이트가 변형 하나를 묻는 콜로 답한다), 종류 라벨을 그 줄마다
-  // 반복하지 않기로 했으므로 그 숫자들을 설명하는 자리도 이 헤더뿐이다. 접힌 목록 안의
-  // 요금이라도 라벨 없는 숫자로 남으면 안 된다.
+  // **변형의 요금도 여기서 센다.** 소노는 요금이 행이 아니라 세부 목록에 붙고
+  // (`@/lib/variants` — 사이트가 변형 하나를 묻는 콜로 답한다), 행 줄에는 그 요약이 그려진다.
+  // 렌더와 이 집합이 같은 함수(`displayedPrice`)를 쓰는 이유가 위의 ⚠️다.
   const priceKinds = [
     ...new Set(
       listed.flatMap((r) => {
-        const visible = showsPrice(tones.get(r.id)!);
-        const kinds = showsRowPrice(r.price, visible) ? [r.price!.kind] : [];
-        if (!visible) return kinds;
-        for (const v of r.variants ?? []) if (v.price) kinds.push(v.price.kind);
-        return kinds;
+        const p = displayedPrice(r, tones.get(r.id)!);
+        return p ? [p.kind] : [];
       }),
     ),
   ];
@@ -164,9 +162,14 @@ export function BranchResultSection({
         {sorted.map((row) => {
           const tone = tones.get(row.id)!;
           const manual = rates.get(rateKey(row)) ?? null;
+          const shown = displayedPrice(row, tone);
           // 수동 요금은 사이트가 답하지 않은 자리를 사람이 채운 값이라, 자동 요금이
-          // 붙은 행에는 입력 자리를 만들지 않는다(운영자 결정: 자동 우선).
-          const editable = row.price == null || row.price.kind === "manual";
+          // 붙은 행에는 입력 자리를 만들지 않는다(운영자 결정: 자동 우선). 소노의 변형
+          // 요금도 자동 요금이다 — 화면에 보이는지와 무관하게 센다.
+          const editable =
+            row.price == null
+              ? variantPriceSummary(row.variants) == null
+              : row.price.kind === "manual";
           return (
             // 행의 껍질(`<li>`·세부 목록 펼침)은 `RoomRow`가 갖는다 — 줄 안의 내용은 여기 그대로다.
             <RoomRow
@@ -197,13 +200,13 @@ export function BranchResultSection({
                   {occupancyLabel(row.occupancy)}
                 </span>
               )}
-              {showsRowPrice(row.price, showsPrice(tone)) && (
+              {shown && (
                 // `shrink-0`이 필수다. 이 줄은 2xl에서 2컬럼이 되어 폭이 절반이고
                 // 리솜 객실명은 길다("레스트리 S30 타워 클린 케어룸") — 좁아질 때
                 // 줄어들어야 하는 쪽은 요금이 아니라 이름이다.
                 <span
                   className="shrink-0 text-xs font-mono tabular-nums"
-                  title={priceTitle(row.price!, nights, manual, now)}
+                  title={priceTitle(shown, nights, manual, now)}
                 >
                   {/*
                     **행 단위 출처 표식.** 종류 라벨은 섹션 헤더에 한 번만 그려지는데,
@@ -213,26 +216,29 @@ export function BranchResultSection({
                     "회원가 · 수동 입력"이라고 둘 다 말할 뿐 어느 행이 어느 쪽인지는
                     말하지 못하므로, 수동인 행이 스스로 이름을 댄다.
                   */}
-                  {row.price!.kind === "manual" && (
+                  {shown.kind === "manual" && (
                     <span className="mr-1 font-sans text-[10px] font-normal text-muted-foreground">
                       수동
                     </span>
                   )}
-                  {formatKrw(row.price!.amount)}
+                  {formatKrw(shown.amount)}
+                  {/* 세부 객실마다 요금이 다르다 — 이 값은 가장 싼 것이다(`variantPriceSummary`). */}
+                  {shown.from && "~"}
                   {nights > 1 &&
-                    (row.price!.kind === "manual" ? (
+                    (shown.kind === "manual" ? (
                       // 수동값은 단가가 원본이고 총액이 파생이다 — 나눠서 얻은 값이 아니므로
                       // "평균"이 아니라 "단가"다. `price.ts`의 규약이 여기서만 뒤집힌다.
                       <span className="hidden font-normal text-muted-foreground sm:inline">
                         {" · 1박 "}
-                        {formatKrw(manual?.perNight ?? row.price!.amount / nights)}
+                        {formatKrw(manual?.perNight ?? shown.amount / nights)}
                       </span>
                     ) : (
                       // "평균"을 빼면 안 된다 — 요금은 밤마다 다르고(주중·주말) 이
                       // 값은 그 숙박의 어느 밤 값도 아니다.
                       <span className="hidden font-normal text-muted-foreground sm:inline">
                         {" · 1박 평균 "}
-                        {formatKrw(perNightAverage(row.price!.amount, nights))}
+                        {formatKrw(perNightAverage(shown.amount, nights))}
+                        {shown.from && "~"}
                       </span>
                     ))}
                 </span>
@@ -311,13 +317,15 @@ function occupancyLabel(o: { standard: number; max: number }) {
  * 그 숫자는 6개월 전 것일 수 있다. 그 사실을 말할 자리가 여기뿐이다.
  */
 function priceTitle(
-  price: { amount: number; kind: PriceKind },
+  price: { amount: number; kind: PriceKind; from: boolean },
   nights: number,
   manual: ManualRate | null,
   now: number,
 ): string {
   const label = PRICE_KIND_LABEL[price.kind];
-  if (price.kind !== "manual") return `${label} · ${nights}박 합계`;
+  if (price.kind !== "manual") {
+    return `${label} · ${nights}박 합계${price.from ? " · 세부 객실 중 최저" : ""}`;
+  }
 
   const unit = manual ? `1박 ${formatKrw(manual.perNight)} × ${nights}박` : `${nights}박 합계`;
   const age = manual ? ` · ${relativeAge(manual.updatedAt, now)} 입력` : "";
@@ -329,4 +337,22 @@ function occupancyTitle(o: { standard: number; max: number }) {
   return o.standard === o.max
     ? `기준인원 ${o.standard}명`
     : `기준인원 ${o.standard}명 · 최대인원 ${o.max}명`;
+}
+
+/**
+ * 이 행의 요금 칸에 **실제로 그리는** 값. 렌더와 섹션 헤더의 라벨 집합이 둘 다 이 함수를 쓴다.
+ *
+ * 행의 요금이 있으면 그것이다(`showsRowPrice` — 수동 요금은 낡은·매진 행에서도 그린다).
+ * 없으면 변형 요금의 요약이고(`variantPriceSummary`, 소노), 크롤이 쓴 요금이므로
+ * `showsPrice(tone)` 게이트를 그대로 탄다. 변형은 행과 같은 `syncedAt`을 쓴다.
+ */
+function displayedPrice(
+  row: InventoryRow,
+  tone: AvailabilityTone,
+): { amount: number; kind: PriceKind; from: boolean } | null {
+  if (row.price) {
+    return showsRowPrice(row.price, showsPrice(tone)) ? { ...row.price, from: false } : null;
+  }
+  const v = variantPriceSummary(row.variants);
+  return v && showsPrice(tone) ? v : null;
 }

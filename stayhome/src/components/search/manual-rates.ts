@@ -1,4 +1,5 @@
 import type { ResortSlug } from "@/generated/prisma/enums";
+import { variantPriceSummary } from "@/lib/variants";
 import type { InventoryRow } from "./types";
 
 /**
@@ -48,6 +49,8 @@ export function indexRates(rates: ManualRate[]): Map<string, ManualRate> {
  * 우선순위가 이 함수의 조기 반환 한 줄(`row.price != null`)로 표현된다 — 사이트가 답한
  * 값이 있으면 그것을 쓰고, 사람이 적은 값은 빈칸만 채운다. 반대로 하면 사이트 요금이
  * 바뀌어도 화면이 옛 수동값을 계속 주장하게 된다.
+ * 소노는 사이트가 답한 요금이 행이 아니라 **변형**에 있으므로(`@/lib/variants`) 그것도
+ * "자동 요금 있음"으로 센다. 안 그러면 수동값이 `row.price`로 들어가 변형 요금을 가린다.
  *
  * ⚠️ **빈칸은 소노·한화만의 일이 아니다.** 롯데는 회원 트랙이 BAR의 부분집합이라 거기 없는
  * 방이 빈칸이고(부여 23/25 · 제주 13/14 · 김해 18/20), 오크밸리는 밸리 31평·46평을 일부러
@@ -74,7 +77,7 @@ export function withManualRates(
 
   let changed = false;
   const merged = rows.map((row) => {
-    if (row.price != null) return row;
+    if (row.price != null || variantPriceSummary(row.variants) != null) return row;
     const rate = rates.get(rateKey(row));
     if (!rate) return row;
     changed = true;

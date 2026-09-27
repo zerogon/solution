@@ -102,3 +102,31 @@ function hasValidPrice(x: InventoryVariant): boolean {
     isPriceKind(x.price.kind)
   );
 }
+
+/**
+ * 행 줄에 그릴 **표시용** 요금 — 변형 요금에서 화면이 유도하고, 저장하지 않는다.
+ *
+ * 요금이 변형에만 붙으므로(위 `price` 주석) 행의 `price`는 소노에서 항상 null이다. 그런데
+ * 세부 목록은 변형이 **둘 이상**일 때만 펼칠 수 있어서(`RoomRow`), 변형이 하나인 행은 요금이
+ * 붙어 있어도 화면 어디에도 나오지 않았다. 2026-09-27 실측으로 소노캄 고양 16행 중 13행이
+ * 그 경우였다. 운영자 결정(2026-09-27)은 이렇다:
+ *
+ * - 요금이 붙은 변형이 하나이거나 값이 전부 같으면 그 값을 그대로 쓴다(`from: false`).
+ * - 값이 갈리면 **최저가 + "~"**(`from: true`). 변형별 정확한 값은 세부 목록이 말한다.
+ *   위 주석이 지적한 단위 어긋남(잔여·상태는 행 전체, 요금은 가장 싼 변형)은 그 `~`가 드러낸다.
+ *
+ * 종류가 섞이면 null이다. 라벨 하나로 설명할 수 없는 최솟값은 비교가 거짓말이 된다
+ * (`price.ts`). 지금은 전부 `member`라 이 분기는 실행되지 않는다.
+ * 가용성 게이트는 따로 두지 않는다. 요금은 예약 가능한 변형에만 붙기 때문이다.
+ */
+export function variantPriceSummary(
+  variants: InventoryVariant[] | null | undefined,
+): { amount: number; kind: PriceKind; from: boolean } | null {
+  const priced = (variants ?? []).flatMap((v) => (v.price ? [v.price] : []));
+  if (priced.length === 0) return null;
+  const kind = priced[0].kind;
+  if (priced.some((p) => p.kind !== kind)) return null;
+  const amounts = priced.map((p) => p.amount);
+  const min = Math.min(...amounts);
+  return { amount: min, kind, from: amounts.some((a) => a !== min) };
+}
