@@ -100,6 +100,17 @@ function detectInstallMode(): InstallMode {
   return null;
 }
 
+/**
+ * 데스크톱(PC)인가. 휴대폰·태블릿이 아니면 참이다.
+ * iPadOS는 Mac UA를 보고하므로 `detectInstallMode`와 같은 "터치 되는 Mac" 휴리스틱으로 뺀다.
+ */
+function isDesktop(): boolean {
+  const ua = window.navigator.userAgent;
+  const touchMac =
+    window.navigator.platform === "MacIntel" && (window.navigator.maxTouchPoints ?? 0) > 1;
+  return !/android|iphone|ipad|ipod|mobile/i.test(ua) && !touchMac;
+}
+
 export function PwaInstallPrompt() {
   const [event, setEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [open, setOpen] = useState(false);
@@ -108,6 +119,8 @@ export function PwaInstallPrompt() {
   const checkboxId = useId();
 
   useEffect(() => {
+    // PC에서는 설치 팝업을 띄우지 않는다(운영자 요청, 2026-09-27). 다시 켜려면 이 줄을 지운다.
+    if (isDesktop()) return;
     if (isDismissedToday()) return;
 
     const standalone =
