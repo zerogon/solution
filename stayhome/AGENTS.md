@@ -20,7 +20,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 | 소노 | `docs/crawlers/sono.md` | 응답이 그 달 전체 달력(`stay`) · `storeCdList` 배치 · 변형(`variants`)과 `room/detail` 이름 · 요금은 `detail/price`(최신화 전용) |
 | 리솜 | `docs/crawlers/resom.md` | 베어러 토큰을 우리 쿠키로 운반 · `calendarRooms` 임의 범위 · 요금은 `stockPrice`(최신화 전용) |
 | 오크밸리 | `docs/crawlers/oakvalley.md` | 호스트 둘 · `ptSignature` · id≠name · 월 달력 병합 · 공표 요금표(`rates.ts`) · 정원(`api/v1/room`) |
-| 켄싱턴 | `docs/crawlers/kensington.md` | 무기명(법인) 로그인 · **분양회원 경로**(`quick_roomdata_member`, 회원번호는 페이지에서 읽음) · HTML 조각 · 매진은 목록에서 빠짐 · 지점 **순차**(세션 잠금) · 요금 미부착 |
+| 켄싱턴 | `docs/crawlers/kensington.md` | 무기명(법인) 로그인 · **분양회원 경로**(`quick_roomdata_member`, 회원번호는 페이지에서 읽음) · HTML 조각 · 매진은 목록에서 빠짐 · 지점 **순차**(세션 잠금) · 요금은 예약 요약(최신화 전용) · 인원은 무인증 객실 팝업 |
 | 한화 | `docs/crawlers/hanwha.md` | 호스트 둘 · 2화면 로그인(회원권 비밀번호 = `memo`) · `doExecute.mvc` 게이트웨이 · 지점 4씩 병렬 · 부분 윈도우는 `stay`를 좁힌다 · 요금표 `getRoomPrice.do` |
 
 새 내용을 적을 때도 리조트별 상세는 그 파일에, 여러 크롤러에 걸친 규칙만 여기에 적는다

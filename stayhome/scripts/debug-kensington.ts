@@ -335,6 +335,49 @@ async function main() {
       console.log(`${res.status()} len=${html.length} → ${OUT}-mrooms.html`);
       printRooms(`member ${mask(full)} ${branCd} ${checkin}+${n}`, await parseRooms(page, html));
       if (html.trim().length < 300) console.log("[body]", html.trim());
+    } else if (step === "occ" || step === "price") {
+      // The crawler's own parsers (`kensington/parse.ts`) over the member room list:
+      //   occ   <branCd> [checkin]            popup_room_info per room → 기준/최대 (anonymous calls)
+      //   price <#> <branCd> <checkin> [n]    quick_set_summary per room → 총액 + 날짜별
+      const { parseOccupancy, parseSummaryTotal } = await import("../src/crawlers/kensington/parse");
+      const [a0, a1, a2, a3] = args;
+      const which = step === "price" ? (a0 ?? "1") : "1";
+      const branCd = (step === "price" ? a1 : a0) ?? "RKT01";
+      const checkin = (step === "price" ? a2 : a1) ?? addDays(new Date().toISOString().slice(0, 10), 14);
+      const n = Number(step === "price" ? (a3 ?? "1") : "1");
+      const memberHtml = await (await context.request.get(`${BASE}/reservation/quick_member`)).text();
+      const full = [...memberHtml.matchAll(/membno_select\('([^']+)','([^']+)'\)/g)][Number(which) - 1]?.[2];
+      if (!full) throw new Error("no membership on quick_member — session expired? run doLogin");
+      const headers = { Referer: `${BASE}/reservation/quick_member`, "X-Requested-With": "XMLHttpRequest" };
+      const listUrl = roomQuery(branCd, checkin, n)
+        .replace("/quick_roomdata/", "/quick_roomdata_member/")
+        .replace("pay_type=P", `pay_type=D&memb_no=${encodeURIComponent(full)}`);
+      const rooms = await parseRooms(page, await (await context.request.get(listUrl, { headers })).text());
+      console.log(`[${step}] ${branCd} ${checkin}+${n} — ${rooms.length} rooms (member ${mask(full)})`);
+      const nights = Array.from({ length: n }, (_, i) => addDays(checkin, i));
+      for (const r of rooms) {
+        if (step === "occ") {
+          const res = await fetch(`${BASE}/reservation/popup_room_info`, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "XMLHttpRequest" },
+            body: new URLSearchParams({ bran_cd: branCd, room_type_cd: r.code }).toString(),
+          });
+          const html = await res.text();
+          const raw = html.match(/desc_title">\s*인원\s*<\/span>\s*<span>([^<]*)</)?.[1] ?? "(no 인원 cell)";
+          const occ = parseOccupancy(html);
+          console.log(`  ${r.code.padEnd(8)} ${occ ? `${occ.standard}/${occ.max}`.padEnd(6) : "null  "} [${raw}]  ${r.name}`);
+        } else {
+          const url = listUrl
+            .replace("/quick_roomdata_member/", "/quick_set_summary/")
+            .replace("room_type_cd=", `room_type_cd=${encodeURIComponent(r.code)}`);
+          const startedAt = Date.now();
+          const html = await (await context.request.get(url, { headers })).text();
+          const perNight = [...html.matchAll(/<span class="tit">\s*([\d. ]+\([^)]*\))\s*<\/span>\s*<span class="desc"[^>]*>[^<]*<span class="num">([^<]*)</g)]
+            .map((m) => `${m[1].replace(/\s/g, "")} ${m[2]}`);
+          const total = parseSummaryTotal(html, nights);
+          console.log(`  ${r.code.padEnd(8)} ${String(total ?? "null").padStart(9)}  ${String(Date.now() - startedAt).padStart(5)}ms  [${perNight.join(" + ")}]  ${r.name}`);
+        }
+      }
     } else if (step === "mstock") {
       const [which = "1", branCd = "RKT01", ym = new Date().toISOString().slice(0, 7).replace("-", "")] = args;
       const memberHtml = await (await context.request.get(`${BASE}/reservation/quick_member`)).text();

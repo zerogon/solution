@@ -4,7 +4,9 @@ import { SessionLostError } from "../_shared/errors";
 import type { CrawlerContext, InventoryRow, SearchParams } from "../types";
 import { KENSINGTON, type KensingtonBranch } from "./config";
 import { memberNo } from "./member";
-import { buildRows, parseRoomFragment } from "./parse";
+import { attachOccupancy } from "./occupancy";
+import { buildRows, parseRoomFragment, type KensingtonRow } from "./parse";
+import { attachPrices } from "./price";
 
 /**
  * 분양회원 경로로 지점마다 객실 목록 한 콜.
@@ -21,6 +23,12 @@ import { buildRows, parseRoomFragment } from "./parse";
  * 행 전부다. 게이트에 걸려 못 물은 지점은 0행이고, 0행 그룹은 `removeVanishedRows`가
  * 건드리지 않는다. 실제로는 `run.ts`가 가장 느린 윈도우가 들어갈 때만 윈도우를 시작하므로
  * 이 게이트는 거의 열리지 않는다.
+ *
+ * 지점마다 재고 뒤에 인원(`occupancy.ts`)과 요금(`price.ts`, 지점 하나를 지목한 최신화에서만)을
+ * 붙인다. 둘 다 실패해도 재고 행은 남는다. **인원은 기다리지 않고 다음 지점으로 넘어간다** —
+ * 쿠키 없는 콜이라 이 순차 줄 밖에서 돌고, 윈도우 끝에서 한 번 모아 기다린다. 지점마다 기다리면
+ * 캐시가 빈 첫 윈도우가 ~10초 느려지고, `run.ts`가 그 느린 윈도우를 척도로 삼아 패스당 윈도우가
+ * 6 → 3으로 줄었다(2026-10-18 실측).
  */
 export async function performSearch(
   ctx: CrawlerContext,
@@ -40,12 +48,16 @@ export async function performSearch(
   const membNo = await memberNo(ctx);
   const checkin = toIsoDate(params.checkin);
   const checkout = toIsoDate(params.checkout);
+  // 요금을 붙여도 되는 상황인가 — 리솜·소노와 같은 두 번 판정. 라우트는 "사람이 지점
+  // 하나를 지목했다"를 알고(`withPrices`), 여기는 그 비용(방마다 순차 1콜)을 안다.
+  const wantsPrices = params.withPrices === true && branches.length === 1;
 
   const out: InventoryRow[] = [];
   const failures: string[] = [];
   let attempted = 0;
   let sessionLosses = 0;
   let slowestMs = 0;
+  const occupancyPending: Promise<void>[] = [];
   for (const branch of branches) {
     const left = ctx.deadlineAt - Date.now() - KENSINGTON.timeouts.returnReserve;
     if (left < Math.max(slowestMs, 1_000)) {
@@ -59,7 +71,11 @@ export async function performSearch(
     attempted++;
     const startedAt = Date.now();
     try {
-      out.push(...(await searchOneBranch(ctx, branch, checkin, checkout, membNo)));
+      const rows = await searchOneBranch(ctx, branch, checkin, checkout, membNo);
+      // 행 객체를 먼저 내보내고 인원은 나중에 채운다 — 반환 전에 아래에서 기다린다.
+      out.push(...rows.map((r) => r.row));
+      occupancyPending.push(attachOccupancySafely(ctx, branch, rows));
+      if (wantsPrices) await attachPricesSafely(ctx, branch, rows, { checkin, checkout, membNo });
     } catch (e) {
       failures.push(branch.value);
       if (e instanceof SessionLostError) sessionLosses++;
@@ -73,6 +89,8 @@ export async function performSearch(
     }
     slowestMs = Math.max(slowestMs, Date.now() - startedAt);
   }
+
+  await Promise.all(occupancyPending);
 
   // 삼키는 것은 일부 지점까지다. 전부 실패한 0행 SUCCESS는 "전 객실 매진"과 구별되지 않는다.
   // 전부가 세션 상실이면 그렇게 던져야 `run.ts`가 패스 안에서 재로그인한다.
@@ -94,13 +112,51 @@ export async function performSearch(
   return out;
 }
 
+/**
+ * 인원·요금을 붙이는 호출을 한 겹 더 감싼다 — 각 함수가 안에서 전부 삼키지만, 예상 못 한
+ * 예외 하나가 새면 요금은 지점 루프의 catch가 받아 **이 지점의 재고 행이 전멸**하고, 인원은
+ * `Promise.all`을 터뜨려 **윈도우 전체**를 잃는다(리솜 `attachPrices` 호출부와 같은 판단).
+ */
+async function attachOccupancySafely(
+  ctx: CrawlerContext,
+  branch: KensingtonBranch,
+  rows: KensingtonRow[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  try {
+    await attachOccupancy(ctx, branch, rows);
+  } catch (e) {
+    ctx.log("[kensington] occupancy pass failed, inventory kept", {
+      branch: branch.value,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
+async function attachPricesSafely(
+  ctx: CrawlerContext,
+  branch: KensingtonBranch,
+  rows: KensingtonRow[],
+  stay: { checkin: string; checkout: string; membNo: string },
+): Promise<void> {
+  if (rows.length === 0) return;
+  try {
+    await attachPrices(ctx, branch, rows, stay);
+  } catch (e) {
+    ctx.log("[kensington] price pass failed, inventory kept", {
+      branch: branch.value,
+      error: e instanceof Error ? e.message : String(e),
+    });
+  }
+}
+
 async function searchOneBranch(
   ctx: CrawlerContext,
   branch: KensingtonBranch,
   checkin: string,
   checkout: string,
   membNo: string,
-): Promise<InventoryRow[]> {
+): Promise<KensingtonRow[]> {
   // 사이트의 `#fm_search` 직렬화 그대로. 빈 칸들도 보낸다 — 이 서버는 칸이 빠지면
   // "잘못된 접근"(`N`)으로 답하는 화면이 있어, 무엇이 필수인지 가려 보는 것보다 사이트와
   // 같은 요청을 보내는 쪽이 싸다.

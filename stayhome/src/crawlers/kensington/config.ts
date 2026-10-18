@@ -16,6 +16,13 @@ export const KENSINGTON = {
   /** 분양회원 빠른예약. 로그인해야 열리고(익명은 302 → `/`), 회원번호가 여기 인라인으로 있다. */
   memberPageUrl: "https://www.kensington.co.kr/reservation/quick_member",
   roomListUrl: "https://www.kensington.co.kr/reservation/quick_roomdata_member/",
+  /** 객실을 고르면 뜨는 예약 요약. 숙박 총액 + 날짜별 요금(`price.ts`). 회원 세션 필요. */
+  summaryUrl: "https://www.kensington.co.kr/reservation/quick_set_summary/",
+  /** 객실 정보 팝업. 기준·최대 인원(`occupancy.ts`). 무인증. */
+  roomInfoUrl: "https://www.kensington.co.kr/reservation/popup_room_info",
+  /** 쿠키 없이 보내는 팝업 콜의 UA — `_shared/browser.ts`의 컨텍스트 UA와 같은 값. */
+  anonymousUserAgent:
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
   /** 조회 화면의 "예약하기" 링크. 지점·날짜를 URL로 넘길 수 없는 화면이라 진입점만 준다. */
   bookingUrl: "https://www.kensington.co.kr/reservation/quick_member",
 

@@ -8,8 +8,8 @@
 | 예약 경로 | **분양회원 빠른예약** `/reservation/quick_member` (로그인 시에만 메뉴가 생긴다) |
 | 재고 콜 | `GET /reservation/quick_roomdata_member/?…&pay_type=D&memb_no=<분양회원번호>` → HTML 조각 |
 | 지점 | 10곳(아래 표). 지점마다 1콜 — 롯데형 |
-| 요금 | **이번에는 붙이지 않는다**(아래 "요금") |
-| 인원 | 미부착(목록에 없다) |
+| 요금 | `member` — `quick_set_summary`(방마다 1콜), **최신화 전용**(아래 "요금") |
+| 인원 | 기준·최대 — 무인증 `popup_room_info`, 정기 수집에서도 붙는다(아래 "인원") |
 | `stay` | 없음 — 요청 윈도우만 답한다 |
 
 ## 로그인
@@ -86,16 +86,39 @@ JSON `{com_yn:"Y", ret_url:"/"}`를 받는다. 실패는 `com_yn≠"Y"`, 403은 
   크롤러는 리다이렉트를 따르지 않고(`maxRedirects: 0`) 3xx를 `SessionLostError`로 읽는다.
 - `validateSession` = `quick_member`가 200이고 `membno_select(` 를 담고 있는가.
 
-## 요금 — 이번에는 붙이지 않는다
+## 요금 — 예약 요약의 숙박 총액 (2026-10-18 정정)
 
-목록의 `data-kfx-price`는 **1박 최저가("~")**다: 같은 방이 1박·2박에서 같은 값(109,000). 요금 플랜
-(`quick_roomdata_subpack_member`, 방마다 1콜)도 1·2·3박에서 플랜별 "~"가를 그대로 보여준다 —
-총액은 그 뒤 단계(`quick_set_summary`)에나 있다. `InventoryRow.price`는 **숙박 총액**이 계약이고
-"~최저가 × 박수"는 주말이 섞이면 틀린 총액을 낸다. 틀린 요금은 담당자가 직원에게 전달하므로
-붙이지 않는다. 필요하면 화면의 수동 요금(1박 단가)으로 넣는다.
+처음 판단은 "붙이지 않는다"였다. 목록의 `data-kfx-price`는 **1박 최저가("~")**이고(같은 방이 1박·2박에서
+같은 값), 요금 플랜(`quick_roomdata_subpack_member`)도 플랜별 "~"가뿐이라 총액이 없다고 봤다.
+**총액은 그 다음 단계에 있었다** — 객실을 고르면 사이트가 부르는 `GET /reservation/quick_set_summary/`
+(목록과 같은 `#fm_search` 파라미터 + `room_type_cd`, `pack_cd=""`)가 예약 요약을 준다:
 
-참고: 요금 플랜 응답에는 `data-room-adult-cnt`(4)·`data-room-child-cnt`(2)가 있다. 기준인원이 아니라
-최대 구성으로 보이고 방마다 1콜이라 인원도 붙이지 않는다(`occupancy`는 둘 다이거나 둘 다 아니다).
+```
+객실1 ￦348,000  ·  2026. 11. 13(금) ￦169,000  ·  2026. 11. 14(토) ￦179,000
+객실요금 합계 ￦348,000(#total_amt)  ·  할인액 ￦0(#total_sale_amt)
+```
+
+- `pack_cd=""` = 패키지 없는 기본 분양회원 요금. 요금 플랜 콜을 먼저 부르지 않아도 답한다(경주 10실 실측 —
+  서버 상태 없음). 사이트가 그 방·그 숙박에 견적한 값이라 종류는 **`member`**.
+- `parse.ts`의 `parseSummaryTotal`은 숫자 하나를 믿지 않는다: 날짜별 줄이 요청한 밤과 같은 날짜들이고,
+  그 합이 합계와 같고, 할인액이 0일 때만 값이다(할인이 있으면 합계가 할인 전/후인지 이 화면만으로 모른다).
+- **최신화 전용**(`withPrices && branches.length === 1`, 리솜·소노와 같은 게이트). 방마다 1콜 ~0.75초이고 회원
+  세션이라 순차만 된다 — 지점 하나 ~10실은 ~11초(경주 12실 11.3초)지만 정기 수집의 한 윈도우(~83실)는 ~60초다.
+  그래서 요금은 최신화를 누른 지점에만 붙고 다음 정기 수집이 지운다(`price` COALESCE 금지 규약).
+- 요금 실패는 그 행의 빈칸이다. 3xx(세션 상실)도 `price.ts`는 던지지 않고 멈춘다 — 재고는 이미 받았다.
+
+## 인원 — 객실 정보 팝업 (2026-10-18)
+
+`POST /reservation/popup_room_info {bran_cd, room_type_cd}` — 사이트의 "객실 정보" 팝업. **무인증**이다.
+`<span class="desc_title">인원</span><span>기준 4명 (최대 성인6/어린이0)</span>`.
+
+- 10지점 83유형 census에서 **전부** 파싱됐다. 모르는 코드에는 빈 틀(`기준 명 (최대 성인)`)이 온다 → null.
+- **최대 = 성인 최대 + 어린이 최대.** 설악비치에 `기준 3명 (최대 성인2/어린이3)`이 있어 성인만 쓰면 최대 < 기준이다.
+- **쿠키 없는 `fetch`로 보낸다**(`occupancy.ts`). `page.request`로 보내면 회원 세션 잠금에 줄을 선다. 쿠키 없는
+  콜은 병렬이 실제로 빨라지고(10개 0.9초), 지점 루프는 기다리지 않고 다음 지점으로 넘어간 뒤 윈도우 끝에서 모아 기다린다 —
+  지점마다 기다리게 했더니 캐시가 빈 첫 윈도우가 느려져 패스당 윈도우가 6 → 3이 됐다(겹친 뒤 5).
+- 캐시는 모듈 수준 + 6시간 TTL(값이 브라우저와 무관해 페이지에 묶을 이유가 없다). 네트워크 실패는 캐시하지 않는다.
+- 정원이라 게이트 없음 — 정기 수집·최신화 모두에서 붙는다. 참고로 요금 플랜의 `data-room-adult-cnt`는 성인 최대와 같다.
 
 ## 월 마감일
 
@@ -113,4 +136,6 @@ npx tsx scripts/debug-kensington.ts mrooms 1 RKT01 2026-11-11 2      # 회원 �
 ROOM=21OV npx tsx scripts/debug-kensington.ts mrooms 1 RKT01 2026-11-11 2   # 그 방의 요금 플랜
 npx tsx scripts/debug-kensington.ts member RKT01 2026-11-11 1        # 일반 경로 익명↔세션 대조
 npx tsx scripts/debug-kensington.ts mstock 1 RKT01 202611            # 회원 월 마감일
+npx tsx scripts/debug-kensington.ts occ RKT02 2026-11-20             # 방마다 인원(크롤러 파서)
+npx tsx scripts/debug-kensington.ts price 1 RKT01 2026-11-13 2       # 방마다 요약 총액 + 날짜별
 ```

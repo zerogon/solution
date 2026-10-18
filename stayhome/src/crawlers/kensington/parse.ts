@@ -1,3 +1,4 @@
+import { occupancyOf } from "../_shared/occupancy";
 import type { InventoryRow } from "../types";
 import { KENSINGTON, type KensingtonBranch } from "./config";
 
@@ -32,6 +33,12 @@ export function parseRoomFragment(html: string): RoomEntry[] {
   return out;
 }
 
+/** 재고 행 + 그 방의 사이트 코드. 인원·요금은 코드로 묻는다(`occupancy.ts`·`price.ts`). */
+export interface KensingtonRow {
+  code: string;
+  row: InventoryRow;
+}
+
 /**
  * 객실 목록 → 재고 행.
  *
@@ -39,26 +46,81 @@ export function parseRoomFragment(html: string): RoomEntry[] {
  * (설악비치 11/1: 1박 9개 → 2박 8개). 빠진 방은 `run.ts`의 `removeVanishedRows`가 지운다.
  * `closingSoon`은 근거가 없어 항상 false.
  *
- * 요금은 붙이지 않는다 — 목록의 가격은 1박 "~최저가"이고 `price`의 계약은 숙박 총액이다
- * (`docs/crawlers/kensington.md`의 "요금"). 같은 이름이 두 번 나오면 첫 것만 쓴다
- * (upsert 키가 객실명이라 어차피 하나로 뭉개진다).
+ * 목록의 가격(`data-kfx-price`)은 쓰지 않는다 — 1박 "~최저가"이고 `price`의 계약은 숙박
+ * 총액이다. 총액은 `quick_set_summary`에 있고 `price.ts`가 최신화에서만 붙인다.
+ * 같은 이름이 두 번 나오면 첫 것만 쓴다(upsert 키가 객실명이라 어차피 하나로 뭉개진다).
  */
-export function buildRows(rooms: RoomEntry[], branch: KensingtonBranch): InventoryRow[] {
+export function buildRows(rooms: RoomEntry[], branch: KensingtonBranch): KensingtonRow[] {
   const seen = new Set<string>();
-  const rows: InventoryRow[] = [];
+  const rows: KensingtonRow[] = [];
   for (const room of rooms) {
     if (seen.has(room.name)) continue;
     seen.add(room.name);
     rows.push({
-      branchName: branch.value,
-      roomType: room.name,
-      region: branch.region,
-      available: true,
-      closingSoon: false,
-      detailUrl: KENSINGTON.bookingUrl,
+      code: room.code,
+      row: {
+        branchName: branch.value,
+        roomType: room.name,
+        region: branch.region,
+        available: true,
+        closingSoon: false,
+        detailUrl: KENSINGTON.bookingUrl,
+      },
     });
   }
   return rows;
+}
+
+/**
+ * `popup_room_info`(객실 정보 팝업) → 기준·최대 인원.
+ *
+ * 형식은 `<span class="desc_title">인원</span><span>기준 4명 (최대 성인6/어린이0)</span>`.
+ * **최대 = 성인 최대 + 어린이 최대**다 — 설악비치에 `기준 3명 (최대 성인2/어린이3)`인 방이
+ * 있어 성인만 쓰면 최대가 기준보다 작아진다(2026-10-18, 83개 유형 census).
+ * 모르는 코드에는 사이트가 빈 틀(`기준 명 (최대 성인)`)을 주고, 그건 null이다.
+ */
+export function parseOccupancy(html: string): InventoryRow["occupancy"] | null {
+  const cell = html.match(/desc_title">\s*인원\s*<\/span>\s*<span>([^<]*)</)?.[1];
+  const m = cell?.trim().match(/^기준\s*(\d+)\s*명\s*\(최대\s*성인\s*(\d+)\s*\/\s*어린이\s*(\d+)\s*\)$/);
+  if (!m) return null;
+  return occupancyOf(m[1], Number(m[2]) + Number(m[3]));
+}
+
+/**
+ * `quick_set_summary`(예약 요약) → 숙박 총액. 판정할 수 없으면 null.
+ *
+ * 요약은 `객실요금 합계`(`#total_amt`)와 그 아래 날짜별 요금(`2026. 11. 13(금)  ￦ 169,000`)을
+ * 준다. 숫자 하나만 믿지 않고 **서로 맞을 때만** 쓴다 — 틀린 요금은 빈칸보다 나쁘다:
+ * - 날짜별 줄이 요청한 밤과 정확히 같은 날짜들이고,
+ * - 그 합이 `객실요금 합계`와 같고,
+ * - `할인액`이 0이다(0이 아니면 합계가 할인 전인지 후인지 이 화면만으로는 모른다).
+ */
+export function parseSummaryTotal(html: string, nights: string[]): number | null {
+  const total = amount(html.match(/id="total_amt">([^<]*)</)?.[1]);
+  const discount = amount(html.match(/id="total_sale_amt">([^<]*)</)?.[1]);
+  if (total == null || discount !== 0) return null;
+
+  const lines = [
+    ...html.matchAll(
+      /<span class="tit">\s*(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\([^)]*\)\s*<\/span>\s*<span class="desc"[^>]*>[^<]*<span class="num">([^<]*)<\/span>/g,
+    ),
+  ];
+  if (lines.length !== nights.length) return null;
+  let sum = 0;
+  for (const [i, m] of lines.entries()) {
+    const date = `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`;
+    const value = amount(m[4]);
+    if (date !== nights[i] || value == null) return null;
+    sum += value;
+  }
+  return sum === total && total > 0 ? total : null;
+}
+
+function amount(s: string | undefined): number | null {
+  if (s == null) return null;
+  const digits = s.replace(/[,\s]/g, "");
+  if (!/^\d+$/.test(digits)) return null;
+  return Number(digits);
 }
 
 function decodeEntities(s: string): string {
