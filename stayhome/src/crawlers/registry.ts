@@ -18,6 +18,7 @@ const LOADERS: Partial<Record<ResortSlug, LoaderFn>> = {
   [ResortSlug.HANWHA]: async () => (await import("./hanwha")).hanwhaCrawler,
   [ResortSlug.OAKVALLEY]: async () => (await import("./oakvalley")).oakvalleyCrawler,
   [ResortSlug.SONO]: async () => (await import("./sono")).sonoCrawler,
+  [ResortSlug.KENSINGTON]: async () => (await import("./kensington")).kensingtonCrawler,
 };
 
 export async function loadCrawler(slug: ResortSlug): Promise<CrawlerModule> {

@@ -77,6 +77,17 @@ const RESORTS: Array<{
     active: false,
     memo: "구 대명리조트 (소노로 리브랜딩). 회원(제휴) 예약 경로 — 비로그인 조회 불가",
   },
+  {
+    slug: ResortSlug.KENSINGTON,
+    name: "켄싱턴리조트",
+    region: "전국",
+    baseUrl: "https://www.kensington.co.kr",
+    // 무기명(법인) 회원 로그인. 일반 회원 로그인(/member/login_int)이 아니다.
+    // Nothing reads this column at runtime (kensington/config.ts is authoritative).
+    loginUrl: "https://www.kensington.co.kr/member/login_corp/",
+    active: false,
+    memo: "무기명(법인) 회원 로그인 → 분양회원 예약 경로. 회원번호는 크롤러가 페이지에서 읽는다",
+  },
 ];
 
 async function main() {

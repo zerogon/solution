@@ -15,7 +15,7 @@ import type { CrawlerContext } from "../src/crawlers/types";
 /**
  * Login-only smoke test for every registered resort.
  *
- *   npx tsx scripts/login-check.ts                 # all five, sequentially
+ *   npx tsx scripts/login-check.ts                 # all six, sequentially
  *   npx tsx scripts/login-check.ts HANWHA SONO     # just these
  *   npx tsx scripts/login-check.ts --save          # keep successful sessions
  *
@@ -44,6 +44,7 @@ const ALL: ResortSlug[] = [
   ResortSlug.RESOM,
   ResortSlug.OAKVALLEY,
   ResortSlug.HANWHA,
+  ResortSlug.KENSINGTON,
 ];
 
 interface Outcome {

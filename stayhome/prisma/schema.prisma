@@ -26,6 +26,7 @@ enum ResortSlug {
   HANWHA
   OAKVALLEY
   SONO
+  KENSINGTON
 }
 
 enum AuditAction {
