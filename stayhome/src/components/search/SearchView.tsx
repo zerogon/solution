@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/empty-state";
 import { DateRangeField } from "./DateRangeField";
 import { NightsStepper } from "./NightsStepper";
 import { PlaceFilter, type PlaceCounts } from "./PlaceFilter";
-import { AvailabilitySummary } from "./AvailabilitySummary";
+import { AvailabilitySummary, SearchConditionLine } from "./AvailabilitySummary";
 import { BranchResultSection } from "./BranchResultSection";
 import { ResultSkeleton } from "./ResultSkeleton";
 import {
@@ -444,23 +444,25 @@ function Results({
       <AvailabilitySummary
         rows={rows}
         now={now}
-        committed={committed}
         place={place}
         catalog={catalog}
       />
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-0.5">
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-          <Checkbox
-            checked={availableOnly}
-            onCheckedChange={(checked) => onAvailableOnlyChange(checked)}
-          />
-          예약 가능만 보기
-        </label>
-        {availableOnly && hiddenCount > 0 && (
-          <span className="font-mono text-xs tabular-nums text-muted-foreground">
-            마감·확인 필요 {hiddenCount}건 숨김
-          </span>
-        )}
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-0.5">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+            <Checkbox
+              checked={availableOnly}
+              onCheckedChange={(checked) => onAvailableOnlyChange(checked)}
+            />
+            예약 가능만 보기
+          </label>
+          {availableOnly && hiddenCount > 0 && (
+            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+              마감·확인 필요 {hiddenCount}건 숨김
+            </span>
+          )}
+        </div>
+        <SearchConditionLine committed={committed} place={place} catalog={catalog} />
       </div>
       {groups.length === 0 && (
         <Card>
