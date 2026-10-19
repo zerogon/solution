@@ -5,8 +5,7 @@ import { AppShell } from "@/components/app-shell/AppShell";
 import { PwaInstallPrompt } from "@/components/pwa/PwaInstallPrompt";
 
 /**
- * 앱 셸. `(app)`은 URL에 나타나지 않는 라우트 그룹이라 `/dashboard`, `/leaves/*`,
- * `/calendar`, `/settings` 경로는 그대로다.
+ * 앱 셸. `(app)`은 URL에 나타나지 않는 라우트 그룹이라 `/calendar`, `/settings` 경로는 그대로다.
  *
  * `PwaInstallPrompt`는 루트 레이아웃에 두지 않는다. 설치 시트는 Base UI 모달이라
  * 열리는 순간 `markOthers()`가 바깥 형제 요소에 `aria-hidden`을 DOM에 직접 찍는데,

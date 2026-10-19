@@ -41,9 +41,9 @@
   ],
   "shortcuts": [
     {
-      "name": "연차 기록 추가",
-      "short_name": "기록 추가",
-      "url": "/leaves/new",
+      "name": "캘린더",
+      "short_name": "캘린더",
+      "url": "/calendar",
       "icons": [
         {
           "src": "/icons/icon-192.png",
@@ -52,9 +52,9 @@
       ]
     },
     {
-      "name": "캘린더",
-      "short_name": "캘린더",
-      "url": "/calendar",
+      "name": "설정",
+      "short_name": "설정",
+      "url": "/settings",
       "icons": [
         {
           "src": "/icons/icon-192.png",

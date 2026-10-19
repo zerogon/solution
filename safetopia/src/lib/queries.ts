@@ -68,20 +68,6 @@ export async function getYearSummaries(ensureYear: number): Promise<YearSummary[
     });
 }
 
-export function getEntries(year: number) {
-  return prisma.leaveEntry.findMany({
-    where: { startDate: yearRange(year) },
-    orderBy: [{ startDate: "asc" }, { createdAt: "asc" }],
-  });
-}
-
-/** 월별 사용 일수 12칸(인덱스 0 = 1월). 기록은 시작일이 속한 달에 통째로 잡는다. */
-export function monthlyUsage(entries: { startDate: Date; days: number }[]): number[] {
-  const months = Array.from({ length: 12 }, () => 0);
-  for (const e of entries) months[e.startDate.getUTCMonth()] += e.days;
-  return months;
-}
-
 export async function getOwner() {
   const owner = await prisma.owner.findUnique({ where: { id: "owner" } });
   if (!owner) throw new Error("Owner 행이 없습니다. `npm run owner:set-password`로 먼저 만드세요.");

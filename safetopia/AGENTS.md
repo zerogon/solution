@@ -29,7 +29,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 날짜 음영은 `isShadedDay`(`src/lib/calendar.ts`) 하나 — 주말+쉬는 요일+공휴일. **표시 전용이라 `leave-days.ts`의 `dayOff`(차감 판정)와 일부러 다르다.** 합치지 말 것.
 - 월 그리드 칸 음영은 `SHADED_DAY_CELL`/`OUT_OF_MONTH_CELL`(불투명 — `gap-px bg-border` 위라 반투명이면 격자선보다 어두워진다).
 - 월 캘린더는 `MonthGrid`(`src/components/month-grid.tsx`, 서버 컴포넌트). 셀 본문은 `renderDay` 슬롯.
-- 셸 지오메트리 `--app-sidebar-w`(16rem) + `--app-content-w`(88rem) = 1664px 고정 쌍. 내비는 `nav-items.ts`의 `NAV_ITEMS` 한 배열(홈·연차 기록·캘린더·설정).
+- 셸 지오메트리 `--app-sidebar-w`(16rem) + `--app-content-w`(88rem) = 1664px 고정 쌍. 내비는 `nav-items.ts`의 `NAV_ITEMS` 한 배열.
+
+## 화면 — 캘린더와 설정 둘뿐 (2026-10-19 최소화, 사용자 결정)
+- `/calendar`가 본 화면이다(`/`·로그인 후 여기로). 위에 **그 해 잔여 한 줄**, 아래 월 달력. 홈·연차 기록 목록·월별 합계 화면은 일부러 없앴다 — 되살리지 말 것.
+- 기록 추가·수정·삭제는 **창(`EntryDialog`)**에서. 열림 상태는 URL이 갖는다: 빈 날짜 칸 → `?m=YYYY-MM&add=날짜`, 기록 칩 → `?entry=id`.
+  그래서 `MonthGrid`는 서버 컴포넌트 그대로이고, 칸 본문은 평범한 `<Link>`다. 닫기 = 파라미터를 뺀 주소로 `router.replace`.
+  폼 데이터(공휴일·연도별 잔여·수정 대상)는 창이 열릴 때만 만든다. Base UI Dialog는 포털이라 SSR HTML에는 안 나온다(브라우저로 확인).
+- `/settings`: 연도별 부여 표(연도 누르면 그 해 1월 달력) · 이름·쉬는 요일 · 비밀번호.
 
 ## 날짜 규약 (어기면 하루 밀린다)
 - 경계는 `"YYYY-MM-DD"` 문자열. DB는 `@db.Date`. Date 객체는 **UTC 자정**(`parseDate`). 읽을 땐 UTC getter만.

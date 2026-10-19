@@ -21,7 +21,7 @@ CSRF=$(curl -s -c $JAR $B/api/auth/csrf | python3 -c "import sys,json;print(json
 curl -s -o /dev/null -w "%{http_code} %{redirect_url}\n" -b $JAR -c $JAR -X POST $B/api/auth/callback/credentials \
   -d "csrfToken=$CSRF&password=1234"
 # 성공: 302 → / , 실패: 302 → /login?error=CredentialsSignin
-curl -s -b $JAR $B/leaves   # SSR HTML
+curl -s -b $JAR "$B/calendar?m=2026-05"   # SSR HTML
 ```
 
 기대 동작: 비로그인 → `/login?from=…`, `/offline`·`/manifest.json`은 비로그인 200.
@@ -31,19 +31,18 @@ curl -s -b $JAR $B/leaves   # SSR HTML
 
 ```bash
 npx -y playwright screenshot --channel=chrome --load-storage=storage.json \
-  --viewport-size=1280,1200 --wait-for-timeout=2500 http://localhost:3000/leaves desktop.png
+  --viewport-size=1280,1200 --wait-for-timeout=2500 "http://localhost:3000/calendar?m=2026-05&add=2026-05-11" desktop.png
 npx -y playwright screenshot --channel=chrome --load-storage=storage.json \
-  --viewport-size=390,844 --wait-for-timeout=2500 http://localhost:3000/dashboard mobile.png
+  --viewport-size=390,844 --wait-for-timeout=2500 http://localhost:3000/calendar mobile.png
 ```
 
 ## 확인할 만한 화면 (시드 기준)
-- `/dashboard`: 2026 잔여 6.5 / 사용 10.5 / 부여 15 / 이월 2, 다가오는 휴가
-- `/leaves?year=2026`: 월별 사용(5월 2 — 어린이날 낀 5/4~5/6), 기록 6건 · 합계 10.5일
-- `/leaves?year=2025`: 직접 입력 기록 3건에 `*`
-- `/leaves/new`: 금~화 범위 → 토·일 제외 3일, 해 넘김 → `year_boundary` 문구, "일수 직접 입력" 체크 시 입력칸
-- `/calendar?m=2026-05`: 5/4·5/6 연차 칩, 5/5 공휴일, 칩 클릭 → 수정 화면
-- `/settings`: 연도별 부여 표(추가·수정·삭제), 쉬는 요일 토글, 비밀번호 변경
-- 모바일 390px: 하단 탭 4개, 카드 목록
+- `/` → `/calendar` 307, `/dashboard`·`/leaves`는 404(화면 최소화로 제거)
+- `/calendar?m=2026-05`: 요약 "2026년 잔여 6.5일 · 사용 10.5 · 부여 15 + 이월 2", 5/4·5/6 연차 칩, 5/5 어린이날
+- `&add=2026-05-11`: 기록 창(금~화 범위 → 토·일 제외 3일, 해 넘김 → `year_boundary` 문구, "일수 직접 입력")
+- `&entry=<id>`: 수정 창 + "이 기록 지우기". **창은 Base UI 포털이라 SSR HTML에 없다** — 스크린샷으로 본다
+- `/settings`: 연도별 부여 표(추가·수정·삭제, 연도 → 그 해 1월 달력), 쉬는 요일 토글, 비밀번호 변경
+- 모바일 390px: 하단 탭 2개
 
 ## 주의
 - SSR HTML에서 텍스트 카운트 시 RSC flight payload 때문에 **약 2배로 중복** 집계된다

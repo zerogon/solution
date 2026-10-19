@@ -51,7 +51,7 @@ export default async function SettingsPage() {
                 return (
                   <TableRow key={s.year}>
                     <TableCell className="pl-4 font-mono font-medium tabular-nums">
-                      <Link href={`/leaves?year=${s.year}`} className="hover:underline">
+                      <Link href={`/calendar?m=${s.year}-01`} className="hover:underline">
                         {s.year}
                       </Link>
                     </TableCell>

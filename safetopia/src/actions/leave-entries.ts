@@ -12,7 +12,7 @@ const LOGIN_REQUIRED = { ok: false, message: "로그인이 필요합니다." } a
 
 /** 기록이 바뀌면 영향받는 화면 전부. */
 function revalidate() {
-  for (const p of ["/dashboard", "/leaves", "/calendar", "/settings"]) revalidatePath(p);
+  for (const p of ["/calendar", "/settings"]) revalidatePath(p);
 }
 
 function parseEntry(input: unknown): { ok: true; data: EntryInput } | { ok: false; message: string } {

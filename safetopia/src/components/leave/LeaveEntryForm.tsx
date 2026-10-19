@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { createLeaveEntry, updateLeaveEntry } from "@/actions/leave-entries";
@@ -39,6 +38,7 @@ export function LeaveEntryForm({
   remainingByYear,
   defaultDate,
   initial,
+  onDone,
 }: {
   closedWeekdays: number[];
   holidays: { covered: number[]; years: Record<string, HolidayMap> };
@@ -46,8 +46,9 @@ export function LeaveEntryForm({
   remainingByYear: Record<number, number>;
   defaultDate: string;
   initial?: EntryFormInitial;
+  /** 저장 성공 후. 창을 닫고 화면을 새로 읽는 것은 호출자 몫이다. */
+  onDone: () => void;
 }) {
-  const router = useRouter();
   const [type, setType] = useState<LeaveType>(initial?.type ?? LeaveType.FULL_DAY);
   const [start, setStart] = useState(initial?.startIso ?? defaultDate);
   const [end, setEnd] = useState(initial?.endIso ?? defaultDate);
@@ -88,8 +89,7 @@ export function LeaveEntryForm({
       const res = initial ? await updateLeaveEntry({ id: initial.id, ...payload }) : await createLeaveEntry(payload);
       if (res.ok) {
         toast.success(initial ? "기록을 고쳤습니다." : "기록했습니다.");
-        router.push(`/leaves?year=${year}`);
-        router.refresh();
+        onDone();
       } else {
         toast.error(res.message);
       }
