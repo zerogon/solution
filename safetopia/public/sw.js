@@ -1,5 +1,5 @@
 /**
- * safetopia 서비스워커.
+ * Sulki Holiday 서비스워커.
  *
  * 빌드 플러그인 없이 직접 작성한다 — Next 16은 Turbopack을 쓰는데 Serwist/next-pwa는
  * webpack 설정을 요구해서 충돌한다.
@@ -15,7 +15,7 @@
  *
  * ## 인증된 HTML은 캐시하지 않는다 (의도적 판단)
  *
- * 앱 셸을 precache하면 완전 오프라인에서도 화면이 뜨지만, 직원별 연차·사유 같은
+ * 앱 셸을 precache하면 완전 오프라인에서도 화면이 뜨지만, 연차 기록·메모 같은
  * 개인정보가 담긴 로그인 상태의 HTML이 디스크 캐시에 남는 것을 피한다. 대신
  * `/api/holidays`(공휴일, 개인정보 없음)만 SWR로 캐시하고, 완전 오프라인에서는
  * `/offline` 안내 페이지가 뜬다.
@@ -25,10 +25,13 @@
  */
 
 // 캐시된 API 응답 형태가 바뀌면 올린다. 올리면 activate 핸들러가 이전 접두사 캐시를 지운다.
-const CACHE_VERSION = "v2";
-const STATIC_CACHE = `safetopia-static-${CACHE_VERSION}`;
-const DATA_CACHE = `safetopia-data-${CACHE_VERSION}`;
-const OFFLINE_CACHE = `safetopia-offline-${CACHE_VERSION}`;
+const CACHE_VERSION = "v4";
+const STATIC_CACHE = `sulki-holiday-static-${CACHE_VERSION}`;
+const DATA_CACHE = `sulki-holiday-data-${CACHE_VERSION}`;
+const OFFLINE_CACHE = `sulki-holiday-offline-${CACHE_VERSION}`;
+
+/** 이 앱이 만든 캐시의 접두사. `safetopia-`는 이름을 바꾸기 전(2026-10)의 캐시다 — 같이 지운다. */
+const OWN_PREFIXES = ["sulki-holiday-", "safetopia-"];
 
 const OFFLINE_URL = "/offline";
 
@@ -65,7 +68,7 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((k) => k.startsWith("safetopia-") && !CURRENT_CACHES.includes(k))
+            .filter((k) => OWN_PREFIXES.some((p) => k.startsWith(p)) && !CURRENT_CACHES.includes(k))
             .map((k) => caches.delete(k)),
         ),
       )
@@ -202,10 +205,10 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "Safetopia", body: event.data.text() };
+    payload = { title: "Sulki Holiday", body: event.data.text() };
   }
 
-  const title = payload.title || "Safetopia";
+  const title = payload.title || "Sulki Holiday";
   const options = {
     body: payload.body,
     icon: payload.icon || "/icons/icon-192.png",

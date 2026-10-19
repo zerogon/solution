@@ -1,4 +1,4 @@
-/** 도메인 규칙 위반(잔여 부족, 중복 신청, 상태 전이 불가 등). 메시지는 그대로 사용자에게 보인다. */
+/** 도메인 규칙 위반(중복 날짜, 잘못된 기간 등). 메시지는 그대로 사용자에게 보인다. */
 export class LeaveError extends Error {
   constructor(message: string) {
     super(message);
@@ -12,7 +12,7 @@ export type ActionResult<T = void> =
 
 const PRISMA_UNIQUE_VIOLATION = "P2002";
 
-/** Prisma 고유 제약 위반(P2002)인지 판별. `leave_request_days(user_id, date)` 충돌 판정에 사용. */
+/** Prisma 고유 제약 위반(P2002)인지 판별. `leave_entry_days.date` 충돌 판정에 사용. */
 export function isPrismaUniqueViolation(err: unknown): boolean {
   return (
     typeof err === "object" &&
@@ -26,7 +26,7 @@ export function isPrismaUniqueViolation(err: unknown): boolean {
 export function toActionError(err: unknown, tag: string, fallback = "처리 중 오류가 발생했습니다."): { ok: false; message: string } {
   if (err instanceof LeaveError) return { ok: false, message: err.message };
   if (isPrismaUniqueViolation(err)) {
-    return { ok: false, message: "이미 신청된 날짜가 포함되어 있습니다." };
+    return { ok: false, message: "이미 기록된 날짜가 포함되어 있습니다." };
   }
   console.error(`[${tag}]`, err);
   return { ok: false, message: fallback };

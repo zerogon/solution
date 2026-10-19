@@ -1,4 +1,4 @@
-// safetopia — 다지점 카페 연차 관리 데이터 모델.
+// Sulki Holiday — 한 사람의 연차 장부.
 // datasource url은 prisma.config.ts가 공급한다(.env.local > .env, scripts/load-env.ts).
 
 generator client {
@@ -10,250 +10,67 @@ datasource db {
   provider = "postgresql"
 }
 
-// ───────────────────────── Enums ─────────────────────────
-
-enum Role {
-  ADMIN
-  EMPLOYEE
-}
-
-enum EmployeeStatus {
-  ACTIVE
-  INACTIVE
-  RETIRED
-}
-
-enum BranchStatus {
-  ACTIVE
-  INACTIVE
-}
-
 enum LeaveType {
   FULL_DAY
   AM_HALF
   PM_HALF
 }
 
-/// 승인 절차 없음(2026-09-05). 신청 즉시 CONFIRMED로 확정·차감되고, 취소만 남는다.
-enum LeaveStatus {
-  CONFIRMED
-  CANCELLED
+/// 앱 주인 1명. 행은 항상 하나뿐이다(id = "owner").
+model Owner {
+  id             String   @id @default("owner")
+  name           String
+  password       String
+  /// 쉬는 요일. 0=일 … 6=토 (JS getUTCDay 규약). 연차 일수 계산에서 제외된다.
+  closedWeekdays Int[]    @default([0, 6]) @map("closed_weekdays")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("owner")
 }
 
-enum AuditAction {
-  LOGIN
-  CREATE_EMPLOYEE
-  UPDATE_EMPLOYEE
-  CHANGE_EMPLOYEE_STATUS
-  DELETE_EMPLOYEE
-  RESET_PASSWORD
-  /// 2026-09-10 지점 이동 기능 제거로 더 이상 쓰지 않는다. 과거 로그 행이 참조해 값만 남긴다.
-  CHANGE_BRANCH
-  CREATE_BRANCH
-  UPDATE_BRANCH
-  CHANGE_BRANCH_STATUS
-  GRANT_LEAVE
-  ADJUST_LEAVE
-  CARRY_OVER_LEAVE
-  CANCEL_REQUEST_ADMIN
-}
-
-enum AuditTargetType {
-  USER
-  BRANCH
-  LEAVE_REQUEST
-  LEAVE_BALANCE
-}
-
-/// Phase 2 — 인앱 알림.
-enum NotificationType {
-  REQUEST_CREATED
-  REQUEST_CANCELLED
-  LEAVE_ADJUSTED
-}
-
-// ───────────────────────── Core ─────────────────────────
-
-model User {
-  id                 String         @id @default(uuid())
-  loginId            String         @unique @map("login_id")
-  password           String
-  mustChangePassword Boolean        @default(true) @map("must_change_password")
-  name               String
-  role               Role           @default(EMPLOYEE)
-  status             EmployeeStatus @default(ACTIVE)
-  /// ADMIN은 null 허용. EMPLOYEE는 zod에서 필수.
-  branchId           String?        @map("branch_id")
-  hireDate           DateTime?      @map("hire_date") @db.Date
-  createdAt          DateTime       @default(now()) @map("created_at")
-  updatedAt          DateTime       @updatedAt @map("updated_at")
-
-  branch            Branch?           @relation(fields: [branchId], references: [id])
-  leaveBalances     LeaveBalance[]
-  leaveRequests     LeaveRequest[]    @relation("RequestOwner")
-  leaveDays         LeaveRequestDay[]
-  cancelledRequests LeaveRequest[]    @relation("RequestCanceller")
-  adjustments       LeaveAdjustment[] @relation("AdjustmentTarget")
-  adjustmentsMade   LeaveAdjustment[] @relation("AdjustmentActor")
-  auditLogs         AuditLog[]
-  notifications     Notification[]
-
-  @@index([branchId, status])
-  @@map("users")
-}
-
-model Branch {
-  id             String       @id @default(uuid())
-  name           String       @unique
-  address        String?
-  phone          String?
-  status         BranchStatus @default(ACTIVE)
-  /// 정기 휴무 요일. 0=일 … 6=토 (JS getUTCDay 규약). 예: [1] = 매주 월요일 휴무.
-  closedWeekdays Int[]        @default([]) @map("closed_weekdays")
-  /// Phase 2 — 최소 근무 인원 경고 임계값.
-  minStaff       Int?         @map("min_staff")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
-
-  users User[]
-
-  @@map("branches")
-}
-
-/// 연차 잔액 1행 = **입사일 기준 회차** 1개. 캘린더 연도가 아니다(2026-09-10 전환).
-model LeaveBalance {
+/// 연도별 부여(1/1~12/31). 엑셀의 "올해 연차 n일" 칸.
+model LeaveYear {
   id              String   @id @default(uuid())
-  userId          String   @map("user_id")
-  /// 1-based 회차(1 = 입사 첫 해). 입사일을 고쳐도 변하지 않는 **불변 신원**이라 유니크 키로 쓴다.
-  /// 음수는 전환 이전의 캘린더 연도 행이다(-2026 = 옛 2026년 행). 회차 계산에서 제외된다.
-  periodIndex     Int      @map("period_index")
-  /// 회차 경계. periodIndex와 입사일에서 파생되며 입사일 수정 시 재계산된다(realignBalances).
-  periodStart     DateTime @map("period_start") @db.Date
-  periodEnd       DateTime @map("period_end") @db.Date
-  /// **null = 자동 계산**(leave-accrual.ts)이 실효값. 값이 있으면 관리자 수동 부여(override).
-  /// 자동값을 저장하지 않는 이유: 1년 미만 회차는 매달 커져서 저장하는 순간 반드시 낡는다.
-  totalDays       Float?   @map("total_days")
+  year            Int      @unique
+  grantedDays     Float    @map("granted_days")
   carriedOverDays Float    @default(0) @map("carried_over_days")
-  adjustedDays    Float    @default(0) @map("adjusted_days")
-  /// 확정된 사용 누계. 신청 시 증가, 취소(본인/관리자) 시 감소 — 전부 leave-service.ts 트랜잭션 안에서.
-  usedDays        Float    @default(0) @map("used_days")
+  memo            String?
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  requests LeaveRequest[]
-
-  @@unique([userId, periodIndex])
-  @@map("leave_balances")
+  @@map("leave_years")
 }
 
-model LeaveRequest {
-  id             String      @id @default(uuid())
-  userId         String      @map("user_id")
-  type           LeaveType
-  startDate      DateTime    @map("start_date") @db.Date
-  endDate        DateTime    @map("end_date") @db.Date
-  /// 신청 시점 계산값(지점 휴무·공휴일 제외). 0.5 단위.
-  days           Float
-  /// 연차 사유 — 2026-09-04 UI에서 비활성(빈 문자열 저장). 컬럼은 마이그레이션 없이 유지.
-  reason         String
-  status         LeaveStatus @default(CONFIRMED)
-  /// 관리자 취소 사유(선택). 본인 취소는 null.
-  cancelReason   String?     @map("cancel_reason")
-  cancelledById  String?     @map("cancelled_by_id")
-  cancelledAt    DateTime?   @map("cancelled_at")
-  /// 이 신청이 차감한 회차. 취소는 **정확히 이 행**을 되돌린다 — 시작일에서 회차를 다시 유도하면
-  /// 입사일이 수정된 뒤 증가시킨 행과 감소시킬 행이 달라져 usedDays가 영구히 어긋난다.
-  leaveBalanceId String?     @map("leave_balance_id")
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+/// 연차 기록 1줄. 사용 일수는 저장된 행의 합으로 계산한다(누계 컬럼 없음).
+model LeaveEntry {
+  id         String    @id @default(uuid())
+  type       LeaveType
+  startDate  DateTime  @map("start_date") @db.Date
+  endDate    DateTime  @map("end_date") @db.Date
+  /// 차감 일수. 0.5 단위. 보통 자동 계산(쉬는 요일·공휴일 제외)이고 manualDays면 직접 입력값.
+  days       Float
+  manualDays Boolean   @default(false) @map("manual_days")
+  memo       String    @default("")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  user        User              @relation("RequestOwner", fields: [userId], references: [id], onDelete: Cascade)
-  cancelledBy User?             @relation("RequestCanceller", fields: [cancelledById], references: [id])
-  balance     LeaveBalance?     @relation(fields: [leaveBalanceId], references: [id], onDelete: SetNull)
-  dayRows     LeaveRequestDay[]
+  dayRows LeaveEntryDay[]
 
-  @@index([userId, status])
-  @@index([status, createdAt])
-  @@index([startDate, endDate])
-  @@index([leaveBalanceId])
-  @@map("leave_requests")
+  @@index([startDate])
+  @@map("leave_entries")
 }
 
-/// 신청이 실제로 차감하는 날짜 1개 = 행 1개.
-/// CONFIRMED 동안만 존재하며 CANCELLED 전이 시 같은 트랜잭션에서 삭제한다.
-/// 그래서 (user_id, date) 단순 유니크가 "같은 직원·같은 날짜 중복 신청"을 DB 층에서 막고,
-/// 캘린더와 지점 근무 인원 집계도 이 표에서 읽는다.
-model LeaveRequestDay {
-  id             String    @id @default(uuid())
-  leaveRequestId String    @map("leave_request_id")
-  userId         String    @map("user_id")
-  date           DateTime  @db.Date
-  /// 인원 집계 가중치(반차 0.5)용 비정규화.
-  type           LeaveType
-  createdAt      DateTime  @default(now()) @map("created_at")
+/// 기록이 덮는 날짜 1개 = 행 1개. `date` 유니크가 같은 날 중복 기록을 DB 층에서 막고,
+/// 캘린더가 이 표를 읽는다. 기록을 수정하면 같은 트랜잭션에서 다시 만든다.
+model LeaveEntryDay {
+  id      String    @id @default(uuid())
+  entryId String    @map("entry_id")
+  date    DateTime  @unique @db.Date
+  type    LeaveType
 
-  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  entry LeaveEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, date])
-  @@index([date])
-  @@map("leave_request_days")
-}
-
-model LeaveAdjustment {
-  id          String   @id @default(uuid())
-  userId      String   @map("user_id")
-  /// 조정이 적용된 회차(LeaveBalance.periodIndex와 같은 규약).
-  periodIndex Int      @map("period_index")
-  /// +1.0 / -0.5 처럼 부호 있는 0.5 단위.
-  amount      Float
-  reason      String
-  /// 관리자를 삭제해도 **남의 조정 이력**은 지우지 않는다 — 행위자만 비운다(AuditLog.actorName과 같은 취지).
-  createdById String?  @map("created_by_id")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  user      User  @relation("AdjustmentTarget", fields: [userId], references: [id], onDelete: Cascade)
-  createdBy User? @relation("AdjustmentActor", fields: [createdById], references: [id], onDelete: SetNull)
-
-  @@index([userId, periodIndex])
-  @@map("leave_adjustments")
-}
-
-model AuditLog {
-  id          String          @id @default(uuid())
-  actorId     String?         @map("actor_id")
-  /// 행위자 이름 스냅샷 — 개명·삭제 후에도 이력이 읽히도록.
-  actorName   String          @map("actor_name")
-  action      AuditAction
-  targetType  AuditTargetType @map("target_type")
-  targetId    String?         @map("target_id")
-  description String?
-  metadata    Json?
-  ip          String?
-  userAgent   String?         @map("user_agent")
-  createdAt   DateTime        @default(now()) @map("created_at")
-
-  actor User? @relation(fields: [actorId], references: [id])
-
-  @@index([actorId, createdAt])
-  @@index([targetType, targetId])
-  @@map("audit_logs")
-}
-
-/// Phase 2 골격 — 인앱 알림.
-model Notification {
-  id        String           @id @default(uuid())
-  userId    String           @map("user_id")
-  type      NotificationType
-  title     String
-  body      String?
-  href      String?
-  readAt    DateTime?        @map("read_at")
-  createdAt DateTime         @default(now()) @map("created_at")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId, readAt, createdAt])
-  @@map("notifications")
+  @@index([entryId])
+  @@map("leave_entry_days")
 }

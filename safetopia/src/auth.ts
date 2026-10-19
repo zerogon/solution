@@ -4,39 +4,27 @@ import bcrypt from "bcryptjs";
 import { authConfig } from "@/auth.config";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validators";
-import { EmployeeStatus } from "@/generated/prisma/enums";
 
+/** 사용자는 한 명뿐이라 아이디가 없다 — 비밀번호 하나로 `Owner` 행과 대조한다. */
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   providers: [
     Credentials({
       name: "credentials",
       credentials: {
-        loginId: { label: "아이디", type: "text" },
         password: { label: "비밀번호", type: "password" },
       },
       async authorize(credentials) {
-        const parsed = loginSchema.safeParse({
-          loginId: credentials?.loginId,
-          password: credentials?.password,
-        });
+        const parsed = loginSchema.safeParse({ password: credentials?.password });
         if (!parsed.success) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { loginId: parsed.data.loginId },
-        });
-        // 휴직(INACTIVE)·퇴사(RETIRED)는 로그인 자체를 막는다 (FR-001).
-        if (!user || user.status !== EmployeeStatus.ACTIVE) return null;
+        const owner = await prisma.owner.findUnique({ where: { id: "owner" } });
+        if (!owner) return null;
 
-        const passwordOk = await bcrypt.compare(parsed.data.password, user.password);
+        const passwordOk = await bcrypt.compare(parsed.data.password, owner.password);
         if (!passwordOk) return null;
 
-        return {
-          id: user.id,
-          name: user.name,
-          role: user.role,
-          mustChangePassword: user.mustChangePassword,
-        };
+        return { id: owner.id, name: owner.name };
       },
     }),
   ],

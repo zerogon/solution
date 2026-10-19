@@ -1,12 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useState, useTransition } from "react";
+import { Suspense, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, Lock, User } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
-import Image from "next/image";
 import { loginAction } from "@/actions/auth";
-import { LOCKUP_PX, LOCKUP_SRC } from "@/lib/brand-mark";
+import { AppMark } from "@/components/app-mark";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -20,13 +19,6 @@ function LoginForm() {
   const [pending, startTransition] = useTransition();
   const [rememberMe, setRememberMe] = useState(true);
 
-  // requireActiveUser()가 비활성 계정을 여기로 보낸다. 토큰은 살아 있으니 이유를 알려준다.
-  useEffect(() => {
-    if (params.get("error") === "inactive") {
-      toast.error("비활성화된 계정입니다. 관리자에게 문의하세요.");
-    }
-  }, [params]);
-
   function goAfterLogin() {
     const from = params.get("from") ?? "/";
     router.replace(from.startsWith("/") ? from : "/");
@@ -36,7 +28,6 @@ function LoginForm() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    fd.set("loginId", String(fd.get("loginId") ?? "").trim().toLowerCase());
     fd.set("rememberMe", rememberMe ? "true" : "false");
     startTransition(async () => {
       const res = await loginAction(undefined, fd);
@@ -49,22 +40,6 @@ function LoginForm() {
     <form onSubmit={handleSubmit} className="space-y-5">
       <div className="space-y-2">
         <div className="relative">
-          <User
-            aria-hidden
-            className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            id="loginId"
-            name="loginId"
-            placeholder="아이디"
-            autoComplete="username"
-            autoCapitalize="none"
-            aria-label="아이디"
-            required
-            className="h-11 pl-10 text-base"
-          />
-        </div>
-        <div className="relative">
           <Lock
             aria-hidden
             className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
@@ -76,13 +51,11 @@ function LoginForm() {
             placeholder="비밀번호"
             autoComplete="current-password"
             aria-label="비밀번호"
+            autoFocus
             required
             className="h-11 pl-10 text-base"
           />
         </div>
-        <p className="text-xs text-muted-foreground">
-          아이디와 초기 비밀번호는 관리자에게 받으세요.
-        </p>
       </div>
       <div className="flex items-center gap-2">
         <Checkbox
@@ -114,21 +87,12 @@ export default function LoginPage() {
       <Card className="w-full max-w-sm rounded-2xl shadow-sm">
         {/* CardHeader는 flex가 아니라 grid다 — `items-center`는 세로 정렬이라 로고가
             왼쪽에 붙는다. 가로 중앙은 `justify-items-center`로 잡는다. */}
-        <CardHeader className="justify-items-center px-6 pt-8 pb-2">
-          {/* 브랜드명은 로고 이미지가 보여 준다. 제목 시맨틱만 남긴다.
-              sr-only는 absolute라 그리드 트랙을 만들지 않는다. */}
-          <h1 className="sr-only">Safetopia</h1>
-          {/* 로그인은 워드마크까지 있는 전체 로고를 쓴다(셸 안에서는 엠블럼만).
-              `unoptimized`는 AppMark와 같은 이유 — 서비스워커가 `/icons/` 경로로 다룬다. */}
-          <Image
-            src={LOCKUP_SRC}
-            alt="ROASTING CAFÉ"
-            width={LOCKUP_PX}
-            height={LOCKUP_PX}
-            unoptimized
-            priority
-            className="w-40"
-          />
+        <CardHeader className="justify-items-center gap-3 px-6 pt-8 pb-2">
+          <AppMark className="size-16" />
+          <div className="text-center">
+            <h1 className="font-heading text-xl font-semibold tracking-tight">Sulki Holiday</h1>
+            <p className="text-sm text-muted-foreground">내 연차 관리</p>
+          </div>
         </CardHeader>
         <CardContent className="px-6 pt-4 pb-8">
           <Suspense fallback={<div className="h-40 animate-pulse rounded-md bg-muted" />}>

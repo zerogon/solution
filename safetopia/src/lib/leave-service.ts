@@ -1,205 +1,102 @@
 import type { PrismaClient } from "@/generated/prisma/client";
-import {
-  AuditAction,
-  AuditTargetType,
-  EmployeeStatus,
-  LeaveStatus,
-  type LeaveType,
-} from "@/generated/prisma/enums";
+import type { LeaveType } from "@/generated/prisma/enums";
 import { LeaveError } from "@/lib/errors";
 import { getHolidayOracle } from "@/lib/holidays-server";
-import { LEAVE_DAYS_ERROR_MESSAGE, computeLeaveDays } from "@/lib/leave-days";
-import { periodFor } from "@/lib/leave-accrual";
-import { summarize, withGranted } from "@/lib/leave-balance";
-import {
-  lockBalanceById,
-  lockPeriodBalance,
-  requireHireIso,
-  type TxClient,
-} from "@/lib/leave-period";
-import { writeAudit } from "@/lib/audit";
-import { formatDays } from "@/lib/labels";
-import { parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
+import { LEAVE_DAYS_ERROR_MESSAGE, computeLeaveDays, manualEntryDates } from "@/lib/leave-days";
+import { parseDate } from "@/lib/utils";
 
 /**
- * 연차 신청/취소의 상태 전이 — 전부 여기서, 전부 트랜잭션 안에서.
+ * 연차 기록 쓰기 — 추가·수정·삭제 전부 여기서, 전부 트랜잭션 안에서.
  *
- * 승인 절차는 없다(2026-09-05). 신청이 곧 확정(CONFIRMED)이고 같은 트랜잭션에서
- * `usedDays`를 더한다. 취소(본인/관리자)는 `usedDays`를 되돌린다.
+ * 한 사람이 쓰는 장부라 잔여 잠금도, 상태 전이도 없다. 지킬 것은 둘뿐이다:
+ * (1) 일수는 서버에서 다시 계산한다(클라이언트 미리보기를 믿지 않는다),
+ * (2) 같은 날짜가 두 기록에 들어가지 않는다 — `leave_entry_days.date` 유니크가 최종 방어선이고
+ *     여기 `findFirst`는 친절한 메시지용이다(P2002는 `toActionError`가 번역).
  *
- * 액션(`src/actions/leave-requests.ts`)과 동시성 검증 스크립트(`scripts/race-test.ts`)가
- * **같은 함수**를 부른다. 그래서 `db`를 인자로 받는다.
- *
- * ## 잔액의 단위
- * 잔액 행은 캘린더 연도가 아니라 **입사일 기준 회차**다(`leave-accrual.ts`). 행은 미리 만들지
- * 않고 `lockPeriodBalance`가 필요할 때 지연 생성한다.
- *
- * ## 동시성
- * 같은 직원의 동시 신청은 `leave_balances` 행 잠금이 직렬화한다 — 두 번째 트랜잭션은
- * 첫 번째가 커밋될 때까지 기다렸다가 갱신된 usedDays를 본다. 행이 아직 없는 상태에서
- * 동시에 들어와도 `ON CONFLICT DO UPDATE`가 유니크 인덱스 위에서 직렬화한다.
- * 그 잠금을 우회하는 어떤 경로(예: 다른 회차 balance)든 `leave_request_days(user_id, date)`
- * 유니크가 최후 방어선으로 막는다(P2002 → 액션이 메시지로 번역).
- *
- * ## 자식 행(LeaveRequestDay)
- * CONFIRMED 동안만 존재한다. CANCELLED로 가면 같은 트랜잭션에서 지운다 —
- * 그래야 취소한 날짜에 다시 신청할 수 있다. 부모 행은 이력으로 남는다.
+ * 잔여가 모자라도 막지 않는다. 지난 해를 옮겨 적을 때 부여보다 먼저 기록을 넣는 일이 흔하다.
  */
 
-type Actor = { id: string; name: string };
+type TxClient = Parameters<Parameters<PrismaClient["$transaction"]>[0]>[0];
 
-async function lockRequest(tx: TxClient, requestId: string) {
-  // 상태 전이 경쟁(본인 취소 vs 관리자 취소가 동시에)을 막기 위해 행을 잠근 뒤 읽는다.
-  await tx.$queryRaw`SELECT id FROM leave_requests WHERE id = ${requestId} FOR UPDATE`;
-  const req = await tx.leaveRequest.findUnique({
-    where: { id: requestId },
-    include: { user: { select: { id: true, name: true, branchId: true, hireDate: true } } },
-  });
-  if (!req) throw new LeaveError("신청을 찾을 수 없습니다.");
-  return req;
+export interface EntryInput {
+  type: LeaveType;
+  startIso: string;
+  endIso: string;
+  /** null = 자동 계산. 숫자면 그 값을 그대로 쓴다(0.5 단위, 검증은 zod). */
+  manualDays: number | null;
+  memo: string;
 }
 
-/** 확정 건을 취소 상태로 옮기고 차감분을 되돌린다. 호출자가 권한·조건 검사를 끝낸 뒤 부른다. */
-async function cancelConfirmed(
-  tx: TxClient,
-  req: Awaited<ReturnType<typeof lockRequest>>,
-  by: { id: string; reason: string | null },
-) {
-  // 신청이 실제로 차감한 행을 id로 되돌린다. 시작일에서 회차를 다시 유도하면 그 사이
-  // 입사일이 수정된 경우 다른 행을 깎게 된다. FK가 없는 것은 전환 이전 행뿐이다.
-  const balance = req.leaveBalanceId
-    ? await lockBalanceById(tx, req.leaveBalanceId)
-    : (await lockPeriodBalance(tx, req.user, toIsoDate(req.startDate), todayKstIso())).balance;
-  await tx.leaveBalance.update({
-    where: { id: balance.id },
-    data: { usedDays: { decrement: req.days } },
-  });
-  await tx.leaveRequestDay.deleteMany({ where: { leaveRequestId: req.id } });
-  return tx.leaveRequest.update({
-    where: { id: req.id },
-    data: {
-      status: LeaveStatus.CANCELLED,
-      cancelledById: by.id,
-      cancelledAt: new Date(),
-      cancelReason: by.reason,
-    },
-  });
-}
-
-// ───────────────────────── 신청(= 확정) ─────────────────────────
-
-export async function createLeaveRequest(
-  db: PrismaClient,
-  input: { userId: string; type: LeaveType; startIso: string; endIso: string; reason: string },
-) {
-  const user = await db.user.findUnique({
-    where: { id: input.userId },
-    include: { branch: { select: { closedWeekdays: true, status: true } } },
-  });
-  if (!user || user.status !== EmployeeStatus.ACTIVE) throw new LeaveError("재직 중인 직원만 신청할 수 있습니다.");
-  if (!user.branch) throw new LeaveError("소속 지점이 없어 신청할 수 없습니다. 관리자에게 문의하세요.");
-
-  // 회차는 입사일 없이 정의되지 않는다. 트랜잭션 밖에서 먼저 막아 준다.
-  const hireIso = requireHireIso(user);
-
+async function resolveDays(db: PrismaClient, input: EntryInput) {
+  const owner = await db.owner.findUnique({ where: { id: "owner" }, select: { closedWeekdays: true } });
+  const closedWeekdays = owner?.closedWeekdays ?? [0, 6];
   const { oracle } = await getHolidayOracle();
-  const calc = computeLeaveDays({
-    type: input.type,
-    startIso: input.startIso,
-    endIso: input.endIso,
-    closedWeekdays: user.branch.closedWeekdays,
-    oracle,
-    period: periodFor(hireIso, input.startIso),
+  const args = { type: input.type, startIso: input.startIso, endIso: input.endIso, closedWeekdays, oracle };
+
+  if (input.manualDays != null) {
+    const r = manualEntryDates(args);
+    if (!r.ok) throw new LeaveError(LEAVE_DAYS_ERROR_MESSAGE[r.reason]);
+    return { days: input.manualDays, dates: r.dates, manual: true };
+  }
+  const r = computeLeaveDays(args);
+  if (!r.ok) throw new LeaveError(LEAVE_DAYS_ERROR_MESSAGE[r.reason]);
+  return { days: r.days, dates: r.countedDates, manual: false };
+}
+
+async function assertNoClash(tx: TxClient, dates: string[], exceptEntryId?: string) {
+  const clash = await tx.leaveEntryDay.findFirst({
+    where: {
+      date: { in: dates.map(parseDate) },
+      ...(exceptEntryId ? { entryId: { not: exceptEntryId } } : {}),
+    },
+    select: { date: true },
   });
-  if (!calc.ok) throw new LeaveError(LEAVE_DAYS_ERROR_MESSAGE[calc.reason]);
+  if (clash) throw new LeaveError("이미 기록된 날짜가 포함되어 있습니다.");
+}
 
-  const today = todayKstIso();
-
+export async function createEntry(db: PrismaClient, input: EntryInput) {
+  const calc = await resolveDays(db, input);
   return db.$transaction(async (tx) => {
-    const { balance, autoDays } = await lockPeriodBalance(tx, user, input.startIso, today);
-    const { remaining } = summarize(withGranted(balance, autoDays));
-    if (calc.days > remaining) {
-      throw new LeaveError(
-        `잔여 연차가 부족합니다. (신청 ${formatDays(calc.days)} / 잔여 ${formatDays(Math.max(remaining, 0))})`,
-      );
-    }
-
-    // 자식 유니크(user_id, date)가 같은 날짜 중복을 막는다. 여기서 findFirst로 미리 보는 것은
-    // 친절한 메시지를 위해서이고, 정확성은 유니크 제약이 책임진다.
-    const clash = await tx.leaveRequestDay.findFirst({
-      where: { userId: input.userId, date: { in: calc.countedDates.map(parseDate) } },
-      select: { date: true },
-    });
-    if (clash) {
-      throw new LeaveError("이미 신청된 날짜가 포함되어 있습니다.");
-    }
-
-    const created = await tx.leaveRequest.create({
+    await assertNoClash(tx, calc.dates);
+    return tx.leaveEntry.create({
       data: {
-        userId: input.userId,
         type: input.type,
         startDate: parseDate(input.startIso),
         endDate: parseDate(input.endIso),
         days: calc.days,
-        reason: input.reason,
-        leaveBalanceId: balance.id,
-        dayRows: {
-          create: calc.countedDates.map((iso) => ({
-            userId: input.userId,
-            date: parseDate(iso),
-            type: input.type,
-          })),
-        },
+        manualDays: calc.manual,
+        memo: input.memo,
+        dayRows: { create: calc.dates.map((iso) => ({ date: parseDate(iso), type: input.type })) },
       },
     });
-    // 신청 = 확정. 같은 트랜잭션에서 차감해야 잔여와 신청이 어긋나지 않는다.
-    await tx.leaveBalance.update({
-      where: { id: balance.id },
-      data: { usedDays: { increment: calc.days } },
-    });
-    return created;
   });
 }
 
-// ───────────────────────── 직원 본인 취소 ─────────────────────────
-
-/** 시작일이 오늘(KST) 이후인 확정 건만 본인이 취소할 수 있다. 지난 휴가는 관리자 몫. */
-export async function cancelOwnRequest(db: PrismaClient, input: { requestId: string; userId: string }) {
+/** 수정 = 날짜 행을 지우고 다시 만든다. 자기 자신의 옛 날짜와는 충돌로 보지 않는다. */
+export async function updateEntry(db: PrismaClient, id: string, input: EntryInput) {
+  const calc = await resolveDays(db, input);
   return db.$transaction(async (tx) => {
-    const req = await lockRequest(tx, input.requestId);
-    if (req.userId !== input.userId) throw new LeaveError("본인의 신청만 취소할 수 있습니다.");
-    if (req.status !== LeaveStatus.CONFIRMED) throw new LeaveError("이미 취소된 신청입니다.");
-    if (toIsoDate(req.startDate) < todayKstIso()) {
-      throw new LeaveError("이미 시작된 휴가는 직접 취소할 수 없습니다. 관리자에게 요청하세요.");
-    }
-    return cancelConfirmed(tx, req, { id: input.userId, reason: null });
+    const existing = await tx.leaveEntry.findUnique({ where: { id }, select: { id: true } });
+    if (!existing) throw new LeaveError("기록을 찾을 수 없습니다.");
+    await assertNoClash(tx, calc.dates, id);
+    await tx.leaveEntryDay.deleteMany({ where: { entryId: id } });
+    return tx.leaveEntry.update({
+      where: { id },
+      data: {
+        type: input.type,
+        startDate: parseDate(input.startIso),
+        endDate: parseDate(input.endIso),
+        days: calc.days,
+        manualDays: calc.manual,
+        memo: input.memo,
+        dayRows: { create: calc.dates.map((iso) => ({ date: parseDate(iso), type: input.type })) },
+      },
+    });
   });
 }
 
-// ───────────────────────── 관리자 취소 ─────────────────────────
-
-/** 확정된 연차의 관리자 취소. 날짜 제한 없음, 사유 선택, 감사 로그 기록. */
-export async function adminCancelRequest(
-  db: PrismaClient,
-  input: { requestId: string; reason: string | null; actor: Actor },
-) {
-  return db.$transaction(async (tx) => {
-    const req = await lockRequest(tx, input.requestId);
-    if (req.status !== LeaveStatus.CONFIRMED) throw new LeaveError("이미 취소된 신청입니다.");
-
-    const updated = await cancelConfirmed(tx, req, { id: input.actor.id, reason: input.reason });
-    await writeAudit(
-      {
-        actorId: input.actor.id,
-        actorName: input.actor.name,
-        action: AuditAction.CANCEL_REQUEST_ADMIN,
-        targetType: AuditTargetType.LEAVE_REQUEST,
-        targetId: req.id,
-        description: `${req.user.name} ${formatDays(req.days)} 취소(연차 복원)${input.reason ? ` — ${input.reason}` : ""}`,
-        metadata: { userId: req.userId, days: req.days, startDate: req.startDate, endDate: req.endDate },
-      },
-      tx,
-    );
-    return updated;
-  });
+/** 하드 삭제. 날짜 행은 cascade로 함께 사라진다. */
+export async function deleteEntry(db: PrismaClient, id: string) {
+  const res = await db.leaveEntry.deleteMany({ where: { id } });
+  if (res.count === 0) throw new LeaveError("이미 삭제된 기록입니다.");
 }

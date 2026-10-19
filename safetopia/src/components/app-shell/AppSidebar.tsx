@@ -5,17 +5,8 @@ import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/utils";
 import { activeNavHref, type NavItem } from "@/components/nav-items";
-import { NavBadge } from "@/components/nav-badge";
 
-export function AppSidebar({
-  items,
-  badges,
-  collapsed,
-}: {
-  items: NavItem[];
-  badges?: Record<string, number>;
-  collapsed: boolean;
-}) {
+export function AppSidebar({ items, collapsed }: { items: NavItem[]; collapsed: boolean }) {
   const pathname = usePathname();
   const active = activeNavHref(items, pathname);
 
@@ -24,7 +15,6 @@ export function AppSidebar({
       <ul className="space-y-1">
         {items.map(({ href, label, icon: Icon }) => {
           const isActive = href === active;
-          const count = badges?.[href] ?? 0;
           return (
             <li key={href}>
               <Link
@@ -42,13 +32,6 @@ export function AppSidebar({
                 {/* 색만이 아니라 획 두께로도 활성 상태를 표시한다. */}
                 <Icon className="size-4.5 shrink-0" strokeWidth={isActive ? 2.3 : 2} />
                 <span className={cn("flex-1", collapsed && "sr-only")}>{label}</span>
-                {count > 0 &&
-                  (collapsed ? (
-                    // 레일 모드에서는 숫자를 그릴 자리가 없으니 점으로 줄인다.
-                    <span className="absolute top-1.5 right-2 size-2 rounded-full bg-destructive" />
-                  ) : (
-                    <NavBadge count={count} />
-                  ))}
               </Link>
             </li>
           );

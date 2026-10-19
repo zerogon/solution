@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isShadedDay, monthBounds, monthGrid, resolveMonthParam, shiftMonth } from "@/lib/calendar";
+import { isShadedDay, monthBounds, monthGrid, resolveMonthParam, resolveYearParam, shiftMonth } from "@/lib/calendar";
 
 describe("monthBounds", () => {
   it("달마다 말일이 다르다", () => {
@@ -52,18 +52,27 @@ describe("isShadedDay", () => {
     expect(isShadedDay("2026-09-07", [], null)).toBe(false);
     expect(isShadedDay("2026-09-08", [], null)).toBe(false);
   });
-  it("지점 휴무 요일을 칠한다", () => {
+  it("쉬는 요일을 칠한다", () => {
     expect(isShadedDay("2026-09-07", [1], null)).toBe(true);
     expect(isShadedDay("2026-09-08", [1], null)).toBe(false);
   });
   it("공휴일을 칠한다", () => {
     expect(isShadedDay("2026-09-07", [], "추석")).toBe(true);
   });
-  it("주말이면서 지점 휴무여도 한 번만 참이다", () => {
+  it("주말이면서 쉬는 요일이어도 한 번만 참이다", () => {
     expect(isShadedDay("2026-09-06", [0], "추석")).toBe(true);
   });
-  it("차감 규칙이 아니다 — 주말 근무 지점의 토요일도 칠해진다", () => {
+  it("차감 규칙이 아니다 — 쉬는 요일에서 토요일을 빼도 토요일은 칠해진다", () => {
     // 강남점은 closedWeekdays: [] 라 토요일 연차가 차감되지만 음영은 들어간다.
     expect(isShadedDay("2026-09-05", [], null)).toBe(true);
+  });
+});
+
+describe("resolveYearParam", () => {
+  it("네 자리 연도만 받는다", () => {
+    expect(resolveYearParam("2024", "2026-10-19")).toBe(2024);
+    expect(resolveYearParam(undefined, "2026-10-19")).toBe(2026);
+    expect(resolveYearParam("abc", "2026-10-19")).toBe(2026);
+    expect(resolveYearParam("1999", "2026-10-19")).toBe(2026);
   });
 });

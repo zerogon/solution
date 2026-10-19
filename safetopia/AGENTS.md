@@ -6,9 +6,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ---
 
-# safetopia — 다지점 카페 연차 관리
+# Sulki Holiday — 한 사람의 연차 장부
 
-요구사항은 `PRD.md`. 구현 계획·결정 근거는 이 문서가 단일 출처다.
+요구사항은 `PRD.md`. 구현 결정 근거는 이 문서가 단일 출처다.
+
+2026-10-19, 다지점 카페 연차 시스템(safetopia)을 **1인용 연차 장부**로 전환했다. 사용자는 한 명이고,
+그 전에는 엑셀로 관리했다(연도별 부여 일수 + 쓴 날 한 줄씩 + 잔여). 관리자·직원·지점·감사 로그·입사일 회차
+자동 발생·승인/취소 상태는 전부 없앴다. 폴더 `safetopia/`와 브랜치 `safetopia`는 Vercel 설정 때문에 이름을 그대로 둔다.
 
 ## 스택 / 형제 앱과의 관계
 - Next 16(App Router, Turbopack) + React 19 + Prisma 7(`prisma-client` 생성기, `@prisma/adapter-pg`) + Auth.js v5 beta(Credentials, JWT) + Tailwind v4 + shadcn v4 **base-nova(Base UI, Radix 아님)** + zod 4 + sonner.
@@ -16,90 +20,65 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - **Base UI 주의**: `asChild` 없음 → `render={<Link/>}`. `Select.onValueChange`는 `(value: string | null)`. 메뉴 항목에 `<button type=submit>`을 넘길 땐 `nativeButton`.
 
 ## 디자인
-- `src/app/globals.css` OKLCH 토큰. 형제와 구조·L/C 동일, **hue만 웜(브랜드 52 로스팅 브라운 + 중성 65~75)**. hue 52는 로고 잉크(`public/icons/icon.png`)를 측정해 얻었다. 새 색은 이 계열 안에서 — 예외는 의미색뿐이다(취소 muted, destructive 25, 토요일 chart-2 250, 경고 amber 유틸).
-- 브랜드 로고는 벡터가 아니라 **원본 PNG 한 장에서 잘라 쓴다**. 크롭·색·모서리 상수는 `src/lib/brand-mark.ts` 하나가 출처이고 `components/app-mark.tsx`와 `scripts/generate-icons.ts`가 공유한다. 절차는 `public/icons/README.md`. 아이콘을 다시 구우면 `public/sw.js`의 `CACHE_VERSION`도 올린다(`/icons/*`는 cache-first).
+- `src/app/globals.css` OKLCH 토큰. 형제와 구조·L/C 동일, **hue만 웜(브랜드 52 + 중성 65~75)**. 새 색은 이 계열 안에서 — 예외는 의미색뿐이다(destructive 25, 토요일 chart-2 250, 경고 amber 유틸).
+- 브랜드 마크는 **원 안의 턱시도 고양이**(2026-10-19, stayhome과 같은 방식) — 원본 `assets/brand/logo.png` 한 장에서 `npm run icons:generate`가 모든 아이콘과 앱 안 마크(`/icons/mark.png`)를 굽는다. 원형 테두리가 그림에 있어 배경을 깔지 않는다(maskable·iOS만 `ICON_BG`). 상수는 `src/lib/brand-mark.ts`, 절차는 `public/icons/README.md`. 아이콘을 다시 구우면 `public/sw.js`의 `CACHE_VERSION`도 올린다(`/icons/*`는 cache-first). 로그인 화면은 마크 + "Sulki Holiday" 텍스트.
+- 웜 브라운 팔레트(hue 52)는 카페 시절 로고에서 온 값이다. 고양이 로고는 무채색이라 바꿀 여지가 있다(미결).
 - 라이트 고정(`layout.tsx`가 `colorScheme: light`). `.dark` 블록은 **가드로 남긴다** — 지우면 `dark:` 유틸이 OS 다크에서 되살아난다.
 - 숫자는 `font-mono tabular-nums`. 페이지는 `<div className="space-y-6"><PageHeader/>…</div>`.
-- 한글 라벨에는 `break-keep`(어절 중간에서 끊기면 안 된다). `StatCard`는 모바일에서 아이콘을 접는다 —
-  3열 그리드에서 카드 폭이 100px 남짓이라 아이콘 36px + gap + 패딩이 글자 자리를 다 먹었다.
-- 날짜 음영은 `isShadedDay`(`src/lib/calendar.ts`) 하나 — 주말+지점 휴무+공휴일. **표시 전용이라 `leave-days.ts`의 `dayOff`(차감 판정)와 일부러 다르다.** 합치지 말 것.
-- 음영 클래스는 색은 같고 **바탕이 달라 둘**이다: 표 셀은 `SHADED_DAY_CLASS`(반투명 — hover·합계 행 틴트가 비쳐야 한다), 월 그리드 칸은 `SHADED_DAY_CELL`/`OUT_OF_MONTH_CELL`(불투명 — `gap-px bg-border` 위라 반투명이면 격자선보다 어두워진다).
-- 월 캘린더는 `MonthGrid`(`src/components/month-grid.tsx`, 서버 컴포넌트) 하나를 직원/관리자 캘린더와 관리자 대시보드 모바일이 공유한다. 셀 본문은 `renderDay` 슬롯.
-- 셸 지오메트리 `--app-sidebar-w`(16rem) + `--app-content-w`(88rem) = 1664px 고정 쌍.
+- 한글 라벨에는 `break-keep`. `StatCard`는 모바일에서 아이콘을 접는다(2~4열 그리드에서 글자 자리를 먹는다).
+- 날짜 음영은 `isShadedDay`(`src/lib/calendar.ts`) 하나 — 주말+쉬는 요일+공휴일. **표시 전용이라 `leave-days.ts`의 `dayOff`(차감 판정)와 일부러 다르다.** 합치지 말 것.
+- 월 그리드 칸 음영은 `SHADED_DAY_CELL`/`OUT_OF_MONTH_CELL`(불투명 — `gap-px bg-border` 위라 반투명이면 격자선보다 어두워진다).
+- 월 캘린더는 `MonthGrid`(`src/components/month-grid.tsx`, 서버 컴포넌트). 셀 본문은 `renderDay` 슬롯.
+- 셸 지오메트리 `--app-sidebar-w`(16rem) + `--app-content-w`(88rem) = 1664px 고정 쌍. 내비는 `nav-items.ts`의 `NAV_ITEMS` 한 배열(홈·연차 기록·캘린더·설정).
 
 ## 날짜 규약 (어기면 하루 밀린다)
 - 경계는 `"YYYY-MM-DD"` 문자열. DB는 `@db.Date`. Date 객체는 **UTC 자정**(`parseDate`). 읽을 땐 UTC getter만.
 - `new Date(y, m, d)` / 로컬 타임 API 금지. 산술은 `addDaysIso`/`diffDaysIso`(`src/lib/utils.ts`).
-- `Branch.closedWeekdays`는 `getUTCDay()` 규약(0=일).
+- `Owner.closedWeekdays`는 `getUTCDay()` 규약(0=일).
 
-## 도메인 핵심
-- 일수 계산 `src/lib/leave-days.ts`(순수, 서버·클라이언트 공유, vitest). **주말 자동 제외 없음** — 지점 휴무 요일 + 공휴일만 뺀다. 공휴일 데이터 없는 연도는 `uncovered`로 신청 차단(적게 세면 직원 손해 방향이라 fail-closed).
-- 공휴일 `src/lib/holidays-server.ts` — Google iCal 피드, 12h 메모리 캐시, stale 폴백. `/api/holidays`는 얇은 래퍼.
-- **승인 절차 없음**(2026-09-05 제거). 신청 = 확정(`CONFIRMED`). `LeaveStatus`는 `CONFIRMED | CANCELLED` 둘뿐.
-- 상태 전이는 전부 `src/lib/leave-service.ts`, 전부 `$transaction`. 신청 트랜잭션이 `usedDays`를 더하고, 취소가 되돌린다. balance 행 잠금(`lockPeriodBalance`)이 같은 직원 동시 신청을 직렬화하고, `leave_request_days(user_id, date)` 유니크가 최후 방어선. `npm run race-test`로 검증(기대: 성공 1 / 차단 9).
-- 취소 두 경로: 직원 본인은 **시작일이 오늘(KST) 이후**인 건만(`cancelOwnRequest`), 관리자는 언제든 사유 선택(`adminCancelRequest`, 감사 로그). 둘 다 `cancelledBy/At`, 관리자 사유는 `cancelReason`.
-- `LeaveRequestDay`는 CONFIRMED 동안만 존재. 취소 시 **삭제**(그래야 그 날 재신청 가능). 부모 `LeaveRequest`는 이력으로 남는다. 캘린더·오늘 휴가자는 이 표를 상태 조건 없이 읽는다.
-- 직원 `/calendar`는 같은 지점(`user.branchId`) 동료의 `LeaveRequestDay`까지 읽는다(연한 칩, `DayLeaveList` 재사용). **다른 지점은 비공개** — 지점 필터를 빼면 전 지점 연차가 노출된다. 소속 지점이 없으면 본인만.
-- 잔여 산식 `src/lib/leave-balance.ts`: total = 부여+이월+조정, remaining = total - used. 대기/신청 가능 개념 없음.
+## 데이터 모델 (`prisma/schema.prisma`)
+- `Owner` — 싱글턴(id `"owner"`). 이름, bcrypt 비밀번호, 쉬는 요일(기본 `[0,6]` 토·일).
+- `LeaveYear` — 연도별 부여(`year` 유니크, `grantedDays`, `carriedOverDays`, `memo`). 기간은 **캘린더 연도**(1/1~12/31).
+  이월은 지난해 잔여에서 자동으로 끌어오지 않는다 — 회사마다 규칙이 달라 엑셀처럼 직접 적는다.
+- `LeaveEntry` — 기록 1줄(유형·시작/종료·`days`·`manualDays`·`memo`). 상태 없음, 삭제는 하드 삭제.
+- `LeaveEntryDay` — 기록이 덮는 날짜 1행. **`date` 유니크**가 같은 날 중복 기록을 DB 층에서 막는다. 캘린더가 이 표를 읽는다.
+- 잔여는 저장하지 않는다: 총 = 부여 + 이월, 사용 = 그 해 `LeaveEntry.days` 합(`src/lib/queries.ts`), 잔여 = 총 − 사용
+  (`src/lib/leave-balance.ts`). "그 해의 기록" = 시작일이 그 해인 기록 — 한 기록은 한 해 안에 있으므로 정확하다.
+- **잔여가 모자라도 기록을 막지 않는다.** 장부는 일어난 일을 적는 곳이고, 지난 해를 옮겨 적을 때 부여보다 기록을 먼저 넣는 일이 흔하다. 음수 잔여는 빨갛게, 폼 미리보기는 amber 경고.
 
-## 직원 계정 (2026-09-10)
-- **완전 삭제가 있다**(`deleteEmployee`). 퇴사 처리(`changeEmployeeStatus`)와 다른 동작이다 — 연차 신청·차감일·
-  잔액·조정이 DB cascade로 함께 사라진다. 남는 건 감사 로그뿐이고, `AuditLog.actorId`는 SET NULL이라
-  `actorName` 스냅샷이 "누가 지웠는지"를 지탱한다. 본인·마지막 관리자는 못 지운다. UI는 상세 화면에만
-  두고 **이름을 그대로 받아 적어야** 버튼이 열린다(목록에는 없다).
-- 그 삭제를 위해 `LeaveRequest.user`/`LeaveRequestDay.user`/`LeaveAdjustment.user`가 `onDelete: Cascade`다.
-  **`LeaveAdjustment.createdById`만 nullable + SetNull** — 관리자를 지울 때 그가 *남에게* 해 준 조정까지
-  사라지면 안 된다. 읽는 쪽은 `createdBy?.name ?? "—"`.
-- 소속 지점은 **수정 폼에서 그냥 바꾼다**. `BranchHistory`·`BranchChangeDialog`·`changeEmployeeBranch`는 제거했다.
-  `AuditAction.CHANGE_BRANCH` 값만 과거 로그 행 때문에 남아 있다(더 이상 쓰지 않는다).
-  셀렉트는 활성 지점 + **현재 소속 지점**을 담는다 — 비활성 지점 소속인 직원의 소속이 저장 한 번에 날아가지 않게.
-- 비밀번호는 초기화·신규 등록 모두 `DEFAULT_PASSWORD`(`src/lib/passwords.ts`, `1111`) 하나로 고정이다.
-  랜덤 임시 비밀번호는 관리자가 받아 적어 전달하는 단계에서 늘 샜다. `mustChangePassword`가 첫 로그인에서
-  변경을 강제하므로 추측 가능해도 된다.
-- 직원에게 **연락처·이메일 필드는 없다**(컬럼째 제거). `Branch.phone`(지점 연락처)과 헷갈리지 말 것.
-
-## 연차 회차 — 잔액의 단위는 캘린더 연도가 아니다 (2026-09-10)
-- **입사일 기준 회차**(`src/lib/leave-accrual.ts`, 순수·vitest). n회차 = `[addMonthsIso(hire, 12*(n-1)), 다음 시작-1일]`.
-  회차는 **항상 입사일을 앵커로** 계산한다 — 이전 회차에서 체이닝하면 말일 클램프가 누적돼 밀린다(1/31 → 2/28 → 3/28).
-- 발생: 1회차는 입사 후 1·2·…·11개월마다 1일(최대 11, 회차 끝나면 소멸·자동 이월 없음). 2회차 이상은
-  `min(25, 15 + floor((y-1)/2))`, y = index-1. 법정 요건인 "개근·80% 출근"은 출근을 관리하지 않으므로 충족 가정.
-- `LeaveBalance`의 유니크 키는 `(userId, periodIndex)`다. **`year`는 없앴다** — 입사일에서 파생되는 값이라
-  입사일을 고치면 키가 통째로 이동한다(2025행이 2026행과 충돌). `periodIndex`는 입사일이 바뀌어도 불변인 신원이다.
-  `periodStart/End`는 파생값이라 입사일 수정 시 `realignBalances`가 다시 계산한다. 음수 index는 전환 이전의
-  캘린더 연도 행(`-2026` = 옛 2026년)이고 회차 계산에서 제외된다.
-- `totalDays`는 **nullable이고 null이 "자동 계산"을 뜻한다.** 자동값을 저장하면 1년 미만 회차는 매달 커지므로
-  반드시 낡는다. 읽기·쓰기 모두 `withGranted(row, autoDays)`를 통과한다(`BalanceLike.totalDays`가 `number`인 것이 그 강제 장치).
-- 잔액 행은 미리 만들지 않는다. `lockPeriodBalance`(`src/lib/leave-period.ts`)가
-  `INSERT ... ON CONFLICT DO UPDATE ... RETURNING`으로 **없으면 만들고 있으면 잠근다**(DO NOTHING은 락을 잡지도
-  돌려주지도 않는다). 덕분에 해가 바뀌어도, 1년 넘은 직원을 뒤늦게 등록해도 "미부여"로 막히지 않는다.
-  읽기 경로(`src/lib/queries.ts`)는 행이 없으면 자동 계산으로 **합성**해 보여 준다 — 쓰기 없이.
-- `LeaveRequest.leaveBalanceId`가 그 신청이 깎은 행을 가리킨다. 취소는 **이 id로만** 되돌린다 —
-  시작일에서 회차를 재유도하면 그 사이 입사일이 수정된 경우 다른 행을 깎아 usedDays가 영구히 어긋난다.
-- `computeLeaveDays`의 경계 규칙은 `period_boundary`다(옛 `year_boundary` 폐기). 회차는 연도가 아니라서
-  12/28~1/3처럼 해를 넘겨도 같은 회차면 통과한다. **`periodFor`(회계)와 `computeLeaveDays`(차감)는 다른 축이다 —
-  `isShadedDay`/`dayOff`처럼 합치지 말 것.**
+## 일수 계산
+- `src/lib/leave-days.ts`(순수, 서버·클라이언트 공유, vitest). 쉬는 요일 + 공휴일을 뺀다. 반차는 하루·0.5일, 쉬는 날이면 거부.
+- 공휴일 `src/lib/holidays-server.ts` — Google iCal 피드(실측 2021~올해+1), 12h 메모리 캐시, stale 폴백. `/api/holidays`는 얇은 래퍼.
+  데이터 없는 연도는 `uncovered`로 **자동 계산을 멈춘다**(모르는 채로 세면 연차를 더 깎는다).
+- 그때(또는 회사 사정으로 일수가 다를 때) **일수 직접 입력**(`manualDays=true`)을 쓴다. 일수는 사용자 값을 믿고, 날짜 행은
+  `manualEntryDates`가 아는 만큼만 쉬는 날을 빼서 만든다(다 빠지면 범위 전체). 반차의 직접 입력은 0.5일 고정.
+- 모양 규칙(`checkRange`)은 자동·직접 공통: 종료 ≥ 시작, **해를 넘기면 `year_boundary`**, 31일 초과 `too_long`, 반차 이틀 금지.
+- 쉬는 요일을 바꿔도 **저장된 기록의 일수는 재계산하지 않는다** — 그 날 실제로 깎인 일수가 장부의 사실이다.
+- 쓰기는 전부 `src/lib/leave-service.ts`(`createEntry`/`updateEntry`/`deleteEntry`, 각각 `$transaction`). 서버에서 일수를 다시 계산하고(미리보기를 믿지 않는다),
+  수정은 날짜 행을 지우고 다시 만든다(자기 옛 날짜와는 충돌로 보지 않는다). P2002는 `toActionError`가 "이미 기록된 날짜"로 번역.
 
 ## 인증
-- `src/auth.config.ts` `ROLE_PREFIX`: `/admin`만 ADMIN. 나머지는 세션만 있으면 접근(관리자도 직원 화면 사용 가능).
-- `requireActiveUser()`(`src/lib/auth-helpers.ts`)가 역할 레이아웃 공통 가드 — 세션 뒤 **DB 1회 조회**로 비활성 즉시 차단 + `mustChangePassword` → `/account/password` 강제. 그 페이지는 셸 밖(가드 쓰면 루프).
-- 서버 액션은 `requireAdmin()` 또는 `auth()` + 소유권 `where`. 결과는 `ActionResult`, 오류는 `toActionError()`.
+- 사용자 한 명 — **아이디 없이 비밀번호만**. `src/auth.ts` Credentials가 `Owner.password`와 bcrypt 비교. 세션 `user.id`는 항상 `"owner"`.
+- `src/auth.config.ts`는 공개 경로(`/login`, `/offline`, `/manifest.json`, `/icons/*`, `/api/auth`) 외에 세션만 본다. 역할 구분 없음.
+- `requireOwner()`(`src/lib/auth-helpers.ts`)가 셸 레이아웃 가드 — 세션 + Owner 행(이름·쉬는 요일). 서버 액션은 `isSignedIn()`.
+- 비밀번호 변경은 `/settings`. 잊었거나 첫 배포면 `npm run owner:set-password`(아래).
 
 ## 로컬 개발
-- `npm run db:local:up`(Docker Postgres **5434**, 5433은 pianoflow) → `db:local:dev`(migrate dev) → `db:local:seed`. 파괴적 명령은 전부 `assert-local-db` 가드 뒤.
-- 시드 계정: `admin/admin1234`, `emp01~08/1234`(emp03~은 첫 로그인 비번 변경 강제), `retired01`(차단).
-  시드는 부여 일수를 넣지 않는다 — 입사일만 주고 자동 발생이 맞는지 본다. 입사일은 까다로운 자리로 골랐다
-  (말일·2/29·1주년 직전·상한 근처).
-- 검증: `npm run typecheck`, `npm run lint`, `npm test`(vitest — 순수 함수만), `npm run race-test`, 수동 절차는 `.claude/skills/verify/SKILL.md`.
-  `race-test`는 2단계다 — 1단계는 같은 날짜 동시 신청(기대: 성공 1 / 차단 9 / 잔액 행 1),
-  2단계는 잔액 행이 없는 회차에 `lockPeriodBalance` 동시 10건(기대: 실패 0 / 잔액 행 1).
+- `npm run db:local:up`(Docker Postgres **5434**, DB `sulki_holiday`/유저 `sulki`; 5433은 pianoflow) → `db:local:dev`(migrate dev) → `db:local:seed`. 파괴적 명령은 전부 `assert-local-db` 가드 뒤.
+- 시드: 비밀번호 `1234`, 2025(직접 입력 기록 3건)·2026(어린이날 낀 기간·반차·앞으로의 휴가) 부여와 기록.
+- 검증: `npm run typecheck`, `npm run lint`, `npm test`(vitest — 순수 함수만), 수동 절차는 `.claude/skills/verify/SKILL.md`.
+- Docker를 못 띄우면 `npx pglite-server -p 5455 -m 10` + `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5455/postgres?sslmode=disable`로 메모리 DB에서 migrate/seed/스모크가 된다(`localhost`는 ::1로 가서 실패 — 127.0.0.1을 쓸 것).
 
 ## 배포 (Vercel + Neon)
 - `build`는 `prisma generate && next build` — **마이그레이션도 시드도 돌지 않는다**. 스키마를 바꿔 배포할 땐
   Neon을 가리킨 채 `npx prisma migrate deploy`를 수동으로 돌린다(`prisma.config.ts`가 `DIRECT_URL`을 본다).
+- 2026-10-19 전환에서 마이그레이션 이력을 `20261019000000_init` 하나로 새로 시작했다. 옛 표가 남은 Neon에는
+  `migrate deploy`가 아니라 **`migrate reset`**(옛 데이터 폐기 — 사용자 승인됨)이 필요하다.
 - `prisma/seed.ts`는 모든 표를 지우고 다시 만드는 **로컬 전용**이다(`assert-local-db` 가드). 운영에는 절대 쓰지 않는다.
-- 배포 후 첫 로그인 수단은 `npm run admin:create`(`scripts/create-admin.ts`) — 지우는 것 없이 관리자 하나만 upsert.
-  `scripts/load-env.ts`가 `.env.local`을 `.env`보다 먼저 읽으므로 **대상 DB를 반드시 확인**하고 `--yes`를 붙인다.
+- 배포 후 첫 로그인 수단은 `OWNER_PASSWORD=… OWNER_NAME=… npm run owner:set-password -- --yes`(`scripts/set-password.ts`) — 지우는 것 없이 Owner 한 행만 upsert.
+  `scripts/load-env.ts`가 `.env.local`을 `.env`보다 먼저 읽으므로 **대상 DB를 반드시 확인**한다.
 - PWA는 dev에서 SW를 등록하지 않는다(개발 청크 cache-first 사고 방지). `next build && next start`로 확인.
+  캐시 접두사는 `sulki-holiday-`, 옛 `safetopia-` 캐시도 activate에서 함께 지운다.
 
 ## 커밋
-- `[feat]_safetopia …` / `[fix]_…` / `[chore]_…`. **`git add safetopia`로 한정** — `-A`는 형제 폴더를 끌어온다.
+- `[feat]_sulki-holiday …` / `[fix]_…` / `[chore]_…`. **`git add safetopia`로 한정** — `-A`는 형제 폴더를 끌어온다.

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronsUpDown, KeyRound, LogOut, ScrollText } from "lucide-react";
+import { ChevronsUpDown, LogOut, Settings } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { clearServiceWorkerCaches } from "@/lib/sw-client";
@@ -14,16 +14,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Role } from "@/generated/prisma/enums";
-import { ROLE_LABEL } from "@/lib/labels";
 
 export function AccountMenu({
   userName,
-  role,
   collapsed,
 }: {
   userName: string;
-  role: Role;
   collapsed: boolean;
 }) {
   const initial = userName.trim().charAt(0) || "?";
@@ -44,28 +40,17 @@ export function AccountMenu({
         </Avatar>
         {!collapsed && (
           <>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sidebar-foreground/90">{userName}</span>
-              <span className="block truncate text-[11px] text-muted-foreground">
-                {ROLE_LABEL[role]}
-              </span>
-            </span>
+            <span className="min-w-0 flex-1 truncate text-sidebar-foreground/90">{userName}</span>
             <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
           </>
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" align="start" className="w-56">
         {/* base-nova는 asChild 대신 render prop. */}
-        <DropdownMenuItem render={<Link href="/account/password" />}>
-          <KeyRound />
-          비밀번호 변경
+        <DropdownMenuItem render={<Link href="/settings" />}>
+          <Settings />
+          설정
         </DropdownMenuItem>
-        {role === Role.ADMIN && (
-          <DropdownMenuItem render={<Link href="/admin/audit-logs" />}>
-            <ScrollText />
-            감사 로그
-          </DropdownMenuItem>
-        )}
         <DropdownMenuSeparator />
         <form
           action={logoutAction}

@@ -1,81 +1,24 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { EmployeeStatus, Role } from "@/generated/prisma/enums";
-import type { Session } from "next-auth";
-
-export async function requireSession() {
-  const session = await auth();
-  if (!session?.user) redirect("/login");
-  return session;
-}
-
-export async function requireRole(...allowed: Role[]) {
-  const session = await requireSession();
-  if (!allowed.includes(session.user.role)) {
-    redirect("/");
-  }
-  return session;
-}
-
-export function defaultRouteForRole(role: Role): string {
-  switch (role) {
-    case Role.ADMIN:
-      return "/admin/dashboard";
-    case Role.EMPLOYEE:
-      return "/dashboard";
-    default:
-      return "/login";
-  }
-}
-
-export type ActiveUser = {
-  id: string;
-  loginId: string;
-  name: string;
-  role: Role;
-  branchId: string | null;
-  /** 연차 회차 계산의 앵커(`leave-accrual.ts`). 관리자 계정은 없을 수 있다. */
-  hireDate: Date | null;
-  mustChangePassword: boolean;
-};
 
 /**
- * 역할 레이아웃 공통 가드. 세션 확인 후 **DB를 한 번 더 읽는다.**
- *
- * JWT는 30일을 살기 때문에 토큰만 믿으면 관리자가 방금 퇴사 처리한 직원이
- * 남은 기간 내내 들어온다. 20명 규모라 요청당 조회 1회는 비용이 아니고,
- * 그 1회가 "비활성화 즉시 차단"과 "첫 로그인 비밀번호 변경 강제"를 둘 다 보장한다.
- *
- * `/account/password`는 이 가드를 쓰지 않는다 — 강제 리다이렉트의 목적지라서.
+ * 앱 셸 공통 가드. 세션 확인 후 `Owner` 행을 읽어 돌려준다 — 화면마다 이름·쉬는 요일이 필요하다.
+ * 행이 없으면(비밀번호를 아직 설정하지 않은 DB) 로그인 화면으로 보낸다.
  */
-export async function requireActiveUser(): Promise<{ session: Session; user: ActiveUser }> {
-  const session = await requireSession();
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      id: true,
-      loginId: true,
-      name: true,
-      role: true,
-      status: true,
-      branchId: true,
-      hireDate: true,
-      mustChangePassword: true,
-    },
+export async function requireOwner() {
+  const session = await auth();
+  if (!session?.user) redirect("/login");
+  const owner = await prisma.owner.findUnique({
+    where: { id: "owner" },
+    select: { name: true, closedWeekdays: true },
   });
-  if (!user || user.status !== EmployeeStatus.ACTIVE) {
-    redirect("/login?error=inactive");
-  }
-  if (user.mustChangePassword) {
-    redirect("/account/password");
-  }
-  return { session, user };
+  if (!owner) redirect("/login");
+  return owner;
 }
 
 /** 서버 액션용 — 리다이렉트 대신 결과값으로 거부한다. */
-export async function requireAdmin() {
+export async function isSignedIn(): Promise<boolean> {
   const session = await auth();
-  if (!session?.user || session.user.role !== Role.ADMIN) return null;
-  return session;
+  return Boolean(session?.user);
 }

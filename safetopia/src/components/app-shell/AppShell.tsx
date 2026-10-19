@@ -9,12 +9,11 @@ import { AccountMenu } from "./AccountMenu";
 import { BottomTabBar } from "@/components/BottomTabBar";
 import { AppMark } from "@/components/app-mark";
 import { Button } from "@/components/ui/button";
-import { NAV_BY_ROLE } from "@/components/nav-items";
-import type { Role } from "@/generated/prisma/enums";
+import { NAV_ITEMS } from "@/components/nav-items";
 
-const APP_NAME = "Safetopia";
-const COLLAPSE_KEY = "safetopia:sidebar-collapsed";
-const COLLAPSE_EVENT = "safetopia:sidebar";
+const APP_NAME = "Sulki Holiday";
+const COLLAPSE_KEY = "sulki-holiday:sidebar-collapsed";
+const COLLAPSE_EVENT = "sulki-holiday:sidebar";
 
 /**
  * 사이드바 접힘 상태를 localStorage에 보존한다.
@@ -57,21 +56,9 @@ function useSidebarCollapsed(): [boolean, () => void] {
   return [collapsed, toggle];
 }
 
-export function AppShell({
-  role,
-  userName,
-  badges,
-  children,
-}: {
-  /** 어느 영역의 내비를 그릴지. 관리자가 직원 화면을 볼 때는 EMPLOYEE를 넘긴다. */
-  role: Role;
-  userName: string;
-  /** href → 미처리 건수. 사이드바·탭바 배지. */
-  badges?: Record<string, number>;
-  children: ReactNode;
-}) {
+export function AppShell({ userName, children }: { userName: string; children: ReactNode }) {
   const [collapsed, toggle] = useSidebarCollapsed();
-  const items = NAV_BY_ROLE[role];
+  const items = NAV_ITEMS;
 
   return (
     <div className="min-h-dvh">
@@ -111,10 +98,10 @@ export function AppShell({
           )}
         </div>
 
-        <AppSidebar items={items} badges={badges} collapsed={collapsed} />
+        <AppSidebar items={items} collapsed={collapsed} />
 
         <div className="shrink-0 border-t border-sidebar-border p-2">
-          <AccountMenu userName={userName} role={role} collapsed={collapsed} />
+          <AccountMenu userName={userName} collapsed={collapsed} />
         </div>
       </aside>
 
@@ -128,7 +115,7 @@ export function AppShell({
         <div className="flex shrink-0 items-center gap-2">
           <span className="max-w-[8rem] truncate text-xs text-muted-foreground">{userName}</span>
           <div className="w-auto">
-            <AccountMenu userName={userName} role={role} collapsed />
+            <AccountMenu userName={userName} collapsed />
           </div>
         </div>
       </header>
@@ -145,7 +132,7 @@ export function AppShell({
         </main>
       </div>
 
-      <BottomTabBar items={items} badges={badges} />
+      <BottomTabBar items={items} />
     </div>
   );
 }

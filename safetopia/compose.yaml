@@ -6,21 +6,21 @@
 services:
   postgres:
     image: postgres:17-alpine
-    container_name: safetopia-db
+    container_name: sulki-holiday-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: safetopia
-      POSTGRES_PASSWORD: safetopia
-      POSTGRES_DB: safetopia
+      POSTGRES_USER: sulki
+      POSTGRES_PASSWORD: sulki
+      POSTGRES_DB: sulki_holiday
     ports:
       - "5434:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - sulki-pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U safetopia -d safetopia"]
+      test: ["CMD-SHELL", "pg_isready -U sulki -d sulki_holiday"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  pgdata:
+  sulki-pgdata:

@@ -10,7 +10,7 @@ export interface DayCtx {
   inMonth: boolean;
   /** 공휴일명. 아니거나 커버리지 밖 연도면 null. */
   holiday: string | null;
-  /** 토·일. 지점 문맥과 무관하다. */
+  /** 토·일. 쉬는 요일 설정과 무관하다. */
   weekend: boolean;
   /** `closedWeekdays`에 든 요일. 소비처가 요일 규약을 다시 구현하지 않게 내려 준다. */
   closed: boolean;
@@ -22,8 +22,7 @@ export interface DayCtx {
  * 월 캘린더 껍데기 — 요일 헤더 + 일요일 시작 6주(42칸) 그리드 + 날짜 배지 + 공휴일 줄.
  * 서버 컴포넌트(훅 없음). 셀 본문은 `renderDay` 슬롯이 채운다.
  *
- * 직원 캘린더·관리자 캘린더·관리자 대시보드 모바일 셋이 공유한다. 음영 규칙이 여기 한 곳에만
- * 살아야 세 화면이 어긋나지 않는다.
+ * 음영 규칙은 `calendar.ts`의 `isShadedDay` 한 곳에 산다.
  */
 export function MonthGrid({
   ym,
@@ -37,7 +36,7 @@ export function MonthGrid({
   ym: string;
   today: string;
   oracle: HolidayOracle;
-  /** 지점 휴무 요일(`getUTCDay` 규약). 여러 지점을 합쳐 보는 화면은 비워 둔다. */
+  /** 쉬는 요일(`getUTCDay` 규약). */
   closedWeekdays?: readonly number[];
   /** 셀 최소 높이 등 소비처별 크기. */
   cellClassName?: string;

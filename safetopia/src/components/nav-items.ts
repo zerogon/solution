@@ -1,57 +1,29 @@
-import {
-  CalendarDays,
-  CalendarPlus,
-  ClipboardList,
-  Home,
-  LayoutDashboard,
-  Store,
-  UserRound,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
-import { Role } from "@/generated/prisma/enums";
+import { CalendarDays, Home, NotebookPen, Settings, type LucideIcon } from "lucide-react";
 
 export interface NavItem {
   href: string;
   label: string;
   icon: LucideIcon;
-  /** 모바일 하단 탭바에서 숨긴다. 사이드바(데스크톱)에는 그대로 남는다. */
-  hideOnMobile?: boolean;
 }
 
 /**
  * 앱 셸 내비게이션의 단일 출처. 사이드바(`AppSidebar`)와 모바일 하단 탭바
  * (`BottomTabBar`)가 같은 배열을 읽으므로 항목 추가는 여기 한 곳만 고치면 된다.
  *
- * 하단 탭바는 항목마다 `flex-1`이라 개수 비의존이지만 5칸이 편안한 상한이다 —
- * 390px에서 78px씩이고 아이콘 알약이 48px라 여유가 있다. 6칸부터가 위험선.
- * 직원 탭 4개는 PRD 7장 그대로. `/leave/history`는 대시보드·마이페이지에서 진입한다.
- *
- * `hideOnMobile`은 좁은 화면에서만 빠진다 — 관리자 대시보드는 md 미만에서 스케줄 보드
- * 대신 **같은 달의 월 캘린더**를 그리므로(`admin/dashboard/page.tsx`의 md 이중 렌더),
- * 폰에서는 캘린더 탭이 방금 본 달력을 한 번 더 보여 주는 셈이 된다.
+ * 하단 탭바는 항목마다 `flex-1`이라 5칸이 편안한 상한이다(390px에서 78px씩).
  */
-export const NAV_BY_ROLE: Record<Role, NavItem[]> = {
-  [Role.EMPLOYEE]: [
-    { href: "/dashboard", label: "홈", icon: Home },
-    { href: "/leave/request", label: "연차신청", icon: CalendarPlus },
-    { href: "/calendar", label: "캘린더", icon: CalendarDays },
-    { href: "/profile", label: "마이페이지", icon: UserRound },
-  ],
-  [Role.ADMIN]: [
-    { href: "/admin/dashboard", label: "대시보드", icon: LayoutDashboard },
-    { href: "/admin/employees", label: "직원", icon: Users },
-    { href: "/admin/branches", label: "지점", icon: Store },
-    { href: "/admin/leaves", label: "연차", icon: ClipboardList },
-    { href: "/admin/calendar", label: "캘린더", icon: CalendarDays, hideOnMobile: true },
-  ],
-};
+export const NAV_ITEMS: NavItem[] = [
+  { href: "/dashboard", label: "홈", icon: Home },
+  { href: "/leaves", label: "연차 기록", icon: NotebookPen },
+  { href: "/calendar", label: "캘린더", icon: CalendarDays },
+  { href: "/settings", label: "설정", icon: Settings },
+];
 
 /**
  * 현재 경로에 해당하는 내비 항목의 href를 고른다.
  *
- * **최장 prefix 매칭**이라야 한다. 단순 `startsWith`로는 `/leave/request`에서
- * 상위 항목까지 같이 활성화되고, 완전 일치만 보면 하위 경로에서 아무것도 활성화되지 않는다.
+ * **최장 prefix 매칭**이라야 한다. 단순 `startsWith`로는 하위 경로에서 상위 항목까지
+ * 같이 활성화되고, 완전 일치만 보면 `/leaves/new`에서 아무것도 활성화되지 않는다.
  */
 export function activeNavHref(items: NavItem[], pathname: string): string | null {
   let best: string | null = null;

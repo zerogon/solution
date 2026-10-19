@@ -23,8 +23,8 @@ const geistMono = Geist_Mono({
 const THEME_COLOR = "#FDFBF9";
 
 export const metadata: Metadata = {
-  title: "Safetopia — 카페 연차 관리",
-  description: "다지점 카페 직원 연차·반차 신청 및 관리",
+  title: "Sulki Holiday — 내 연차 관리",
+  description: "연도별 부여와 연차·반차 사용 기록을 한곳에서",
   manifest: "/manifest.json",
   icons: {
     icon: "/icons/favicon.png",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "Safetopia",
+    title: "Sulki Holiday",
     statusBarStyle: "default",
   },
 };

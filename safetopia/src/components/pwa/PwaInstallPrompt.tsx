@@ -39,7 +39,7 @@ if (typeof window !== "undefined") {
 
 // 키에 v2를 붙여 이전 키에 남아 있던 "오늘 하루 보지 않기" 플래그를 무효화한다.
 // 시트가 안 뜨던 기간에 체크해 둔 기기들이 고친 뒤에도 계속 막혀 있으면 안 된다.
-const DISMISS_DATE_KEY = "safetopia:install-dismissed-date-v2";
+const DISMISS_DATE_KEY = "sulki-holiday:install-dismissed-date";
 
 /**
  * 같은 탭 세션에서 시트를 한 번만 띄우기 위한 표식.
@@ -49,7 +49,7 @@ const DISMISS_DATE_KEY = "safetopia:install-dismissed-date-v2";
  * 같은 시트를 곧바로 다시 본다. `sessionStorage`라 탭을 닫으면 풀린다 —
  * "오늘 하루 보지 않기"(`localStorage`, 사용자가 명시적으로 고른 것)와는 역할이 다르다.
  */
-const SHOWN_SESSION_KEY = "safetopia:install-shown-session";
+const SHOWN_SESSION_KEY = "sulki-holiday:install-shown-session";
 
 function getLocalDateString(date = new Date()): string {
   const y = date.getFullYear();
@@ -211,7 +211,7 @@ export function PwaInstallPrompt() {
           <AppMark className="size-12" />
           <div className="flex flex-1 flex-col gap-0.5">
             <SheetTitle>홈 화면에 추가</SheetTitle>
-            <SheetDescription>연차 신청과 확인을 더 빠르게.</SheetDescription>
+            <SheetDescription>연차 기록과 확인을 더 빠르게.</SheetDescription>
           </div>
         </SheetHeader>
 

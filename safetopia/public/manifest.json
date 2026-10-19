@@ -1,18 +1,24 @@
 {
   "id": "/",
-  "name": "Safetopia — 카페 연차 관리",
-  "short_name": "Safetopia",
-  "description": "다지점 카페 직원 연차·반차 신청 및 관리",
+  "name": "Sulki Holiday — 내 연차 관리",
+  "short_name": "Sulki Holiday",
+  "description": "연도별 부여와 연차·반차 사용 기록을 한곳에서",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "any",
   "background_color": "#FDFBF9",
   "theme_color": "#FDFBF9",
   "lang": "ko-KR",
   "dir": "ltr",
-  "categories": ["business", "productivity"],
+  "categories": [
+    "business",
+    "productivity"
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",
@@ -35,16 +41,26 @@
   ],
   "shortcuts": [
     {
-      "name": "연차 신청",
-      "short_name": "연차신청",
-      "url": "/leave/request",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "name": "연차 기록 추가",
+      "short_name": "기록 추가",
+      "url": "/leaves/new",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
-      "name": "내 캘린더",
+      "name": "캘린더",
       "short_name": "캘린더",
       "url": "/calendar",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

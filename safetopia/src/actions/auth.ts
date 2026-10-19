@@ -2,12 +2,11 @@
 
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
-import { auth, signIn, signOut } from "@/auth";
+import { signIn, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { writeAudit } from "@/lib/audit";
+import { isSignedIn } from "@/lib/auth-helpers";
 import { changePasswordSchema, loginSchema } from "@/lib/validators";
 import type { ActionResult } from "@/lib/errors";
-import { AuditAction, AuditTargetType } from "@/generated/prisma/enums";
 
 // dev/http: "authjs.session-token", prod/https: "__Secure-authjs.session-token"
 const SESSION_TOKEN_BASE = ["authjs.session-token", "__Secure-authjs.session-token"];
@@ -38,10 +37,7 @@ export async function loginAction(
   _prev: ActionResult | undefined,
   formData: FormData,
 ): Promise<ActionResult> {
-  const parsed = loginSchema.safeParse({
-    loginId: formData.get("loginId"),
-    password: formData.get("password") ?? undefined,
-  });
+  const parsed = loginSchema.safeParse({ password: formData.get("password") ?? undefined });
   if (!parsed.success) {
     return { ok: false, message: parsed.error.issues[0].message };
   }
@@ -49,31 +45,11 @@ export async function loginAction(
   const rememberMe = formData.get("rememberMe") === "true";
 
   try {
-    await signIn("credentials", {
-      loginId: parsed.data.loginId,
-      password: parsed.data.password,
-      redirect: false,
-    });
+    await signIn("credentials", { password: parsed.data.password, redirect: false });
     // 체크(기본)면 next-auth 기본 30일 지속 쿠키 유지, 미체크면 세션 쿠키로 강등
     if (!rememberMe) await demoteSessionTokenToSessionScope();
   } catch {
-    return { ok: false, message: "아이디 또는 비밀번호가 올바르지 않습니다." };
-  }
-
-  // 로그인 감사 기록은 best-effort — 실패해도 로그인은 성공이다.
-  try {
-    const session = await auth();
-    if (session?.user) {
-      await writeAudit({
-        actorId: session.user.id,
-        actorName: session.user.name,
-        action: AuditAction.LOGIN,
-        targetType: AuditTargetType.USER,
-        targetId: session.user.id,
-      });
-    }
-  } catch (err) {
-    console.error("[loginAction] audit", err);
+    return { ok: false, message: "비밀번호가 올바르지 않습니다." };
   }
   return { ok: true };
 }
@@ -86,8 +62,7 @@ export async function changePasswordAction(
   _prev: ActionResult | undefined,
   formData: FormData,
 ): Promise<ActionResult> {
-  const session = await auth();
-  if (!session?.user) return { ok: false, message: "로그인이 필요합니다." };
+  if (!(await isSignedIn())) return { ok: false, message: "로그인이 필요합니다." };
 
   const parsed = changePasswordSchema.safeParse({
     currentPassword: formData.get("currentPassword"),
@@ -98,20 +73,18 @@ export async function changePasswordAction(
     return { ok: false, message: parsed.error.issues[0].message };
   }
 
-  const user = await prisma.user.findUnique({ where: { id: session.user.id } });
-  if (!user) return { ok: false, message: "사용자를 찾을 수 없습니다." };
+  const owner = await prisma.owner.findUnique({ where: { id: "owner" } });
+  if (!owner) return { ok: false, message: "계정을 찾을 수 없습니다." };
 
-  const ok = await bcrypt.compare(parsed.data.currentPassword, user.password);
+  const ok = await bcrypt.compare(parsed.data.currentPassword, owner.password);
   if (!ok) return { ok: false, message: "현재 비밀번호가 올바르지 않습니다." };
   if (parsed.data.currentPassword === parsed.data.newPassword) {
     return { ok: false, message: "새 비밀번호가 현재 비밀번호와 같습니다." };
   }
 
-  const newHash = await bcrypt.hash(parsed.data.newPassword, 10);
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { password: newHash, mustChangePassword: false },
+  await prisma.owner.update({
+    where: { id: "owner" },
+    data: { password: await bcrypt.hash(parsed.data.newPassword, 10) },
   });
-
   return { ok: true };
 }

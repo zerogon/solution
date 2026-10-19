@@ -13,8 +13,8 @@ import { holidayOracle, type HolidayMap, type HolidayOracle } from "@/lib/holida
  *
  * ## 실패 방향
  * 공휴일을 적게 세면 연차가 **더 많이 차감**된다(휴일인 날을 근무일로 세니까). 조용히
- * 틀리면 직원이 손해를 보는 쪽이라, 판정 불가 연도는 `covered`에서 빼고 호출자가
- * 신청을 막는다(`computeLeaveDays`의 `uncovered`).
+ * 틀리면 연차를 더 깎는 쪽이라, 판정 불가 연도는 `covered`에서 빼고 호출자가
+ * 자동 계산을 멈춘다(`computeLeaveDays`의 `uncovered` → 일수 직접 입력).
  */
 
 const FEED_URL =
@@ -106,7 +106,7 @@ export async function getKoreanHolidays(): Promise<HolidayPayload> {
 
 /**
  * 오라클 — 실패해도 던지지 않는다. 피드가 죽으면 `covers()`가 전부 false인 오라클을
- * 돌려주고, 호출자는 "판정 불가"로 신청을 막는다. 화면은 여전히 그려진다.
+ * 돌려주고, 호출자는 "판정 불가"로 자동 계산을 멈춘다. 화면은 여전히 그려진다.
  */
 export async function getHolidayOracle(): Promise<{ oracle: HolidayOracle; payload: HolidayPayload | null }> {
   try {

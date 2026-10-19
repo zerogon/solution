@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 
 /** 개발 모드 정리 후 1회 새로고침을 표시하는 플래그 (무한 루프 방지). */
-const DEV_CLEANUP_FLAG = "safetopia:sw-dev-cleanup";
+const DEV_CLEANUP_FLAG = "sulki-holiday:sw-dev-cleanup";
 
 /**
  * 서비스워커 등록과 업데이트 알림.
@@ -39,7 +39,7 @@ export function ServiceWorkerManager() {
             const keys = await caches.keys();
             await Promise.all(
               keys
-                .filter((k) => k.startsWith("safetopia-"))
+                .filter((k) => k.startsWith("sulki-holiday-") || k.startsWith("safetopia-"))
                 .map((k) => caches.delete(k)),
             );
           }
