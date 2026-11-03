@@ -21,8 +21,11 @@
   (drizzle-kit, 마이그레이션 파일 없음). drizzle-kit은 devDependency `pg`로 직접 붙는다.
 - 환경변수는 `DATABASE_URL` 하나. 로컬은 `NEON_LOCAL_PROXY`를 더 둔다(`.env.example`).
 - PWA는 직접 작성한 `public/sw.js` + `manifest.json`(Serwist/next-pwa는 Turbopack과 충돌).
-  **`/api/*`는 캐시하지 않는다** — 5초 폴링 데이터라 낡은 사본이 해롭다. 아이콘은
-  `npm run icons:generate`(sharp)로 굽고 커밋한다. 마크 기하는 `src/lib/brand-mark.ts`.
+  **`/api/*`는 캐시하지 않는다** — 5초 폴링 데이터라 낡은 사본이 해롭다.
+- 로고는 `scripts/assets/logo.jpeg`(녹색 배경 펭귄, 2026-11-03 교체)가 원본이고 `npm run icons:generate`(sharp)가
+  PWA 아이콘 5종 + 앱 안 로고 `public/icons/logo-256.png`를 굽는다(산출물 커밋). 둥근 모서리 22%는 PNG(아이콘)와
+  CSS(`app-mark.tsx`)가 같은 비율. 테마는 로고 녹색(hue 155) — 로고색 자체는 흰 글자 대비가 낮아 `--primary`는 한 단계
+  진하게, `--accent`는 연하게 둔다(`globals.css` 상단 주석).
 - 서체는 시스템 스택(`globals.css`). `next/font/google`은 Turbopack dev에서
   "next/font/google queries have exactly one entry"로 깨져 뺐다(2026-11-03).
 - 갱신은 react-query `refetchInterval: 5000`(`EventView.tsx`). 담기는 낙관적 갱신 후 invalidate.

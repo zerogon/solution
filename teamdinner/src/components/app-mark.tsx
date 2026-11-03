@@ -1,26 +1,21 @@
-import {
-  MARK_BG,
-  MARK_BOWL,
-  MARK_FOOT,
-  MARK_HIGHLIGHT,
-  MARK_STICK_A,
-  MARK_STICK_B,
-  MARK_VIEWBOX,
-} from "@/lib/brand-mark";
+import Image from "next/image";
+
 import { cn } from "@/lib/utils";
 
-/** 인라인 브랜드 마크. 기하는 `lib/brand-mark.ts`가 PWA 아이콘과 공유한다. */
+/**
+ * 앱 로고(펭귄). 원본은 `scripts/assets/logo.jpeg`, 이 PNG는 `npm run icons:generate`가 만든다.
+ * 둥근 모서리는 여기서 CSS로 — PWA 아이콘 PNG의 둥근 모서리(22%)와 같은 비율.
+ */
 export function AppMark({ className }: { className?: string }) {
   return (
-    <svg viewBox={MARK_VIEWBOX} aria-hidden="true" className={cn("size-8", className)}>
-      <rect width="64" height="64" rx="14" fill={MARK_BG} />
-      <path d={MARK_HIGHLIGHT} fill="#fff" opacity="0.08" />
-      <g fill="none" stroke="#fff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-        <path d={MARK_STICK_A} />
-        <path d={MARK_STICK_B} />
-        <path d={MARK_BOWL} fill="#fff" fillOpacity="0.18" />
-        <path d={MARK_FOOT} opacity="0.85" />
-      </g>
-    </svg>
+    <Image
+      src="/icons/logo-256.png"
+      alt=""
+      width={64}
+      height={64}
+      unoptimized
+      priority
+      className={cn("size-8 shrink-0 rounded-[22%]", className)}
+    />
   );
 }

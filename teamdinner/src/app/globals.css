@@ -51,77 +51,79 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* teamdinner — 웜 뉴트럴 + 오렌지(hue 45). 형제 앱(stayhome 틸 205)과 토큰 구조·스케일은 같고 hue만 다르다. */
+/* teamdinner — 쿨 그린 뉴트럴 + 로고 녹색(hue 155). 로고 배경 #18CB6D ≈ oklch(0.74 0.19 155)는 흰 글자
+   대비가 낮아 버튼(--primary)은 한 단계 진한 녹색, 강조 배경(--accent)은 연한 녹색을 쓴다.
+   형제 앱(stayhome 틸 205)과 토큰 구조·스케일은 같고 hue만 다르다. */
 :root {
-  --background: oklch(0.99 0.004 80);
-  --foreground: oklch(0.22 0.01 50);
+  --background: oklch(0.99 0.003 160);
+  --foreground: oklch(0.22 0.01 160);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.22 0.01 50);
+  --card-foreground: oklch(0.22 0.01 160);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.22 0.01 50);
-  --primary: oklch(0.6 0.17 45);
-  --primary-foreground: oklch(0.99 0.005 80);
-  --secondary: oklch(0.965 0.006 70);
-  --secondary-foreground: oklch(0.3 0.02 50);
-  --muted: oklch(0.965 0.006 70);
-  --muted-foreground: oklch(0.5 0.015 60);
-  --accent: oklch(0.95 0.035 60);
-  --accent-foreground: oklch(0.45 0.14 45);
+  --popover-foreground: oklch(0.22 0.01 160);
+  --primary: oklch(0.55 0.16 155);
+  --primary-foreground: oklch(0.99 0.004 160);
+  --secondary: oklch(0.965 0.006 160);
+  --secondary-foreground: oklch(0.3 0.02 160);
+  --muted: oklch(0.965 0.006 160);
+  --muted-foreground: oklch(0.5 0.015 160);
+  --accent: oklch(0.95 0.05 155);
+  --accent-foreground: oklch(0.4 0.13 155);
   --destructive: oklch(0.58 0.2 25);
-  --destructive-foreground: oklch(0.99 0.005 80);
-  --border: oklch(0.91 0.008 70);
-  --input: oklch(0.91 0.008 70);
-  --ring: oklch(0.6 0.17 45);
-  --chart-1: oklch(0.6 0.17 45);
+  --destructive-foreground: oklch(0.99 0.004 160);
+  --border: oklch(0.91 0.008 160);
+  --input: oklch(0.91 0.008 160);
+  --ring: oklch(0.55 0.16 155);
+  --chart-1: oklch(0.55 0.16 155);
   --chart-2: oklch(0.62 0.13 250);
-  --chart-3: oklch(0.65 0.13 155);
-  --chart-4: oklch(0.55 0.03 60);
-  --chart-5: oklch(0.72 0.15 90);
+  --chart-3: oklch(0.72 0.15 70);
+  --chart-4: oklch(0.55 0.03 160);
+  --chart-5: oklch(0.6 0.17 45);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0.005 80);
-  --sidebar-foreground: oklch(0.22 0.01 50);
-  --sidebar-primary: oklch(0.6 0.17 45);
-  --sidebar-primary-foreground: oklch(0.99 0.005 80);
-  --sidebar-accent: oklch(0.95 0.035 60);
-  --sidebar-accent-foreground: oklch(0.45 0.14 45);
-  --sidebar-border: oklch(0.91 0.008 70);
-  --sidebar-ring: oklch(0.6 0.17 45);
+  --sidebar: oklch(0.985 0.004 160);
+  --sidebar-foreground: oklch(0.22 0.01 160);
+  --sidebar-primary: oklch(0.55 0.16 155);
+  --sidebar-primary-foreground: oklch(0.99 0.004 160);
+  --sidebar-accent: oklch(0.95 0.05 155);
+  --sidebar-accent-foreground: oklch(0.4 0.13 155);
+  --sidebar-border: oklch(0.91 0.008 160);
+  --sidebar-ring: oklch(0.55 0.16 155);
 }
 
 /* 라이트 고정(`<html style="color-scheme: light">`). 다크 토큰은 같은 hue로 맞춰만 둔다. */
 .dark {
-  --background: oklch(0.2 0.008 50);
-  --foreground: oklch(0.96 0.006 80);
-  --card: oklch(0.24 0.008 50);
-  --card-foreground: oklch(0.96 0.006 80);
-  --popover: oklch(0.24 0.008 50);
-  --popover-foreground: oklch(0.96 0.006 80);
-  --primary: oklch(0.74 0.15 50);
-  --primary-foreground: oklch(0.2 0.04 45);
-  --secondary: oklch(0.28 0.008 50);
-  --secondary-foreground: oklch(0.96 0.006 80);
-  --muted: oklch(0.28 0.008 50);
-  --muted-foreground: oklch(0.7 0.012 60);
-  --accent: oklch(0.32 0.05 45);
-  --accent-foreground: oklch(0.88 0.08 60);
+  --background: oklch(0.2 0.008 160);
+  --foreground: oklch(0.96 0.006 160);
+  --card: oklch(0.24 0.008 160);
+  --card-foreground: oklch(0.96 0.006 160);
+  --popover: oklch(0.24 0.008 160);
+  --popover-foreground: oklch(0.96 0.006 160);
+  --primary: oklch(0.74 0.19 155);
+  --primary-foreground: oklch(0.2 0.04 155);
+  --secondary: oklch(0.28 0.008 160);
+  --secondary-foreground: oklch(0.96 0.006 160);
+  --muted: oklch(0.28 0.008 160);
+  --muted-foreground: oklch(0.7 0.012 160);
+  --accent: oklch(0.32 0.05 155);
+  --accent-foreground: oklch(0.88 0.1 155);
   --destructive: oklch(0.65 0.18 25);
-  --destructive-foreground: oklch(0.99 0.005 80);
+  --destructive-foreground: oklch(0.99 0.004 160);
   --border: oklch(1 0 0 / 8%);
   --input: oklch(1 0 0 / 13%);
-  --ring: oklch(0.74 0.15 50);
-  --chart-1: oklch(0.74 0.15 50);
+  --ring: oklch(0.74 0.19 155);
+  --chart-1: oklch(0.74 0.19 155);
   --chart-2: oklch(0.7 0.12 250);
-  --chart-3: oklch(0.72 0.13 155);
-  --chart-4: oklch(0.7 0.03 60);
-  --chart-5: oklch(0.78 0.14 90);
-  --sidebar: oklch(0.22 0.008 50);
-  --sidebar-foreground: oklch(0.96 0.006 80);
-  --sidebar-primary: oklch(0.74 0.15 50);
-  --sidebar-primary-foreground: oklch(0.2 0.04 45);
-  --sidebar-accent: oklch(0.32 0.05 45);
-  --sidebar-accent-foreground: oklch(0.88 0.08 60);
+  --chart-3: oklch(0.78 0.14 70);
+  --chart-4: oklch(0.7 0.03 160);
+  --chart-5: oklch(0.74 0.15 50);
+  --sidebar: oklch(0.22 0.008 160);
+  --sidebar-foreground: oklch(0.96 0.006 160);
+  --sidebar-primary: oklch(0.74 0.19 155);
+  --sidebar-primary-foreground: oklch(0.2 0.04 155);
+  --sidebar-accent: oklch(0.32 0.05 155);
+  --sidebar-accent-foreground: oklch(0.88 0.1 155);
   --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: oklch(0.74 0.15 50);
+  --sidebar-ring: oklch(0.74 0.19 155);
 }
 
 @layer base {

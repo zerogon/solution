@@ -1,7 +1,12 @@
 /**
- * PWA 아이콘 PNG 생성기.   npm run icons:generate
- * 마크 기하는 `src/lib/brand-mark.ts` — 앱 인라인 SVG와 같은 그림이어야 한다.
- * 산출물은 커밋한다(빌드 파이프라인에 sharp 의존을 추가하지 않기 위해).
+ * PWA 아이콘·앱 로고 PNG 생성기.   npm run icons:generate
+ *
+ * 원본은 `scripts/assets/logo.jpeg`(녹색 배경 펭귄, 447×447). 서빙되지 않는 생성 전용 파일이다.
+ * 산출물은 커밋한다(빌드 파이프라인에 sharp 의존을 추가하지 않기 위해). 원본을 바꾸면 다시 돌린다.
+ *
+ * - 둥근 모서리(반지름 22%) 버전: 홈 화면 "any" 아이콘·애플 터치·파비콘. 모서리는 투명.
+ * - maskable: 마스크 없이 full-bleed. 펭귄이 원본의 중앙 약 48%×63%에 있어 안전영역(80%)을 이미 만족한다.
+ * - logo-256: 앱 안 로고(`components/app-mark.tsx`). 둥근 모서리는 CSS가 처리하므로 정사각 그대로.
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -9,51 +14,51 @@ import { fileURLToPath } from "node:url";
 
 import sharp from "sharp";
 
-import {
-  MARK_BG,
-  MARK_BOWL,
-  MARK_FOOT,
-  MARK_HIGHLIGHT,
-  MARK_STICK_A,
-  MARK_STICK_B,
-} from "../src/lib/brand-mark";
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const SOURCE = join(ROOT, "scripts", "assets", "logo.jpeg");
+const OUT_DIR = join(ROOT, "public", "icons");
 
-const OUT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "public", "icons");
+/** 모서리 반지름 비율. 예전 SVG 마크의 rx=14/64 ≈ 0.22 와 같다. */
+const CORNER_RATIO = 0.22;
 
-function markSvg({ cornerRadius, inset = 0 }: { cornerRadius: number; inset?: number }): string {
-  const scale = 1 - inset * 2;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <rect width="64" height="64" rx="${cornerRadius}" fill="${MARK_BG}" />
-  <path d="${MARK_HIGHLIGHT}" fill="#fff" opacity="0.08" />
-  <g transform="translate(${inset * 64} ${inset * 64}) scale(${scale})">
-    <g fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round">
-      <path d="${MARK_STICK_A}" />
-      <path d="${MARK_STICK_B}" />
-      <path d="${MARK_BOWL}" fill="#fff" fill-opacity="0.18" />
-      <path d="${MARK_FOOT}" opacity="0.85" />
-    </g>
-  </g>
-</svg>`;
+interface IconSpec {
+  file: string;
+  size: number;
+  rounded: boolean;
+  note: string;
 }
 
-const ROUNDED = markSvg({ cornerRadius: 14 });
-/** maskable: 배경 full-bleed + 글리프를 중앙 80%로 — 원형/스쿼클로 잘려도 살아남는다. */
-const MASKABLE = markSvg({ cornerRadius: 0, inset: 0.1 });
-
-const ICONS = [
-  { file: "icon-192.png", size: 192, svg: ROUNDED, note: "manifest any" },
-  { file: "icon-512.png", size: 512, svg: ROUNDED, note: "manifest any" },
-  { file: "icon-maskable-512.png", size: 512, svg: MASKABLE, note: "manifest maskable" },
-  { file: "apple-touch-icon.png", size: 180, svg: ROUNDED, note: "iOS 홈 화면" },
-  { file: "favicon.png", size: 64, svg: ROUNDED, note: "브라우저 탭" },
+const ICONS: IconSpec[] = [
+  { file: "icon-192.png", size: 192, rounded: true, note: "manifest any" },
+  { file: "icon-512.png", size: 512, rounded: true, note: "manifest any" },
+  { file: "icon-maskable-512.png", size: 512, rounded: false, note: "manifest maskable (full-bleed)" },
+  { file: "apple-touch-icon.png", size: 180, rounded: true, note: "iOS 홈 화면" },
+  { file: "favicon.png", size: 64, rounded: true, note: "브라우저 탭" },
+  { file: "logo-256.png", size: 256, rounded: false, note: "앱 안 로고 (CSS가 모서리 처리)" },
 ];
+
+function roundedMask(size: number): Buffer {
+  const r = Math.round(size * CORNER_RATIO);
+  return Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><rect width="${size}" height="${size}" rx="${r}" fill="#fff"/></svg>`,
+  );
+}
+
+async function render({ size, rounded }: IconSpec): Promise<Buffer> {
+  // 원본(447px)보다 큰 크기는 약간의 업스케일 — lanczos3 로 최대한 부드럽게.
+  let img = sharp(SOURCE).resize(size, size, { fit: "cover", kernel: "lanczos3" });
+  if (rounded) {
+    img = img.composite([{ input: roundedMask(size), blend: "dest-in" }]);
+  }
+  return img.png({ compressionLevel: 9 }).toBuffer();
+}
 
 async function main() {
   mkdirSync(OUT_DIR, { recursive: true });
-  for (const { file, size, svg, note } of ICONS) {
-    const png = await sharp(Buffer.from(svg)).resize(size, size, { fit: "fill" }).png({ compressionLevel: 9 }).toBuffer();
-    writeFileSync(join(OUT_DIR, file), png);
-    console.log(`✓ ${file.padEnd(24)} ${String(size).padStart(3)}px  ${note}`);
+  for (const spec of ICONS) {
+    const png = await render(spec);
+    writeFileSync(join(OUT_DIR, spec.file), png);
+    console.log(`✓ ${spec.file.padEnd(24)} ${String(spec.size).padStart(3)}px  ${spec.note}`);
   }
 }
 
