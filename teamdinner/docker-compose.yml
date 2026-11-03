@@ -1,0 +1,36 @@
+# 로컬 개발용 DB — Neon 없이 돌릴 때만 쓴다 (`docker compose up -d`).
+#
+# 앱은 @neondatabase/serverless(WebSocket) 드라이버 하나만 쓰므로 평범한 Postgres에 바로 붙을 수
+# 없다. Neon이 제공하는 wsproxy가 그 WebSocket 프로토콜을 로컬 Postgres로 중계한다.
+# .env.local 예시:
+#   DATABASE_URL="postgres://postgres:postgres@db.localtest.me:5432/teamdinner"
+#   NEON_LOCAL_PROXY="db.localtest.me:4444"
+# (db.localtest.me 는 127.0.0.1로 풀리는 공개 도메인이다.)
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: teamdinner
+    ports:
+      - "5432:5432"
+    volumes:
+      - teamdinner-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 3s
+      retries: 10
+  neon-proxy:
+    image: ghcr.io/neondatabase/wsproxy:latest
+    environment:
+      APPEND_PORT: "postgres:5432"
+      ALLOW_ADDR_REGEX: ".*"
+      LOG_TRAFFIC: "false"
+    ports:
+      - "4444:80"
+    depends_on:
+      postgres:
+        condition: service_healthy
+volumes:
+  teamdinner-pg:
