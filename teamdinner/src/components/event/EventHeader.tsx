@@ -2,6 +2,7 @@
 
 import {
   ExternalLinkIcon,
+  ListIcon,
   MoreVerticalIcon,
   PencilIcon,
   RefreshCwIcon,
@@ -84,6 +85,9 @@ export function EventHeader({ event, memberName, memberCount, onChangeName, onSy
             )}
           </p>
         </div>
+        <Button variant="ghost" size="icon" nativeButton={false} render={<Link href="/" />} aria-label="회식 목록으로">
+          <ListIcon />
+        </Button>
         <Button variant="outline" size="icon" onClick={share} aria-label="링크 공유">
           <Share2Icon />
         </Button>

@@ -11,7 +11,9 @@ export default function NotFound() {
         <h1 className="text-xl font-semibold tracking-tight">회식을 찾을 수 없습니다</h1>
         <p className="max-w-xs text-sm text-muted-foreground">링크가 잘못됐거나 삭제된 회식입니다.</p>
       </div>
-      <Button render={<Link href="/" />}>새 회식 만들기</Button>
+      <Button nativeButton={false} render={<Link href="/" />}>
+        새 회식 만들기
+      </Button>
     </main>
   );
 }

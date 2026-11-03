@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { EventDeleteDialog } from "@/components/event/EventDeleteDialog";
 import { EventEditDialog } from "@/components/event/EventEditDialog";
+import { CreateEventDialog } from "@/components/home/CreateEventDialog";
 import { EventCard } from "@/components/home/EventCard";
 import { api } from "@/lib/client-api";
 import { isPast } from "@/lib/dates";
@@ -36,15 +37,25 @@ export function EventHistory({ initial, today }: Props) {
 
   if (data.length === 0) {
     return (
-      <p className="rounded-xl bg-muted/50 px-4 py-8 text-center text-sm text-muted-foreground">
-        아직 만든 회식이 없습니다. 위에서 첫 회식을 만들어 보세요.
-      </p>
+      <div className="flex flex-col items-center gap-3 rounded-xl bg-muted/50 px-4 py-10 text-center">
+        <p className="text-sm text-muted-foreground">아직 만든 회식이 없습니다.</p>
+        <CreateEventDialog defaultDate={today} />
+      </div>
     );
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <Section title="예정된 회식" count={upcoming.length} empty="예정된 회식이 없습니다.">
+      <Section
+        title="예정된 회식"
+        count={upcoming.length}
+        empty={
+          <div className="flex flex-col items-center gap-3">
+            <p>예정된 회식이 없습니다.</p>
+            <CreateEventDialog defaultDate={today} variant="outline" />
+          </div>
+        }
+      >
         {upcoming.map((e) => (
           <EventCard key={e.slug} event={e} today={today} past={false} onEdit={setEditing} onDelete={setDeleting} />
         ))}
@@ -71,7 +82,7 @@ function Section({
 }: {
   title: string;
   count: number;
-  empty?: string;
+  empty?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -80,7 +91,7 @@ function Section({
         {title} <span className="font-mono text-xs font-normal text-muted-foreground tabular-nums">{count}</span>
       </h2>
       {count === 0 ? (
-        <p className="rounded-xl bg-muted/50 px-4 py-5 text-center text-sm text-muted-foreground">{empty}</p>
+        <div className="rounded-xl bg-muted/50 px-4 py-6 text-center text-sm text-muted-foreground">{empty}</div>
       ) : (
         <ul className="flex flex-col gap-2">{children}</ul>
       )}

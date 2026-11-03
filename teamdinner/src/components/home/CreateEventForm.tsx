@@ -7,7 +7,6 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/client-api";
@@ -15,9 +14,11 @@ import { api } from "@/lib/client-api";
 interface Props {
   /** 날짜 입력 초기값(KST 오늘). */
   defaultDate: string;
+  /** 생성 성공 직후(이동 전) — 다이얼로그를 닫는 데 쓴다. */
+  onCreated?: () => void;
 }
 
-export function CreateEventForm({ defaultDate }: Props) {
+export function CreateEventForm({ defaultDate, onCreated }: Props) {
   const router = useRouter();
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
@@ -42,6 +43,7 @@ export function CreateEventForm({ defaultDate }: Props) {
         toast.success(`메뉴 ${result.menuCount}개를 가져왔습니다`);
       }
       qc.invalidateQueries({ queryKey: ["events"] });
+      onCreated?.();
       router.push(`/e/${result.slug}`);
     },
     onError: (err) => toast.error(err.message),
@@ -50,8 +52,6 @@ export function CreateEventForm({ defaultDate }: Props) {
   const ready = naverUrl.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(eventDate) && Number(headcount) >= 1;
 
   return (
-    <Card>
-      <CardContent>
         <form
           className="flex flex-col gap-4"
           onSubmit={(e) => {
@@ -120,7 +120,5 @@ export function CreateEventForm({ defaultDate }: Props) {
             )}
           </Button>
         </form>
-      </CardContent>
-    </Card>
   );
 }
