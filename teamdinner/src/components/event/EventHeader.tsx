@@ -11,9 +11,10 @@ import {
   UserRoundPenIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { toast } from "sonner";
+import { useState } from "react";
 
 import { AppMark } from "@/components/app-mark";
+import { ShareDialog } from "@/components/event/ShareDialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -39,23 +40,11 @@ interface Props {
 export function EventHeader({ event, memberName, memberCount, onChangeName, onSync, syncing, onEdit, onDelete }: Props) {
   // 날짜 표시는 클라이언트에서만 "오늘" 기준이 필요하다 — 헤더는 클라이언트 컴포넌트라 바로 계산한다.
   const dday = dDayLabel(event.eventDate, todayKstIso());
-  const share = async () => {
-    const url = window.location.href;
-    const text = `${event.title} — 먹고 싶은 메뉴를 미리 담아 주세요`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: event.title, text, url });
-        return;
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") return;
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      toast.success("링크를 복사했습니다");
-    } catch {
-      toast.error("복사하지 못했습니다. 주소창의 링크를 직접 복사해 주세요.");
-    }
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareUrl, setShareUrl] = useState("");
+  const openShare = () => {
+    setShareUrl(window.location.href);
+    setShareOpen(true);
   };
 
   return (
@@ -88,7 +77,7 @@ export function EventHeader({ event, memberName, memberCount, onChangeName, onSy
         <Button variant="ghost" size="icon" nativeButton={false} render={<Link href="/" />} aria-label="회식 목록으로">
           <ListIcon />
         </Button>
-        <Button variant="outline" size="icon" onClick={share} aria-label="링크 공유">
+        <Button variant="outline" size="icon" onClick={openShare} aria-label="링크 공유">
           <Share2Icon />
         </Button>
         <DropdownMenu>
@@ -127,6 +116,7 @@ export function EventHeader({ event, memberName, memberCount, onChangeName, onSy
           </>
         )}
       </p>
+      <ShareDialog open={shareOpen} onOpenChange={setShareOpen} title={event.title} url={shareUrl} />
     </header>
   );
 }
