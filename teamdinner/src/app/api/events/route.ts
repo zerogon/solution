@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
 
 import { jsonError, parseBody } from "@/lib/api";
-import { createEvent } from "@/lib/events";
+import { createEvent, listEvents } from "@/lib/events";
 import { NaverFetchError, NaverLinkError } from "@/lib/naver";
 import { createEventSchema } from "@/lib/validators";
 
 export const runtime = "nodejs";
+
+/** 팀 전체 회식 히스토리(요약 포함). */
+export async function GET() {
+  const list = await listEvents();
+  return NextResponse.json(list, { headers: { "cache-control": "no-store" } });
+}
 
 /** 회식 만들기: 링크 → 메뉴 수집 → 저장. */
 export async function POST(req: Request) {

@@ -1,20 +1,23 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { BottomBar } from "@/components/event/BottomBar";
 import { CartSummary } from "@/components/event/CartSummary";
 import { CustomMenuForm } from "@/components/event/CustomMenuForm";
+import { EventDeleteDialog } from "@/components/event/EventDeleteDialog";
+import { EventEditDialog } from "@/components/event/EventEditDialog";
 import { EventHeader } from "@/components/event/EventHeader";
 import { MenuList } from "@/components/event/MenuList";
-import { NameGate } from "@/components/event/NameGate";
+import { NameGate } from "@/components/NameGate";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { myQuantities, summarizeCart } from "@/lib/cart";
 import { api } from "@/lib/client-api";
 import type { EventPayload, PickDto } from "@/lib/events";
-import { rememberEventAndNotify, setMemberNameAndNotify } from "@/lib/member";
+import { setMemberNameAndNotify } from "@/lib/member";
 import { useMemberName } from "@/lib/use-member";
 import type { PickInput } from "@/lib/validators";
 
@@ -50,9 +53,9 @@ export function EventView({ slug, initial }: { slug: string; initial: EventPaylo
   const nameLoaded = stored !== undefined;
   const memberName = stored ?? null;
   const [editingName, setEditingName] = useState(false);
-  useEffect(() => {
-    rememberEventAndNotify({ slug, title: data.event.title, placeName: data.event.placeName });
-  }, [slug, data.event.title, data.event.placeName]);
+  const [editingEvent, setEditingEvent] = useState(false);
+  const [deletingEvent, setDeletingEvent] = useState(false);
+  const router = useRouter();
 
   const [tab, setTab] = useState<Tab>("menu");
 
@@ -126,9 +129,12 @@ export function EventView({ slug, initial }: { slug: string; initial: EventPaylo
       <EventHeader
         event={data.event}
         memberName={memberName}
+        memberCount={summary.memberCount}
         onChangeName={() => setEditingName(true)}
         onSync={() => sync.mutate()}
         syncing={sync.isPending}
+        onEdit={() => setEditingEvent(true)}
+        onDelete={() => setDeletingEvent(true)}
       />
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 pt-3 pb-28">
@@ -185,12 +191,19 @@ export function EventView({ slug, initial }: { slug: string; initial: EventPaylo
       <NameGate
         open={nameGateOpen}
         current={memberName}
-        placeName={data.event.placeName}
+        description={`${data.event.placeName}에서 먹고 싶은 메뉴를 담을 때 이 이름으로 표시됩니다.`}
         onSubmit={(name) => {
           setMemberNameAndNotify(name);
           setEditingName(false);
         }}
         onClose={() => setEditingName(false)}
+      />
+      <EventEditDialog event={data.event} open={editingEvent} onOpenChange={setEditingEvent} />
+      <EventDeleteDialog
+        event={data.event}
+        open={deletingEvent}
+        onOpenChange={setDeletingEvent}
+        onDeleted={() => router.replace("/")}
       />
     </div>
   );

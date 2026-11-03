@@ -1,4 +1,5 @@
 import {
+  date,
   index,
   integer,
   pgEnum,
@@ -17,6 +18,10 @@ export const events = pgTable("events", {
   id: serial("id").primaryKey(),
   slug: text("slug").notNull().unique(),
   title: text("title").notNull(),
+  /** 회식 날짜 'YYYY-MM-DD' (시간 없음, 문자열 모드라 타임존 밀림이 없다). */
+  eventDate: date("event_date", { mode: "string" }).notNull(),
+  /** 예상 인원. */
+  headcount: integer("headcount").notNull(),
   naverUrl: text("naver_url").notNull(),
   placeId: text("place_id").notNull(),
   placeName: text("place_name").notNull(),

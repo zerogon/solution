@@ -1,5 +1,5 @@
-import type { CreateEventResult, EventPayload, MenuDto, PickDto } from "@/lib/events";
-import type { CustomMenuInput, PickInput } from "@/lib/validators";
+import type { CreateEventResult, EventDto, EventPayload, EventSummary, MenuDto, PickDto } from "@/lib/events";
+import type { CreateEventInput, CustomMenuInput, PickInput, UpdateEventInput } from "@/lib/validators";
 
 export class ApiError extends Error {
   constructor(
@@ -34,8 +34,15 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  createEvent: (input: { title?: string; naverUrl: string }) =>
+  createEvent: (input: CreateEventInput) =>
     request<CreateEventResult>("/api/events", { method: "POST", body: JSON.stringify(input) }),
+
+  listEvents: () => request<EventSummary[]>("/api/events"),
+
+  updateEvent: (slug: string, input: UpdateEventInput) =>
+    request<EventDto>(`/api/events/${slug}`, { method: "PATCH", body: JSON.stringify(input) }),
+
+  deleteEvent: (slug: string) => request<{ ok: true }>(`/api/events/${slug}`, { method: "DELETE" }),
 
   getEvent: (slug: string) => request<EventPayload>(`/api/events/${slug}`),
 

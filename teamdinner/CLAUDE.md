@@ -7,6 +7,10 @@
 수량과 함께 담는다. 장바구니 탭에 메뉴별·사람별 집계와 예상 금액이 모인다.
 로그인 없음 · 주문 마감 없음(2026-11-03 결정). 모노레포 `solution` 안의 독립 프로젝트.
 
+2차(같은 날): 첫 화면 `/`에서 이름 팝업을 먼저 띄우고, 회식에 **날짜(날짜만, 시간 없음)·예상 인원**을
+받으며, **회식 히스토리는 서버 DB 기준 팀 전체** 목록이다(예정/지난, 제목·날짜·인원 수정, 삭제 —
+로그인이 없어 누구나 할 수 있다). localStorage의 "최근 연 회식"은 이때 제거했다.
+
 ## 스택 / 핵심 결정
 
 - Next.js 16 + React 19 + Tailwind v4 + shadcn v4 `base-nova`(`@base-ui/react`, `asChild` 미지원
@@ -42,8 +46,12 @@
 
 ## 데이터 모델 (`src/db/schema.ts`)
 
-`events`(slug unique) → `menus`(source naver|custom, `price` null = 가격 미정, 합계 제외)
-→ `picks`(unique `(eventId, menuId, memberName)`, 수량만 바뀜, 0이면 삭제).
+`events`(slug unique, `eventDate` date 문자열 'YYYY-MM-DD', `headcount`) → `menus`(source naver|custom,
+`price` null = 가격 미정, 합계 제외) → `picks`(unique `(eventId, menuId, memberName)`, 수량만 바뀜, 0이면 삭제).
+삭제는 FK cascade. 히스토리 집계는 `listEvents()`가 한 쿼리로(참여 인원·담은 수·예상 금액·미정 여부).
+
+날짜 규약: 'YYYY-MM-DD'만 주고받고 Date는 UTC 자정으로만 만든다(`src/lib/dates.ts`). "오늘"은 `todayKstIso()`
+— 홈은 서버가 계산해 `EventHistory`에 props로 내려 hydration을 맞춘다.
 
 ## 로컬 개발
 

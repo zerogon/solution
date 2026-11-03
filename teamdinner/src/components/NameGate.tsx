@@ -17,20 +17,15 @@ import { Label } from "@/components/ui/label";
 interface Props {
   open: boolean;
   current: string | null;
-  placeName: string;
+  /** 처음 묻는 경우의 설명 문구. 변경 모드에서는 고정 문구를 쓴다. */
+  description: string;
   onSubmit: (name: string) => void;
   /** 이름이 이미 있을 때(변경 모드)만 닫을 수 있다. */
   onClose?: () => void;
 }
 
-/** 로그인 대신 이름 하나. 처음 들어오면 반드시 거치고, 이후엔 헤더에서 바꿀 수 있다. */
-export function NameGate({
-  open,
-  current,
-  placeName,
-  onSubmit,
-  onClose,
-}: Props) {
+/** 로그인 대신 이름 하나. 처음 들어오면 반드시 거치고, 이후엔 바꿀 수 있다. 홈과 회식 화면이 공유한다. */
+export function NameGate({ open, current, description, onSubmit, onClose }: Props) {
   const changing = current !== null;
 
   return (
@@ -47,7 +42,7 @@ export function NameGate({
           key={`${open}:${current ?? ""}`}
           current={current}
           changing={changing}
-          placeName={placeName}
+          description={description}
           onSubmit={onSubmit}
         />
       </DialogContent>
@@ -58,12 +53,12 @@ export function NameGate({
 function NameForm({
   current,
   changing,
-  placeName,
+  description,
   onSubmit,
 }: {
   current: string | null;
   changing: boolean;
-  placeName: string;
+  description: string;
   onSubmit: (name: string) => void;
 }) {
   const [name, setName] = useState(current ?? "");
@@ -78,14 +73,8 @@ function NameForm({
       }}
     >
       <DialogHeader>
-        <DialogTitle>
-          {changing ? "이름 바꾸기" : "이름을 알려 주세요"}
-        </DialogTitle>
-        <DialogDescription>
-          {changing
-            ? "이전 이름으로 담은 메뉴는 그대로 남습니다."
-            : `${placeName}에서 먹고 싶은 메뉴를 담을 때 이 이름으로 표시됩니다.`}
-        </DialogDescription>
+        <DialogTitle>{changing ? "이름 바꾸기" : "이름을 알려 주세요"}</DialogTitle>
+        <DialogDescription>{changing ? "이전 이름으로 담은 메뉴는 그대로 남습니다." : description}</DialogDescription>
       </DialogHeader>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="memberName">이름</Label>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2Icon, LinkIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -12,13 +12,27 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/client-api";
 
-export function CreateEventForm() {
+interface Props {
+  /** 날짜 입력 초기값(KST 오늘). */
+  defaultDate: string;
+}
+
+export function CreateEventForm({ defaultDate }: Props) {
   const router = useRouter();
+  const qc = useQueryClient();
   const [title, setTitle] = useState("");
   const [naverUrl, setNaverUrl] = useState("");
+  const [eventDate, setEventDate] = useState(defaultDate);
+  const [headcount, setHeadcount] = useState("");
 
   const create = useMutation({
-    mutationFn: () => api.createEvent({ title: title.trim() || undefined, naverUrl: naverUrl.trim() }),
+    mutationFn: () =>
+      api.createEvent({
+        title: title.trim() || undefined,
+        naverUrl: naverUrl.trim(),
+        eventDate,
+        headcount: Number(headcount),
+      }),
     onSuccess: (result) => {
       if (result.menuCount === 0) {
         toast.warning("메뉴판을 가져오지 못했습니다", {
@@ -27,10 +41,13 @@ export function CreateEventForm() {
       } else {
         toast.success(`메뉴 ${result.menuCount}개를 가져왔습니다`);
       }
+      qc.invalidateQueries({ queryKey: ["events"] });
       router.push(`/e/${result.slug}`);
     },
     onError: (err) => toast.error(err.message),
   });
+
+  const ready = naverUrl.trim().length > 0 && /^\d{4}-\d{2}-\d{2}$/.test(eventDate) && Number(headcount) >= 1;
 
   return (
     <Card>
@@ -39,7 +56,7 @@ export function CreateEventForm() {
           className="flex flex-col gap-4"
           onSubmit={(e) => {
             e.preventDefault();
-            if (!naverUrl.trim() || create.isPending) return;
+            if (!ready || create.isPending) return;
             create.mutate();
           }}
         >
@@ -59,6 +76,27 @@ export function CreateEventForm() {
               />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="eventDate">회식 날짜</Label>
+              <Input id="eventDate" type="date" className="h-10" value={eventDate} onChange={(e) => setEventDate(e.target.value)} required />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="headcount">예상 인원</Label>
+              <Input
+                id="headcount"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={500}
+                placeholder="예: 8"
+                className="h-10 font-mono tabular-nums"
+                value={headcount}
+                onChange={(e) => setHeadcount(e.target.value)}
+                required
+              />
+            </div>
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="title">
               회식 이름 <span className="font-normal text-muted-foreground">(선택)</span>
@@ -72,7 +110,7 @@ export function CreateEventForm() {
               onChange={(e) => setTitle(e.target.value)}
             />
           </div>
-          <Button type="submit" size="lg" className="h-11 text-base" disabled={create.isPending || !naverUrl.trim()}>
+          <Button type="submit" size="lg" className="h-11 text-base" disabled={create.isPending || !ready}>
             {create.isPending ? (
               <>
                 <Loader2Icon className="animate-spin" /> 메뉴판 가져오는 중…

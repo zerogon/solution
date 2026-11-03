@@ -1,4 +1,4 @@
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, sql } from "drizzle-orm";
 
 import { getDb, schema } from "@/db";
 import type { Event, Menu, Pick } from "@/db/schema";
@@ -42,6 +42,58 @@ export async function findEventBySlug(slug: string): Promise<Event | null> {
   const db = getDb();
   const rows = await db.select().from(events).where(eq(events.slug, slug)).limit(1);
   return rows[0] ?? null;
+}
+
+/** 히스토리 카드 한 장에 필요한 요약. */
+export interface EventSummary extends EventDto {
+  /** 메뉴를 하나라도 담은 사람 수. */
+  participantCount: number;
+  pickCount: number;
+  /** 가격을 아는 메뉴만 합산한 예상 금액(원). */
+  estimatedTotal: number;
+  /** 가격 미정 메뉴가 담겨 있어 금액이 하한이라는 뜻. */
+  hasUnpriced: boolean;
+}
+
+/** 팀 전체 회식 목록 + 집계. 최신 날짜가 먼저. 예정/지난 분리는 클라이언트가 한다. */
+export async function listEvents(): Promise<EventSummary[]> {
+  const db = getDb();
+  const rows = await db
+    .select({
+      event: events,
+      participantCount: sql<number>`count(distinct ${picks.memberName})::int`,
+      pickCount: sql<number>`coalesce(sum(${picks.quantity}), 0)::int`,
+      estimatedTotal: sql<number>`coalesce(sum(${picks.quantity} * ${menus.price}), 0)::int`,
+      hasUnpriced: sql<boolean>`coalesce(bool_or(${picks.id} is not null and ${menus.price} is null), false)`,
+    })
+    .from(events)
+    .leftJoin(picks, eq(picks.eventId, events.id))
+    .leftJoin(menus, eq(menus.id, picks.menuId))
+    .groupBy(events.id)
+    .orderBy(desc(events.eventDate), desc(events.id));
+
+  return rows.map((r) => ({
+    ...toPublic(r.event),
+    participantCount: Number(r.participantCount),
+    pickCount: Number(r.pickCount),
+    estimatedTotal: Number(r.estimatedTotal),
+    hasUnpriced: Boolean(r.hasUnpriced),
+  }));
+}
+
+export async function updateEvent(
+  event: Event,
+  patch: { title?: string; eventDate?: string; headcount?: number },
+): Promise<EventDto> {
+  const db = getDb();
+  const [row] = await db.update(events).set(patch).where(eq(events.id, event.id)).returning();
+  return toPublic(row);
+}
+
+/** menus·picks는 FK cascade로 같이 지워진다. */
+export async function deleteEvent(event: Event): Promise<void> {
+  const db = getDb();
+  await db.delete(events).where(eq(events.id, event.id));
 }
 
 /** 폴링 한 번에 필요한 전부 — 회식·메뉴·장바구니. 쿼리 2개를 병렬로 보낸다. */
@@ -107,7 +159,12 @@ export interface CreateEventResult {
  * 링크 해석 → 메뉴 수집 → 회식 생성.
  * 장소 이름조차 못 얻으면 throw(호출자가 400). 메뉴가 0개면 생성은 하고 menuCount=0.
  */
-export async function createEvent(input: { title?: string; naverUrl: string }): Promise<CreateEventResult> {
+export async function createEvent(input: {
+  title?: string;
+  naverUrl: string;
+  eventDate: string;
+  headcount: number;
+}): Promise<CreateEventResult> {
   const { placeId, resolvedUrl } = await resolvePlaceId(input.naverUrl);
   const page = await fetchPlaceMenus(placeId);
   if (!page.place) throw new Error("장소 정보를 읽지 못했습니다.");
@@ -119,6 +176,8 @@ export async function createEvent(input: { title?: string; naverUrl: string }): 
     .values({
       slug: newSlug(),
       title,
+      eventDate: input.eventDate,
+      headcount: input.headcount,
       naverUrl: resolvedUrl,
       placeId,
       placeName: page.place.name,
