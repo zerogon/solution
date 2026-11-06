@@ -7,19 +7,21 @@ import { cn } from "@/lib/utils";
 
 /**
  * 기록 폼의 계산 미리보기. 서버와 같은 `computeLeaveDays` 결과를 그린다 —
- * "차감 2일 · 제외: 9.19(토) 쉬는 날, 9.24(목) 추석" 그리고 기록 후 그 해 잔여.
+ * "차감 2일 · 제외: 9.19(토) 쉬는 날, 9.24(목) 추석" 그리고 등록 후 그 회차 잔여.
  *
  * 잔여가 모자라도 경고만 한다(장부는 막지 않는다). 직접 입력 중이면 그 값으로 잔여를 보여 준다.
  */
 export function DaysPreview({
   result,
   remaining,
-  year,
+  periodLabel,
   manualDays,
 }: {
   result: LeaveDaysResult | null;
-  remaining: number;
-  year: number;
+  /** 그 회차의 현재 잔여. null = 알 수 없음(입사일 미설정 등) — 경고 없이 차감만 보여 준다. */
+  remaining: number | null;
+  /** "3년차" / "입사 전". null = 입사일 미설정. */
+  periodLabel: string | null;
   /** 직접 입력 모드의 유효한 값. null이면 자동 계산을 쓴다. */
   manualDays: number | null;
 }) {
@@ -45,8 +47,8 @@ export function DaysPreview({
     );
   }
 
-  const after = remaining - days;
-  const short = after < 0;
+  const after = remaining == null ? null : remaining - days;
+  const short = after != null && after < 0;
   return (
     <div
       className={cn(
@@ -61,9 +63,15 @@ export function DaysPreview({
           {manualDays != null && <span className="text-muted-foreground">(직접 입력)</span>}
         </span>
         <span className="text-muted-foreground">·</span>
-        <span className={cn(short && "text-amber-700")}>
-          {year}년 잔여 <span className="font-mono font-semibold tabular-nums">{formatDays(after)}</span>
-        </span>
+        {after == null ? (
+          <span className="text-muted-foreground">
+            {periodLabel == null ? "입사일을 입력하면 잔여를 보여 줍니다." : `${periodLabel} 잔여는 설정의 회차 표에서 봅니다.`}
+          </span>
+        ) : (
+          <span className={cn(short && "text-amber-700")}>
+            {periodLabel} 잔여 <span className="font-mono font-semibold tabular-nums">{formatDays(after)}</span>
+          </span>
+        )}
       </div>
       {result.ok && manualDays == null && result.skipped.length > 0 && (
         <p className="text-xs text-muted-foreground">
@@ -73,7 +81,7 @@ export function DaysPreview({
             .join(", ")}
         </p>
       )}
-      {short && <p className="text-xs text-amber-700">{year}년 부여 일수를 넘습니다. 그래도 등록할 수 있습니다.</p>}
+      {short && <p className="text-xs text-amber-700">{periodLabel} 발생 일수를 넘습니다. 그래도 등록할 수 있습니다.</p>}
     </div>
   );
 }

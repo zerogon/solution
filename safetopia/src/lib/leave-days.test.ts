@@ -62,16 +62,33 @@ describe("computeLeaveDays — 연차", () => {
     expect(computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-09-16", endIso: "2026-09-14", closedWeekdays: [], oracle })).toEqual({ ok: false, reason: "range" });
   });
 
-  it("해를 넘기면 year_boundary — 부여가 연도 단위라 나눠서 기록한다", () => {
-    const wide = holidayOracle([2026, 2027], { "2026": {}, "2027": {} });
-    const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-12-30", endIso: "2027-01-02", closedWeekdays: [], oracle: wide });
-    expect(r).toEqual({ ok: false, reason: "year_boundary" });
+  // 회차는 입사일 기준이라 1/1이 아니다. 3/4 입사 → 2026-03-04~2027-03-03.
+  const period = { startIso: "2026-03-04", endIso: "2027-03-03" };
+  const wide = holidayOracle([2026, 2027], { "2026": {}, "2027": {} });
+
+  it("회차 끝을 넘기면 period_boundary — 발생이 회차 단위라 나눠서 등록한다", () => {
+    const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2027-03-02", endIso: "2027-03-05", closedWeekdays: [], oracle: wide, period });
+    expect(r).toEqual({ ok: false, reason: "period_boundary" });
   });
 
-  it("12/31로 끝나면 통과한다", () => {
-    const wide = holidayOracle([2026], { "2026": {} });
-    const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-12-30", endIso: "2026-12-31", closedWeekdays: [], oracle: wide });
+  it("회차 시작 전에서 시작해도 period_boundary", () => {
+    const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-03-02", endIso: "2026-03-05", closedWeekdays: [], oracle: wide, period });
+    expect(r).toEqual({ ok: false, reason: "period_boundary" });
+  });
+
+  it("해를 넘겨도 같은 회차면 통과한다 (옛 year_boundary 회귀)", () => {
+    const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-12-30", endIso: "2027-01-02", closedWeekdays: [], oracle: wide, period });
+    expect(r).toMatchObject({ ok: true, days: 4 });
+  });
+
+  it("회차 마지막 날로 끝나면 통과한다", () => {
+    const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2027-03-02", endIso: "2027-03-03", closedWeekdays: [], oracle: wide, period });
     expect(r).toMatchObject({ ok: true, days: 2 });
+  });
+
+  it("period를 주지 않으면(입사일 미설정·입사 전 기록) 경계를 보지 않는다", () => {
+    const r = computeLeaveDays({ type: LeaveType.FULL_DAY, startIso: "2026-12-30", endIso: "2027-01-02", closedWeekdays: [], oracle: wide });
+    expect(r).toMatchObject({ ok: true, days: 4 });
   });
 
   it("31일 초과는 too_long", () => {
@@ -124,7 +141,8 @@ describe("manualEntryDates — 일수 직접 입력", () => {
   });
 
   it("모양 검사는 자동 계산과 같다", () => {
-    expect(manualEntryDates({ type: LeaveType.FULL_DAY, startIso: "2026-12-31", endIso: "2027-01-01", closedWeekdays: [], oracle })).toEqual({ ok: false, reason: "year_boundary" });
+    const period = { startIso: "2026-03-04", endIso: "2027-03-03" };
+    expect(manualEntryDates({ type: LeaveType.FULL_DAY, startIso: "2027-03-03", endIso: "2027-03-04", closedWeekdays: [], oracle, period })).toEqual({ ok: false, reason: "period_boundary" });
     expect(manualEntryDates({ type: LeaveType.AM_HALF, startIso: "2026-09-15", endIso: "2026-09-16", closedWeekdays: [], oracle })).toEqual({ ok: false, reason: "half_day_not_single" });
   });
 });

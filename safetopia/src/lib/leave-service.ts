@@ -3,7 +3,8 @@ import type { LeaveType } from "@/generated/prisma/enums";
 import { LeaveError } from "@/lib/errors";
 import { getHolidayOracle } from "@/lib/holidays-server";
 import { LEAVE_DAYS_ERROR_MESSAGE, computeLeaveDays, manualEntryDates } from "@/lib/leave-days";
-import { parseDate } from "@/lib/utils";
+import { periodFor } from "@/lib/leave-accrual";
+import { parseDate, toIsoDate } from "@/lib/utils";
 
 /**
  * 연차 기록 쓰기 — 추가·수정·삭제 전부 여기서, 전부 트랜잭션 안에서.
@@ -28,10 +29,13 @@ export interface EntryInput {
 }
 
 async function resolveDays(db: PrismaClient, input: EntryInput) {
-  const owner = await db.owner.findUnique({ where: { id: "owner" }, select: { closedWeekdays: true } });
+  const owner = await db.owner.findUnique({ where: { id: "owner" }, select: { closedWeekdays: true, hireDate: true } });
   const closedWeekdays = owner?.closedWeekdays ?? [0, 6];
+  const hireIso = owner?.hireDate ? toIsoDate(owner.hireDate) : null;
+  // 기록은 시작일이 속한 회차 안에 있어야 한다. 입사일 미설정·입사 전 기록(옛 엑셀 행)은 경계를 보지 않는다.
+  const period = hireIso && input.startIso >= hireIso ? periodFor(hireIso, input.startIso) : null;
   const { oracle } = await getHolidayOracle();
-  const args = { type: input.type, startIso: input.startIso, endIso: input.endIso, closedWeekdays, oracle };
+  const args = { type: input.type, startIso: input.startIso, endIso: input.endIso, closedWeekdays, oracle, period };
 
   if (input.manualDays != null) {
     const r = manualEntryDates(args);

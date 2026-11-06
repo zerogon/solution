@@ -2,9 +2,15 @@ import { describe, expect, it } from "vitest";
 import { roundHalf, summarize } from "@/lib/leave-balance";
 
 describe("summarize", () => {
-  it("부여 + 이월 - 사용", () => {
+  it("발생 + 이월 - 사용", () => {
     const s = summarize({ grantedDays: 15, carriedOverDays: 2, used: 3.5 });
-    expect(s).toEqual({ granted: 15, carriedOver: 2, total: 17, used: 3.5, remaining: 13.5 });
+    expect(s).toEqual({ granted: 15, carriedOver: 2, adjusted: 0, total: 17, used: 3.5, remaining: 13.5 });
+  });
+
+  it("보정은 음수도 된다", () => {
+    const s = summarize({ grantedDays: 15, carriedOverDays: 0, adjustedDays: -15, used: 1 });
+    expect(s).toMatchObject({ adjusted: -15, total: 0, remaining: -1 });
+    expect(summarize({ grantedDays: 15, carriedOverDays: 0, adjustedDays: 2, used: 0 }).total).toBe(17);
   });
 
   it("사용이 보유를 넘으면 remaining이 음수로 드러난다(기록은 막지 않는다)", () => {
@@ -12,7 +18,7 @@ describe("summarize", () => {
     expect(s.remaining).toBe(-0.5);
   });
 
-  it("부여가 없는 해는 전부 0에서 시작한다", () => {
+  it("발생이 없는 회차는 전부 0에서 시작한다", () => {
     expect(summarize({ grantedDays: 0, carriedOverDays: 0, used: 2 }).remaining).toBe(-2);
   });
 

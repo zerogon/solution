@@ -23,23 +23,28 @@ model Owner {
   password       String
   /// 쉬는 요일. 0=일 … 6=토 (JS getUTCDay 규약). 연차 일수 계산에서 제외된다.
   closedWeekdays Int[]    @default([0, 6]) @map("closed_weekdays")
+  /// 입사일. 연차 회차·발생 일수는 전부 이 날짜에서 계산한다(`leave-accrual.ts`). null = 아직 미설정.
+  hireDate       DateTime? @map("hire_date") @db.Date
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("owner")
 }
 
-/// 연도별 부여(1/1~12/31). 엑셀의 "올해 연차 n일" 칸.
-model LeaveYear {
+/// 회차별 조정. 발생 일수는 저장하지 않고 입사일로 계산한다 — 회사 사정으로 다른 만큼(이월·보정)만 적는다.
+/// 회차 경계도 저장하지 않는다(입사일 + index로 매번 계산). 행은 조정이 있는 회차에만 있다.
+model LeavePeriod {
   id              String   @id @default(uuid())
-  year            Int      @unique
-  grantedDays     Float    @map("granted_days")
+  /// 1-based 회차. 1 = 입사 첫해(1년 미만).
+  index           Int      @unique
   carriedOverDays Float    @default(0) @map("carried_over_days")
+  /// 보정(음수 가능). 예: 출근율 미달 −15, 회사 특별 부여 +2.
+  adjustedDays    Float    @default(0) @map("adjusted_days")
   memo            String?
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  @@map("leave_years")
+  @@map("leave_periods")
 }
 
 /// 연차 기록 1줄. 사용 일수는 저장된 행의 합으로 계산한다(누계 컬럼 없음).

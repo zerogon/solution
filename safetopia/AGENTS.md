@@ -11,8 +11,9 @@ This version has breaking changes — APIs, conventions, and file structure may 
 요구사항은 `PRD.md`. 구현 결정 근거는 이 문서가 단일 출처다.
 
 2026-10-19, 다지점 카페 연차 시스템(safetopia)을 **1인용 연차 장부**로 전환했다. 사용자는 한 명이고,
-그 전에는 엑셀로 관리했다(연도별 부여 일수 + 쓴 날 한 줄씩 + 잔여). 관리자·직원·지점·감사 로그·입사일 회차
-자동 발생·승인/취소 상태는 전부 없앴다. 폴더 `safetopia/`와 브랜치 `safetopia`는 Vercel 설정 때문에 이름을 그대로 둔다.
+그 전에는 엑셀로 관리했다(연도별 부여 일수 + 쓴 날 한 줄씩 + 잔여). 관리자·직원·지점·감사 로그·승인/취소 상태는 전부 없앴다.
+입사일 회차 자동 발생도 그때 없앴다가 **2026-11-06에 되살렸다**(사용자 결정, 아래 "연차 발생") — 연도별 부여 수동 입력(`LeaveYear`)은 그때 사라졌다.
+폴더 `safetopia/`와 브랜치 `safetopia`는 Vercel 설정 때문에 이름을 그대로 둔다.
 
 ## 스택 / 형제 앱과의 관계
 - Next 16(App Router, Turbopack) + React 19 + Prisma 7(`prisma-client` 생성기, `@prisma/adapter-pg`) + Auth.js v5 beta(Credentials, JWT) + Tailwind v4 + shadcn v4 **base-nova(Base UI, Radix 아님)** + zod 4 + sonner.
@@ -32,11 +33,12 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 셸 지오메트리 `--app-sidebar-w`(16rem) + `--app-content-w`(88rem) = 1664px 고정 쌍. 내비는 `nav-items.ts`의 `NAV_ITEMS` 한 배열.
 
 ## 화면 — 캘린더와 설정 둘뿐 (2026-10-19 최소화, 사용자 결정)
-- `/calendar`가 본 화면이다(`/`·로그인 후 여기로). 위에 **그 해 잔여 한 줄**, 아래 월 달력. 홈·연차 기록 목록·월별 합계 화면은 일부러 없앴다 — 되살리지 말 것.
+- `/calendar`가 본 화면이다(`/`·로그인 후 여기로). 위에 **그 회차 잔여 한 줄**(이번 달이면 오늘, 아니면 그 달 말일이 속한 회차; 달 안에서 회차가 바뀌면 "3.4(수)부터 3년차" 힌트), 아래 월 달력. 홈·연차 기록 목록·월별 합계 화면은 일부러 없앴다 — 되살리지 말 것.
 - 기록 추가·수정·삭제는 **창(`EntryDialog`)**에서. 열림 상태는 URL이 갖는다: 빈 날짜 칸 → `?m=YYYY-MM&add=날짜`, 기록 칩 → `?entry=id`.
   그래서 `MonthGrid`는 서버 컴포넌트 그대로이고, 칸 본문은 평범한 `<Link>`다. 닫기 = 파라미터를 뺀 주소로 `router.replace`.
-  폼 데이터(공휴일·연도별 잔여·수정 대상)는 창이 열릴 때만 만든다. Base UI Dialog는 포털이라 SSR HTML에는 안 나온다(브라우저로 확인).
-- `/settings`: 연도별 부여 표(연도 누르면 그 해 1월 달력) · 이름. 쉬는 요일 토글과 비밀번호 변경은 2026-11-06에 뺐다(사용자 결정) — `closedWeekdays`는 DB 기본 토·일 그대로.
+  폼 데이터(공휴일·회차별 잔여·수정 대상)는 창이 열릴 때만 만든다. Base UI Dialog는 포털이라 SSR HTML에는 안 나온다(브라우저로 확인).
+- `/settings`: 이름·**입사일**(저장 즉시 오늘 기준 회차·발생 미리보기) · **연차 회차 표**(회차 누르면 그 회차 시작 달; 이월·보정·메모만 입력, 발생은 계산값).
+  쉬는 요일 토글과 비밀번호 변경은 2026-11-06에 뺐다(사용자 결정) — `closedWeekdays`는 DB 기본 토·일 그대로.
 
 ## 날짜 규약 (어기면 하루 밀린다)
 - 경계는 `"YYYY-MM-DD"` 문자열. DB는 `@db.Date`. Date 객체는 **UTC 자정**(`parseDate`). 읽을 땐 UTC getter만.
@@ -44,14 +46,25 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - `Owner.closedWeekdays`는 `getUTCDay()` 규약(0=일).
 
 ## 데이터 모델 (`prisma/schema.prisma`)
-- `Owner` — 싱글턴(id `"owner"`). 이름, bcrypt 비밀번호, 쉬는 요일(기본 `[0,6]` 토·일).
-- `LeaveYear` — 연도별 부여(`year` 유니크, `grantedDays`, `carriedOverDays`, `memo`). 기간은 **캘린더 연도**(1/1~12/31).
-  이월은 지난해 잔여에서 자동으로 끌어오지 않는다 — 회사마다 규칙이 달라 엑셀처럼 직접 적는다.
+- `Owner` — 싱글턴(id `"owner"`). 이름, bcrypt 비밀번호, 쉬는 요일(기본 `[0,6]` 토·일), **`hireDate`**(nullable `@db.Date`; 화면에선 한 번 넣으면 비울 수 없다).
+  코드 경계에서는 `hireIso: string | null`로만 다닌다(`hireIsoOf`, `requireOwner`/`getOwner`).
+- `LeavePeriod` — **회차별 조정**(`index` 유니크 = 1-based 회차, `carriedOverDays`, `adjustedDays`(음수 가능), `memo`). 발생 일수와 회차 경계는
+  **저장하지 않는다**(입사일 + index로 매번 계산) — 입사일을 고쳐도 행은 안 움직이고 사용 버킷만 옮겨진다. 행은 조정이 있는 회차에만 있다.
+  이월은 지난 회차 잔여에서 자동으로 끌어오지 않는다(법은 소멸, 회사는 제각각) — 엑셀처럼 직접 적는다.
 - `LeaveEntry` — 기록 1줄(유형·시작/종료·`days`·`manualDays`·`memo`). 상태 없음, 삭제는 하드 삭제.
 - `LeaveEntryDay` — 기록이 덮는 날짜 1행. **`date` 유니크**가 같은 날 중복 기록을 DB 층에서 막는다. 캘린더가 이 표를 읽는다.
-- 잔여는 저장하지 않는다: 총 = 부여 + 이월, 사용 = 그 해 `LeaveEntry.days` 합(`src/lib/queries.ts`), 잔여 = 총 − 사용
-  (`src/lib/leave-balance.ts`). "그 해의 기록" = 시작일이 그 해인 기록 — 한 기록은 한 해 안에 있으므로 정확하다.
+- 잔여는 저장하지 않는다: 총 = 발생 + 이월 + 보정, 사용 = 그 회차 `LeaveEntry.days` 합(`getPeriodSummaries`, `src/lib/queries.ts`), 잔여 = 총 − 사용
+  (`src/lib/leave-balance.ts`). "그 회차의 기록" = 시작일이 그 회차인 기록(`periodIndexFor`) — 한 기록은 한 회차 안에 있으므로 정확하다.
+  입사일 이전 기록은 **index 0 "입사 전"**으로 따로 모은다(1회차의 11일에 섞이지 않게).
 - **잔여가 모자라도 기록을 막지 않는다.** 장부는 일어난 일을 적는 곳이고, 지난 해를 옮겨 적을 때 부여보다 기록을 먼저 넣는 일이 흔하다. 음수 잔여는 빨갛게, 폼 미리보기는 amber 경고.
+
+## 연차 발생 (입사일 기준, 근로기준법 60조 — 2026-11-06)
+- `src/lib/leave-accrual.ts`(순수, vitest; 옛 커밋 `d8e58b1`에서 그대로 복원). n회차 = `[입사일 + 12(n−1)개월, 다음 회차 시작 − 1일]`, 항상 입사일을
+  앵커로 계산(체이닝하면 말일 클램프가 드리프트). 1회차(1년 미만)는 입사 후 매달 기념일에 1일, 최대 11일(진행형). 2회차부터 만 `y = index−1`년에
+  `min(25, 15 + floor((y−1)/2))`. 개근·80% 출근은 **충족 가정**(출근 기록이 없다) — 예외는 회차 `adjustedDays`로.
+- 미래 회차는 시작일 기준으로 센다(`upcoming`, 화면에 "발생 예정") — 다음 해 휴가를 미리 적어도 잔여가 음수로 보이지 않게. 지난 회차는 끝난 시점으로 고정.
+- `periodIndexFor`(어느 회차에 귀속)와 `computeLeaveDays`(얼마를 깎나)는 별개 관심사 — 합치지 말 것.
+- 입사일을 바꾸면 회차 경계가 전부 다시 계산된다. 경계에 걸치게 된 기록은 다음 수정 때 `period_boundary`로 막힌다 — 나눠서 다시 등록한다(설정 폼이 경고).
 
 ## 일수 계산
 - `src/lib/leave-days.ts`(순수, 서버·클라이언트 공유, vitest). 쉬는 요일 + 공휴일을 뺀다. 반차는 하루·0.5일, 쉬는 날이면 거부.
@@ -59,7 +72,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
   데이터 없는 연도는 `uncovered`로 **자동 계산을 멈춘다**(모르는 채로 세면 연차를 더 깎는다).
 - 그때(또는 회사 사정으로 일수가 다를 때) **일수 직접 입력**(`manualDays=true`)을 쓴다. 일수는 사용자 값을 믿고, 날짜 행은
   `manualEntryDates`가 아는 만큼만 쉬는 날을 빼서 만든다(다 빠지면 범위 전체). 반차의 직접 입력은 0.5일 고정.
-- 모양 규칙(`checkRange`)은 자동·직접 공통: 종료 ≥ 시작, **해를 넘기면 `year_boundary`**, 31일 초과 `too_long`, 반차 이틀 금지.
+- 모양 규칙(`checkRange`)은 자동·직접 공통: 종료 ≥ 시작, **회차를 넘기면 `period_boundary`**(호출자가 `period`를 준다; 입사일 미설정·입사 전 기록은 `null`로 검사 없음 — 옛 엑셀 행을 못 고치는 사고 방지), 31일 초과 `too_long`, 반차 이틀 금지.
+  해를 넘겨도 같은 회차면 통과한다.
 - 쉬는 요일을 바꿔도 **저장된 기록의 일수는 재계산하지 않는다** — 그 날 실제로 깎인 일수가 장부의 사실이다.
 - 쓰기는 전부 `src/lib/leave-service.ts`(`createEntry`/`updateEntry`/`deleteEntry`, 각각 `$transaction`). 서버에서 일수를 다시 계산하고(미리보기를 믿지 않는다),
   수정은 날짜 행을 지우고 다시 만든다(자기 옛 날짜와는 충돌로 보지 않는다). P2002는 `toActionError`가 "이미 기록된 날짜"로 번역.
@@ -72,7 +86,8 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## 로컬 개발
 - `npm run db:local:up`(Docker Postgres **5434**, DB `sulki_holiday`/유저 `sulki`; 5433은 pianoflow) → `db:local:dev`(migrate dev) → `db:local:seed`. 파괴적 명령은 전부 `assert-local-db` 가드 뒤.
-- 시드: 비밀번호 `1234`, 2025(직접 입력 기록 3건)·2026(어린이날 낀 기간·반차·앞으로의 휴가) 부여와 기록.
+- 시드: 비밀번호 `1234`, 입사일 2024-03-04(2회차 2025-03-04~, 3회차 2026-03-04~, 3회차 이월 2), 2025(직접 입력 기록 3건)·2026(어린이날 낀 기간·반차·앞으로의 휴가) 기록.
+  기대값: 2회차 사용 5.5·잔여 9.5, 3회차 사용 9.5·잔여 7.5.
 - 검증: `npm run typecheck`, `npm run lint`, `npm test`(vitest — 순수 함수만), 수동 절차는 `.claude/skills/verify/SKILL.md`.
 - Docker를 못 띄우면 `npx pglite-server -p 5455 -m 10` + `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5455/postgres?sslmode=disable`로 메모리 DB에서 migrate/seed/스모크가 된다(`localhost`는 ::1로 가서 실패 — 127.0.0.1을 쓸 것).
 

@@ -1,25 +1,29 @@
 /**
- * 연도별 잔여 산식 — 엑셀의 "부여 / 이월 / 사용 / 잔여" 네 칸.
+ * 회차별 잔여 산식 — 엑셀의 "발생 / 이월 / 보정 / 사용 / 잔여" 칸.
  *
- *   총 보유 = grantedDays + carriedOverDays
+ *   총 보유 = grantedDays + carriedOverDays + adjustedDays
  *   잔여    = 총 보유 - used
  *
- * `used`는 저장된 누계가 아니라 그 해 `LeaveEntry.days`의 합이다(`queries.ts`). 기록을 고치거나
- * 지우면 곧바로 맞는 값이 나온다. 모든 값은 0.5 단위라 이진 부동소수로 정확하지만, 합산 순서에
- * 따른 표기 잡음을 막기 위해 `roundHalf`를 한 번 거친다.
+ * `grantedDays`는 저장값이 아니라 입사일로 계산한 발생 일수다(`leave-accrual.ts`, 호출자가 넣는다).
+ * `used`는 그 회차에 귀속된 `LeaveEntry.days`의 합이다(`queries.ts`). 기록을 고치거나 지우면 곧바로 맞는
+ * 값이 나온다. 모든 값은 0.5 단위라 이진 부동소수로 정확하지만, 합산 순서에 따른 표기 잡음을 막기 위해
+ * `roundHalf`를 한 번 거친다.
  *
  * 잔여가 음수여도 막지 않는다 — 장부는 일어난 일을 적는 곳이다. 화면이 빨갛게 보여 줄 뿐이다.
  */
 
-export interface YearBalanceInput {
+export interface BalanceInput {
   grantedDays: number;
   carriedOverDays: number;
+  /** 보정. 음수 가능. 생략하면 0. */
+  adjustedDays?: number;
   used: number;
 }
 
 export interface BalanceSummary {
   granted: number;
   carriedOver: number;
+  adjusted: number;
   total: number;
   used: number;
   remaining: number;
@@ -30,12 +34,14 @@ export function roundHalf(n: number): number {
   return Math.round(n * 2) / 2;
 }
 
-export function summarize(b: YearBalanceInput): BalanceSummary {
-  const total = roundHalf(b.grantedDays + b.carriedOverDays);
+export function summarize(b: BalanceInput): BalanceSummary {
+  const adjusted = roundHalf(b.adjustedDays ?? 0);
+  const total = roundHalf(b.grantedDays + b.carriedOverDays + adjusted);
   const used = roundHalf(b.used);
   return {
     granted: roundHalf(b.grantedDays),
     carriedOver: roundHalf(b.carriedOverDays),
+    adjusted,
     total,
     used,
     remaining: roundHalf(total - used),

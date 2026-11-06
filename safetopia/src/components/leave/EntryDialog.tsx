@@ -26,7 +26,8 @@ export function EntryDialog({
   description: string;
   closedWeekdays: number[];
   holidays: { covered: number[]; years: Record<string, HolidayMap> };
-  remainingByYear: Record<number, number>;
+  hireIso: string | null;
+  remainingByPeriod: Record<number, number>;
   defaultDate: string;
   initial?: EntryFormInitial;
 }) {

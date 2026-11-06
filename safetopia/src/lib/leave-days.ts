@@ -11,7 +11,8 @@ import { addDaysIso, diffDaysIso, parseDate } from "@/lib/utils";
  * - 공휴일 데이터가 없는 연도(`oracle.covers === false`)는 **계산하지 않는다.** 모르는 채로
  *   세면 휴일을 근무일로 쳐서 연차를 더 깎는 방향이다. 그런 기록(대개 엑셀에서 옮기는 지난 해)은
  *   일수를 직접 입력한다 — `entryDates`.
- * - 한 기록은 **한 해** 안에 들어와야 한다(부여가 연도 단위라서).
+ * - 한 기록은 **한 회차** 안에 들어와야 한다(발생이 회차 단위라서). 회차는 호출자가 `period`로 준다 —
+ *   입사일 미설정·입사 전 기록은 `period: null`로 경계 검사를 건너뛴다.
  *
  * `countedDates`가 곧 `LeaveEntryDay` 행이다 — 쉬는 날은 행을 만들지 않으므로
  * 같은 날 다른 기록과 충돌하지 않는다.
@@ -31,7 +32,7 @@ export type LeaveDaysResult =
       ok: false;
       reason:
         | "range"
-        | "year_boundary"
+        | "period_boundary"
         | "too_long"
         | "uncovered"
         | "half_day_not_single"
@@ -45,7 +46,7 @@ export const MAX_RANGE_DAYS = 31;
 
 export const LEAVE_DAYS_ERROR_MESSAGE: Record<Extract<LeaveDaysResult, { ok: false }>["reason"], string> = {
   range: "종료일이 시작일보다 앞설 수 없습니다.",
-  year_boundary: "해를 넘기는 연차는 연도별로 나눠서 등록해주세요.",
+  period_boundary: "연차 회차를 넘기는 연차는 회차별로 나눠서 등록해주세요.",
   too_long: `한 번에 ${MAX_RANGE_DAYS}일까지만 등록할 수 있습니다.`,
   uncovered: "이 기간의 공휴일 정보가 없어 일수를 자동으로 셀 수 없습니다. 일수를 직접 입력해주세요.",
   half_day_not_single: "반차는 하루만 선택할 수 있습니다.",
@@ -64,10 +65,21 @@ function dayOff(
   return { off: false };
 }
 
+/** 회차 경계. `leave-accrual.ts`의 `LeavePeriod`와 모양이 같다(여기선 start/end만 쓴다). */
+export interface PeriodBounds {
+  startIso: string;
+  endIso: string;
+}
+
 /** 자동·직접 입력 공통의 모양 검사. 통과하면 null. */
-function checkRange(type: LeaveType, startIso: string, endIso: string): Extract<LeaveDaysResult, { ok: false }> | null {
+function checkRange(
+  type: LeaveType,
+  startIso: string,
+  endIso: string,
+  period: PeriodBounds | null | undefined,
+): Extract<LeaveDaysResult, { ok: false }> | null {
   if (startIso > endIso) return { ok: false, reason: "range" };
-  if (startIso.slice(0, 4) !== endIso.slice(0, 4)) return { ok: false, reason: "year_boundary" };
+  if (period && (startIso < period.startIso || endIso > period.endIso)) return { ok: false, reason: "period_boundary" };
   if (diffDaysIso(startIso, endIso) + 1 > MAX_RANGE_DAYS) return { ok: false, reason: "too_long" };
   if (type !== LeaveType.FULL_DAY && startIso !== endIso) return { ok: false, reason: "half_day_not_single" };
   return null;
@@ -79,10 +91,12 @@ export function computeLeaveDays(input: {
   endIso: string;
   closedWeekdays: readonly number[];
   oracle: HolidayOracle;
+  /** 기록이 들어와야 하는 회차. null/생략이면 경계를 보지 않는다. */
+  period?: PeriodBounds | null;
 }): LeaveDaysResult {
   const { type, startIso, endIso, closedWeekdays, oracle } = input;
 
-  const shape = checkRange(type, startIso, endIso);
+  const shape = checkRange(type, startIso, endIso, input.period);
   if (shape) return shape;
 
   if (type !== LeaveType.FULL_DAY) {
@@ -120,9 +134,10 @@ export function manualEntryDates(input: {
   endIso: string;
   closedWeekdays: readonly number[];
   oracle: HolidayOracle;
+  period?: PeriodBounds | null;
 }): { ok: true; dates: string[] } | Extract<LeaveDaysResult, { ok: false }> {
   const { type, startIso, endIso, closedWeekdays, oracle } = input;
-  const shape = checkRange(type, startIso, endIso);
+  const shape = checkRange(type, startIso, endIso, input.period);
   if (shape) return shape;
 
   const all: string[] = [];

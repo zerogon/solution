@@ -4,8 +4,10 @@
  *
  *   비밀번호 1234
  *
- * 2025년은 "엑셀에서 옮겨 적은 해"를 흉내 낸다 — 공휴일 데이터가 없을 수 있어 일수를 직접 입력한 기록이다.
- * 2026년은 자동 계산 기록(어린이날을 낀 기간, 반차, 앞으로의 휴가)이다.
+ * 입사일 2024-03-04 → 2회차 2025-03-04~2026-03-03(발생 15), 3회차 2026-03-04~2027-03-03(발생 15 + 이월 2).
+ * 2025년 기록은 "엑셀에서 옮겨 적은 해"를 흉내 낸다 — 공휴일 데이터가 없을 수 있어 일수를 직접 입력한 기록이다.
+ * 2026년은 자동 계산 기록(어린이날을 낀 기간, 반차, 앞으로의 휴가)이다. 2026-02-13은 아직 2회차다.
+ * 기대값: 2회차 사용 5.5·잔여 9.5, 3회차 사용 9.5·잔여 7.5.
  */
 import "../scripts/load-env";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -36,18 +38,15 @@ async function main() {
   console.log("🧹 기존 데이터 삭제 중...");
   await prisma.leaveEntryDay.deleteMany();
   await prisma.leaveEntry.deleteMany();
-  await prisma.leaveYear.deleteMany();
+  await prisma.leavePeriod.deleteMany();
   await prisma.owner.deleteMany();
 
   await prisma.owner.create({
-    data: { name: "홍길동", password: await bcrypt.hash("1234", 10), closedWeekdays: [0, 6] },
+    data: { name: "홍길동", password: await bcrypt.hash("1234", 10), closedWeekdays: [0, 6], hireDate: parseDate("2024-03-04") },
   });
 
-  await prisma.leaveYear.createMany({
-    data: [
-      { year: 2025, grantedDays: 15, carriedOverDays: 0 },
-      { year: 2026, grantedDays: 15, carriedOverDays: 2, memo: "2025년 잔여 중 2일 이월" },
-    ],
+  await prisma.leavePeriod.create({
+    data: { index: 3, carriedOverDays: 2, memo: "2년차 잔여 중 2일 이월" },
   });
 
   for (const e of ENTRIES) {

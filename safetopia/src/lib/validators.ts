@@ -23,14 +23,28 @@ export const loginSchema = z.object({
 
 // ───────────────────────── 설정 ─────────────────────────
 
+/** 0.5 단위, 음수 허용(보정용). */
+const signedHalfDays = (max: number) =>
+  z
+    .number({ error: "숫자를 입력해주세요." })
+    .min(-max, `-${max}일 이상이어야 합니다.`)
+    .max(max, `${max}일 이하로 입력해주세요.`)
+    .refine(halfStep("0.5일 단위로 입력해주세요."));
+
 export const ownerSettingsSchema = z.object({
   name: z.string().trim().min(1, "이름을 입력해주세요.").max(30),
+  /** 한 번 넣으면 비울 수 없다 — 회차 조정 행의 뜻이 입사일에 달려 있다. 오늘 이후 금지는 액션에서. */
+  hireDate: isoDateSchema.refine((v) => {
+    const y = Number(v.slice(0, 4));
+    return y >= 2000 && y <= 2100;
+  }, "입사일을 확인해주세요."),
 });
 
-export const leaveYearSchema = z.object({
-  year: z.number().int().min(2000, "연도를 확인해주세요.").max(2100, "연도를 확인해주세요."),
-  grantedDays: halfDays(60),
+/** 회차별 조정. 발생 일수는 입력하지 않는다(입사일로 계산). */
+export const leavePeriodSchema = z.object({
+  index: z.number().int().min(1, "회차를 확인해주세요.").max(60, "회차를 확인해주세요."),
   carriedOverDays: halfDays(60),
+  adjustedDays: signedHalfDays(60),
   memo: z
     .string()
     .trim()
@@ -39,7 +53,7 @@ export const leaveYearSchema = z.object({
     .transform((v) => (v ? v : null)),
 });
 
-export const yearOnlySchema = z.object({ year: z.number().int() });
+export const periodIndexSchema = z.object({ index: z.number().int().min(1) });
 
 // ───────────────────────── 연차 기록 ─────────────────────────
 

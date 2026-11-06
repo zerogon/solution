@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { holidayOracle, type HolidayMap } from "@/lib/holidays-kr";
 import { computeLeaveDays } from "@/lib/leave-days";
+import { PRE_HIRE_INDEX, periodFor, periodIndexFor } from "@/lib/leave-accrual";
 import { LEAVE_TYPE_LABEL } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { LeaveType } from "@/generated/prisma/enums";
@@ -35,15 +36,18 @@ export interface EntryFormInitial {
 export function LeaveEntryForm({
   closedWeekdays,
   holidays,
-  remainingByYear,
+  hireIso,
+  remainingByPeriod,
   defaultDate,
   initial,
   onDone,
 }: {
   closedWeekdays: number[];
   holidays: { covered: number[]; years: Record<string, HolidayMap> };
-  /** 연도 → 현재 잔여. 수정 중인 기록의 일수는 호출자가 이미 되돌려 넣었다. */
-  remainingByYear: Record<number, number>;
+  /** 입사일. null이면 회차 경계를 보지 않고 잔여도 보여 주지 않는다. */
+  hireIso: string | null;
+  /** 회차 index → 현재 잔여(0 = 입사 전). 수정 중인 기록의 일수는 호출자가 이미 되돌려 넣었다. */
+  remainingByPeriod: Record<number, number>;
   defaultDate: string;
   initial?: EntryFormInitial;
   /** 저장 성공 후. 창을 닫고 화면을 새로 읽는 것은 호출자 몫이다. */
@@ -60,19 +64,25 @@ export function LeaveEntryForm({
   const oracle = useMemo(() => holidayOracle(holidays.covered, holidays.years), [holidays]);
   const isHalf = type !== LeaveType.FULL_DAY;
   const effectiveEnd = isHalf ? start : end;
-  const year = Number(start.slice(0, 4));
-  const remaining = remainingByYear[year] ?? 0;
+  // 시작일이 속한 회차. 입사일 미설정·입사 전 날짜는 null(경계 검사 없음). 서버(`resolveDays`)와 같은 규칙.
+  const periodIndex = hireIso && start ? periodIndexFor(hireIso, start) : null;
+  const period = useMemo(
+    () => (hireIso && periodIndex != null && periodIndex !== PRE_HIRE_INDEX ? periodFor(hireIso, start) : null),
+    [hireIso, periodIndex, start],
+  );
+  const periodLabel = periodIndex == null ? null : periodIndex === PRE_HIRE_INDEX ? "입사 전" : `${periodIndex}년차`;
+  const remaining = periodIndex == null ? null : (remainingByPeriod[periodIndex] ?? null);
 
   const preview = useMemo(() => {
     if (!start || !effectiveEnd) return null;
-    return computeLeaveDays({ type, startIso: start, endIso: effectiveEnd, closedWeekdays, oracle });
-  }, [type, start, effectiveEnd, closedWeekdays, oracle]);
+    return computeLeaveDays({ type, startIso: start, endIso: effectiveEnd, closedWeekdays, oracle, period });
+  }, [type, start, effectiveEnd, closedWeekdays, oracle, period]);
 
   // 반차의 직접 입력은 0.5일 고정이다 — 공휴일 데이터가 없는 해의 반차를 적기 위한 통로일 뿐이다.
   const useManual = manual;
   const manualValue = isHalf ? 0.5 : Number(manualDays);
   const manualValid = isHalf || (manualDays !== "" && manualValue > 0 && Number.isInteger(manualValue * 2));
-  // 직접 입력에서도 모양 오류(해 넘김·반차 이틀 등)는 막는다. 공휴일을 모르는 것만 괜찮다.
+  // 직접 입력에서도 모양 오류(회차 넘김·반차 이틀 등)는 막는다. 공휴일을 모르는 것만 괜찮다.
   const shapeOk = preview != null && (preview.ok || preview.reason === "uncovered" || preview.reason === "no_working_day" || preview.reason === "half_day_off");
   const canSubmit = useManual ? manualValid && shapeOk : Boolean(preview?.ok);
 
@@ -147,6 +157,7 @@ export function LeaveEntryForm({
               type="date"
               value={end}
               min={start}
+              max={period?.endIso}
               onChange={(e) => setEnd(e.target.value)}
               required
               className="h-10"
@@ -184,7 +195,7 @@ export function LeaveEntryForm({
       <DaysPreview
         result={preview}
         remaining={remaining}
-        year={year}
+        periodLabel={periodLabel}
         manualDays={useManual && manualValid ? manualValue : null}
       />
 
