@@ -73,7 +73,7 @@ export function DaysPreview({
             .join(", ")}
         </p>
       )}
-      {short && <p className="text-xs text-amber-700">{year}년 부여 일수를 넘습니다. 기록은 그대로 저장됩니다.</p>}
+      {short && <p className="text-xs text-amber-700">{year}년 부여 일수를 넘습니다. 그래도 등록할 수 있습니다.</p>}
     </div>
   );
 }

@@ -13,10 +13,7 @@ function revalidateAll() {
   revalidatePath("/", "layout");
 }
 
-/**
- * 이름·쉬는 요일. 쉬는 요일을 바꿔도 **이미 저장된 기록의 일수는 다시 계산하지 않는다** —
- * 그 날 실제로 깎인 일수가 장부의 사실이다. 바뀐 규칙은 이후 기록(과 수정)에만 적용된다.
- */
+/** 이름만. 쉬는 요일은 화면에서 뺐으므로(2026-11-06) 여기서도 받지 않는다 — DB 값은 그대로 둔다. */
 export async function updateOwnerSettings(input: unknown): Promise<ActionResult> {
   if (!(await isSignedIn())) return LOGIN_REQUIRED;
   const parsed = ownerSettingsSchema.safeParse(input);
@@ -24,7 +21,7 @@ export async function updateOwnerSettings(input: unknown): Promise<ActionResult>
   try {
     await prisma.owner.update({
       where: { id: "owner" },
-      data: { name: parsed.data.name, closedWeekdays: [...new Set(parsed.data.closedWeekdays)].sort() },
+      data: { name: parsed.data.name },
     });
     revalidateAll();
     return { ok: true };

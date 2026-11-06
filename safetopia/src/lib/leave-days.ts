@@ -45,8 +45,8 @@ export const MAX_RANGE_DAYS = 31;
 
 export const LEAVE_DAYS_ERROR_MESSAGE: Record<Extract<LeaveDaysResult, { ok: false }>["reason"], string> = {
   range: "종료일이 시작일보다 앞설 수 없습니다.",
-  year_boundary: "해를 넘기는 기록은 연도별로 나눠서 입력해주세요.",
-  too_long: `한 번에 ${MAX_RANGE_DAYS}일까지만 기록할 수 있습니다.`,
+  year_boundary: "해를 넘기는 연차는 연도별로 나눠서 등록해주세요.",
+  too_long: `한 번에 ${MAX_RANGE_DAYS}일까지만 등록할 수 있습니다.`,
   uncovered: "이 기간의 공휴일 정보가 없어 일수를 자동으로 셀 수 없습니다. 일수를 직접 입력해주세요.",
   half_day_not_single: "반차는 하루만 선택할 수 있습니다.",
   half_day_off: "선택한 날은 쉬는 요일이거나 공휴일입니다.",

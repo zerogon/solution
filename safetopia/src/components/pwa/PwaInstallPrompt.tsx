@@ -211,7 +211,7 @@ export function PwaInstallPrompt() {
           <AppMark className="size-12" />
           <div className="flex flex-1 flex-col gap-0.5">
             <SheetTitle>홈 화면에 추가</SheetTitle>
-            <SheetDescription>연차 기록과 확인을 더 빠르게.</SheetDescription>
+            <SheetDescription>연차 등록과 확인을 더 빠르게.</SheetDescription>
           </div>
         </SheetHeader>
 

@@ -9,7 +9,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { OwnerSettingsForm } from "@/components/settings/OwnerSettingsForm";
 import { LeaveYearDialog } from "@/components/settings/LeaveYearDialog";
 import { DeleteYearButton } from "@/components/settings/DeleteYearButton";
-import { PasswordForm } from "@/components/settings/PasswordForm";
 
 export const dynamic = "force-dynamic";
 
@@ -104,24 +103,14 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>기본 정보</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <OwnerSettingsForm name={owner.name} closedWeekdays={owner.closedWeekdays} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>비밀번호</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PasswordForm />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>기본 정보</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <OwnerSettingsForm name={owner.name} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

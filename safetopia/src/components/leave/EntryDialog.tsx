@@ -38,11 +38,11 @@ export function EntryDialog({
   }
 
   function handleDelete() {
-    if (!initial || !window.confirm("이 기록을 지울까요? 되돌릴 수 없습니다.")) return;
+    if (!initial || !window.confirm("이 연차를 지울까요? 되돌릴 수 없습니다.")) return;
     startDelete(async () => {
       const res = await deleteLeaveEntry({ id: initial.id });
       if (res.ok) {
-        toast.success("기록을 지웠습니다.");
+        toast.success("연차를 지웠습니다.");
         close();
       } else toast.error(res.message);
     });
@@ -52,7 +52,7 @@ export function EntryDialog({
     <Dialog open onOpenChange={(open) => !open && close()}>
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{initial ? "기록 고치기" : "연차 기록"}</DialogTitle>
+          <DialogTitle>{initial ? "연차 고치기" : "연차 등록"}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         {/* key: 다른 칸을 눌러 창이 바로 바뀌면 폼 상태도 새로 시작해야 한다. */}
@@ -66,7 +66,7 @@ export function EntryDialog({
             className="w-full text-muted-foreground hover:text-destructive"
           >
             <Trash2 data-icon="inline-start" />
-            {deleting ? "지우는 중..." : "이 기록 지우기"}
+            {deleting ? "지우는 중..." : "이 연차 지우기"}
           </Button>
         )}
       </DialogContent>

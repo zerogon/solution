@@ -1,11 +1,8 @@
 "use server";
 
-import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { signIn, signOut } from "@/auth";
-import { prisma } from "@/lib/prisma";
-import { isSignedIn } from "@/lib/auth-helpers";
-import { changePasswordSchema, loginSchema } from "@/lib/validators";
+import { loginSchema } from "@/lib/validators";
 import type { ActionResult } from "@/lib/errors";
 
 // dev/http: "authjs.session-token", prod/https: "__Secure-authjs.session-token"
@@ -58,33 +55,3 @@ export async function logoutAction() {
   await signOut({ redirectTo: "/login" });
 }
 
-export async function changePasswordAction(
-  _prev: ActionResult | undefined,
-  formData: FormData,
-): Promise<ActionResult> {
-  if (!(await isSignedIn())) return { ok: false, message: "로그인이 필요합니다." };
-
-  const parsed = changePasswordSchema.safeParse({
-    currentPassword: formData.get("currentPassword"),
-    newPassword: formData.get("newPassword"),
-    confirmPassword: formData.get("confirmPassword"),
-  });
-  if (!parsed.success) {
-    return { ok: false, message: parsed.error.issues[0].message };
-  }
-
-  const owner = await prisma.owner.findUnique({ where: { id: "owner" } });
-  if (!owner) return { ok: false, message: "계정을 찾을 수 없습니다." };
-
-  const ok = await bcrypt.compare(parsed.data.currentPassword, owner.password);
-  if (!ok) return { ok: false, message: "현재 비밀번호가 올바르지 않습니다." };
-  if (parsed.data.currentPassword === parsed.data.newPassword) {
-    return { ok: false, message: "새 비밀번호가 현재 비밀번호와 같습니다." };
-  }
-
-  await prisma.owner.update({
-    where: { id: "owner" },
-    data: { password: await bcrypt.hash(parsed.data.newPassword, 10) },
-  });
-  return { ok: true };
-}

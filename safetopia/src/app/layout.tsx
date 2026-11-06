@@ -24,7 +24,7 @@ const THEME_COLOR = "#FDFBF9";
 
 export const metadata: Metadata = {
   title: "Sulki Holiday — 내 연차 관리",
-  description: "연도별 부여와 연차·반차 사용 기록을 한곳에서",
+  description: "연도별 부여와 연차·반차 사용 내역을 한곳에서",
   manifest: "/manifest.json",
   icons: {
     icon: "/icons/favicon.png",

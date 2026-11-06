@@ -2,7 +2,7 @@
   "id": "/",
   "name": "Sulki Holiday — 내 연차 관리",
   "short_name": "Sulki Holiday",
-  "description": "연도별 부여와 연차·반차 사용 기록을 한곳에서",
+  "description": "연도별 부여와 연차·반차 사용 내역을 한곳에서",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

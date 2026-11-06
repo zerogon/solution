@@ -111,7 +111,7 @@ export default async function CalendarPage({
             </Button>
             <Button size="sm" render={<Link href={`${here}&add=${ym === today.slice(0, 7) ? today : first}`} scroll={false} />} nativeButton={false} className="ml-1">
               <CalendarPlus data-icon="inline-start" />
-              기록
+              연차 등록
             </Button>
           </div>
         }
@@ -160,7 +160,7 @@ export default async function CalendarPage({
                   <Link
                     href={`${here}&add=${iso}`}
                     scroll={false}
-                    aria-label={`${iso} 기록 추가`}
+                    aria-label={`${iso} 연차 등록`}
                     className="block h-full min-h-12 rounded hover:bg-primary/5"
                   />
                 );
@@ -188,7 +188,7 @@ export default async function CalendarPage({
             <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-primary" />연차</span>
             <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-primary/15 ring-1 ring-inset ring-primary/40" />반차</span>
             <span className="inline-flex items-center gap-1"><span className={cn("size-2.5 rounded-sm ring-1 ring-border", SHADED_DAY_CELL)} />주말·쉬는 요일·공휴일</span>
-            <span>날짜를 누르면 기록, 칩을 누르면 고치기</span>
+            <span>날짜를 누르면 등록, 칩을 누르면 고치기</span>
           </div>
         </CardContent>
       </Card>

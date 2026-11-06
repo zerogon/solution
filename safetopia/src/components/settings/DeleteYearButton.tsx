@@ -11,7 +11,7 @@ export function DeleteYearButton({ year }: { year: number }) {
   const [pending, startTransition] = useTransition();
 
   function handleClick() {
-    if (!window.confirm(`${year}년 부여를 지울까요? 그 해의 연차 기록은 남습니다.`)) return;
+    if (!window.confirm(`${year}년 부여를 지울까요? 그 해에 등록한 연차는 남습니다.`)) return;
     startTransition(async () => {
       const res = await deleteLeaveYear({ year });
       if (res.ok) toast.success(`${year}년 부여를 지웠습니다.`);

@@ -3,11 +3,6 @@ import { LeaveType } from "@/generated/prisma/enums";
 
 // ───────────────────────── 공통 ─────────────────────────
 
-export const passwordSchema = z
-  .string()
-  .min(4, "비밀번호는 최소 4자 이상이어야 합니다.")
-  .max(64, "비밀번호가 너무 깁니다.");
-
 export const isoDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "날짜 형식이 올바르지 않습니다.");
@@ -26,25 +21,10 @@ export const loginSchema = z.object({
   password: z.string().min(1, "비밀번호를 입력해주세요."),
 });
 
-export const changePasswordSchema = z
-  .object({
-    currentPassword: z.string().min(1, "현재 비밀번호를 입력해주세요."),
-    newPassword: passwordSchema,
-    confirmPassword: passwordSchema,
-  })
-  .refine((d) => d.newPassword === d.confirmPassword, {
-    message: "새 비밀번호가 일치하지 않습니다.",
-    path: ["confirmPassword"],
-  });
-
 // ───────────────────────── 설정 ─────────────────────────
 
 export const ownerSettingsSchema = z.object({
   name: z.string().trim().min(1, "이름을 입력해주세요.").max(30),
-  closedWeekdays: z
-    .array(z.number().int().min(0).max(6))
-    .max(6, "쉬는 요일은 최대 6일까지 지정할 수 있습니다.")
-    .default([]),
 });
 
 export const leaveYearSchema = z.object({

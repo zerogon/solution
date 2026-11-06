@@ -36,7 +36,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 기록 추가·수정·삭제는 **창(`EntryDialog`)**에서. 열림 상태는 URL이 갖는다: 빈 날짜 칸 → `?m=YYYY-MM&add=날짜`, 기록 칩 → `?entry=id`.
   그래서 `MonthGrid`는 서버 컴포넌트 그대로이고, 칸 본문은 평범한 `<Link>`다. 닫기 = 파라미터를 뺀 주소로 `router.replace`.
   폼 데이터(공휴일·연도별 잔여·수정 대상)는 창이 열릴 때만 만든다. Base UI Dialog는 포털이라 SSR HTML에는 안 나온다(브라우저로 확인).
-- `/settings`: 연도별 부여 표(연도 누르면 그 해 1월 달력) · 이름·쉬는 요일 · 비밀번호.
+- `/settings`: 연도별 부여 표(연도 누르면 그 해 1월 달력) · 이름. 쉬는 요일 토글과 비밀번호 변경은 2026-11-06에 뺐다(사용자 결정) — `closedWeekdays`는 DB 기본 토·일 그대로.
 
 ## 날짜 규약 (어기면 하루 밀린다)
 - 경계는 `"YYYY-MM-DD"` 문자열. DB는 `@db.Date`. Date 객체는 **UTC 자정**(`parseDate`). 읽을 땐 UTC getter만.
@@ -68,7 +68,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 사용자 한 명 — **아이디 없이 비밀번호만**. `src/auth.ts` Credentials가 `Owner.password`와 bcrypt 비교. 세션 `user.id`는 항상 `"owner"`.
 - `src/auth.config.ts`는 공개 경로(`/login`, `/offline`, `/manifest.json`, `/icons/*`, `/api/auth`) 외에 세션만 본다. 역할 구분 없음.
 - `requireOwner()`(`src/lib/auth-helpers.ts`)가 셸 레이아웃 가드 — 세션 + Owner 행(이름·쉬는 요일). 서버 액션은 `isSignedIn()`.
-- 비밀번호 변경은 `/settings`. 잊었거나 첫 배포면 `npm run owner:set-password`(아래).
+- 앱 안에 비밀번호 변경 화면은 없다(2026-11-06 삭제). 바꾸거나 잊었거나 첫 배포면 `npm run owner:set-password`(아래)가 유일한 경로다.
 
 ## 로컬 개발
 - `npm run db:local:up`(Docker Postgres **5434**, DB `sulki_holiday`/유저 `sulki`; 5433은 pianoflow) → `db:local:dev`(migrate dev) → `db:local:seed`. 파괴적 명령은 전부 `assert-local-db` 가드 뒤.

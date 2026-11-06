@@ -88,7 +88,7 @@ export function LeaveEntryForm({
     startTransition(async () => {
       const res = initial ? await updateLeaveEntry({ id: initial.id, ...payload }) : await createLeaveEntry(payload);
       if (res.ok) {
-        toast.success(initial ? "기록을 고쳤습니다." : "기록했습니다.");
+        toast.success(initial ? "연차를 고쳤습니다." : "연차를 등록했습니다.");
         onDone();
       } else {
         toast.error(res.message);
@@ -201,7 +201,7 @@ export function LeaveEntryForm({
       </div>
 
       <Button type="submit" className="h-11 w-full text-base" disabled={!canSubmit || pending}>
-        {pending ? "저장 중..." : initial ? "고치기" : "기록하기"}
+        {pending ? "저장 중..." : initial ? "고치기" : "등록하기"}
       </Button>
     </form>
   );

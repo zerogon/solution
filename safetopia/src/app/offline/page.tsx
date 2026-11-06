@@ -23,7 +23,7 @@ export default function OfflinePage() {
           연결이 끊겼습니다
         </h1>
         <p className="max-w-xs text-sm text-muted-foreground">
-          네트워크에 연결되면 연차 현황을 다시 볼 수 있습니다. 기록은
+          네트워크에 연결되면 연차 현황을 다시 볼 수 있습니다. 연차 등록은
           연결 복구 후 다시 시도해 주세요.
         </p>
       </div>

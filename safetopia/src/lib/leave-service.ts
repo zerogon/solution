@@ -51,7 +51,7 @@ async function assertNoClash(tx: TxClient, dates: string[], exceptEntryId?: stri
     },
     select: { date: true },
   });
-  if (clash) throw new LeaveError("이미 기록된 날짜가 포함되어 있습니다.");
+  if (clash) throw new LeaveError("이미 연차가 등록된 날짜가 포함되어 있습니다.");
 }
 
 export async function createEntry(db: PrismaClient, input: EntryInput) {
@@ -77,7 +77,7 @@ export async function updateEntry(db: PrismaClient, id: string, input: EntryInpu
   const calc = await resolveDays(db, input);
   return db.$transaction(async (tx) => {
     const existing = await tx.leaveEntry.findUnique({ where: { id }, select: { id: true } });
-    if (!existing) throw new LeaveError("기록을 찾을 수 없습니다.");
+    if (!existing) throw new LeaveError("연차를 찾을 수 없습니다.");
     await assertNoClash(tx, calc.dates, id);
     await tx.leaveEntryDay.deleteMany({ where: { entryId: id } });
     return tx.leaveEntry.update({
@@ -98,5 +98,5 @@ export async function updateEntry(db: PrismaClient, id: string, input: EntryInpu
 /** 하드 삭제. 날짜 행은 cascade로 함께 사라진다. */
 export async function deleteEntry(db: PrismaClient, id: string) {
   const res = await db.leaveEntry.deleteMany({ where: { id } });
-  if (res.count === 0) throw new LeaveError("이미 삭제된 기록입니다.");
+  if (res.count === 0) throw new LeaveError("이미 지운 연차입니다.");
 }
