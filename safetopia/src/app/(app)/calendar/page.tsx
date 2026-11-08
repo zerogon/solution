@@ -8,12 +8,13 @@ import { getPeriodSummaries } from "@/lib/queries";
 import { autoDaysForPeriod, formatPeriodLabel, nextAccrualIso, periodByIndex, periodIndexFor } from "@/lib/leave-accrual";
 import { SHADED_DAY_CELL, monthBounds, resolveMonthParam, shiftMonth } from "@/lib/calendar";
 import { LEAVE_TYPE_LABEL, WEEKDAY_LABEL, formatDays } from "@/lib/labels";
-import { cn, formatKoDate, formatKoMd, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
+import { addDaysIso, cn, formatKoDate, formatKoMd, parseDate, toIsoDate, todayKstIso } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { MonthGrid } from "@/components/month-grid";
 import { EntryDialog } from "@/components/leave/EntryDialog";
+import { YearEntryList } from "@/components/leave/YearEntryList";
 import { LeaveType } from "@/generated/prisma/enums";
 
 export const dynamic = "force-dynamic";
@@ -45,10 +46,15 @@ export default async function CalendarPage({
   const addDate = add && ISO_RE.test(add) ? add : null;
   const dialogOpen = Boolean(editing || addDate);
 
-  const [days, summaries, { oracle, payload }] = await Promise.all([
+  const [days, yearEntries, summaries, { oracle, payload }] = await Promise.all([
     prisma.leaveEntryDay.findMany({
       where: { date: { gte: parseDate(first), lte: parseDate(last) } },
       include: { entry: { select: { memo: true } } },
+    }),
+    // 아래 그 해 목록용 — 해를 걸친 기록도 포함.
+    prisma.leaveEntry.findMany({
+      where: { startDate: { lte: parseDate(`${ym.slice(0, 4)}-12-31`) }, endDate: { gte: parseDate(`${ym.slice(0, 4)}-01-01`) } },
+      orderBy: { startDate: "asc" },
     }),
     // 보는 달의 회차와 그 다음 회차는 반드시 포함 — 폼에서 다음 회차 날짜를 골라도 잔여가 나오게.
     hireIso && focusIndex != null ? getPeriodSummaries(hireIso, today, [focusIndex, focusIndex + 1]) : Promise.resolve([]),
@@ -186,54 +192,86 @@ export default async function CalendarPage({
         </p>
       )}
 
-      <Card>
-        <CardContent className="p-2 sm:p-4">
-          <MonthGrid
-            ym={ym}
-            today={today}
-            oracle={oracle}
-            closedWeekdays={owner.closedWeekdays}
-            cellClassName="min-h-20 sm:min-h-24"
-            renderDay={(iso) => {
-              const d = byDate.get(iso);
-              if (!d) {
-                // 칸 전체를 덮는 추가 링크. 날짜 배지 아래 빈 자리를 채운다.
+      {/* 모바일·태블릿은 달력 아래, 넓은 화면(xl)은 달력 오른쪽에 그 해 목록. */}
+      <div className="space-y-4 xl:grid xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start xl:gap-4 xl:space-y-0">
+        <Card>
+          <CardContent className="p-2 sm:p-4">
+            <MonthGrid
+              ym={ym}
+              today={today}
+              oracle={oracle}
+              closedWeekdays={owner.closedWeekdays}
+              cellClassName="min-h-20 sm:min-h-28"
+              renderDay={(iso) => {
+                const d = byDate.get(iso);
+                if (!d) {
+                  // 칸 전체를 덮는 추가 링크. 날짜 배지 아래 빈 자리를 채운다.
+                  return (
+                    <Link
+                      href={`${here}&add=${iso}`}
+                      scroll={false}
+                      aria-label={`${iso} 연차 등록`}
+                      className="block h-full min-h-12 rounded hover:bg-primary/5"
+                    />
+                  );
+                }
+                const half = d.type !== LeaveType.FULL_DAY;
+                // 여러 날 기록은 띠로 잇는다 — 옆 칸이 같은 기록이면 그쪽 모서리를 펴고 셀 패딩만큼 늘인다.
+                // 주가 바뀌는 칸(일·토)에서는 끊고, 라벨은 띠의 첫 칸에만 쓴다.
+                const dow = parseDate(iso).getUTCDay();
+                const joinPrev = dow !== 0 && byDate.get(addDaysIso(iso, -1))?.entryId === d.entryId;
+                const joinNext = dow !== 6 && byDate.get(addDaysIso(iso, 1))?.entryId === d.entryId;
                 return (
                   <Link
-                    href={`${here}&add=${iso}`}
+                    href={`${here}&entry=${d.entryId}`}
                     scroll={false}
-                    aria-label={`${iso} 연차 등록`}
-                    className="block h-full min-h-12 rounded hover:bg-primary/5"
-                  />
+                    className={cn(
+                      "mt-1 block rounded px-1.5 py-1 text-xs leading-tight",
+                      half
+                        ? "border-l-2 border-primary bg-primary/10 text-foreground"
+                        : "bg-primary text-primary-foreground hover:bg-primary/90",
+                      joinPrev && "-ml-1 rounded-l-none sm:-ml-1.5",
+                      joinNext && "-mr-1 rounded-r-none sm:-mr-1.5",
+                    )}
+                    title={[LEAVE_TYPE_LABEL[d.type], d.entry.memo].filter(Boolean).join(" · ")}
+                  >
+                    {/* 이어지는 칸도 같은 내용을 숨겨 그린다 — 띠 높이가 첫 칸(메모 줄)과 맞게. */}
+                    <span className={cn("block", joinPrev && "invisible")} aria-hidden={joinPrev || undefined}>
+                      <span className="block font-semibold">{half ? (d.type === LeaveType.AM_HALF ? "오전" : "오후") : "연차"}</span>
+                      {/* line-clamp가 display를 쓰므로 hidden과 한 요소에 두지 않는다. */}
+                      {d.entry.memo && (
+                        <span className="mt-0.5 hidden opacity-90 sm:block">
+                          <span className="line-clamp-2 break-keep">{d.entry.memo}</span>
+                        </span>
+                      )}
+                    </span>
+                  </Link>
                 );
-              }
-              const half = d.type !== LeaveType.FULL_DAY;
-              return (
-                <Link
-                  href={`${here}&entry=${d.entryId}`}
-                  scroll={false}
-                  className={cn(
-                    "mt-0.5 block truncate rounded px-1 py-0.5 text-[10px] font-medium sm:text-[11px]",
-                    half
-                      ? "bg-primary/15 text-primary ring-1 ring-inset ring-primary/40"
-                      : "bg-primary text-primary-foreground",
-                  )}
-                  title={[LEAVE_TYPE_LABEL[d.type], d.entry.memo].filter(Boolean).join(" · ")}
-                >
-                  {half ? (d.type === LeaveType.AM_HALF ? "오전" : "오후") : "연차"}
-                  {d.entry.memo && <span className="hidden opacity-80 sm:inline"> {d.entry.memo}</span>}
-                </Link>
-              );
-            }}
-          />
-          <div className="mt-3 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-primary" />연차</span>
-            <span className="inline-flex items-center gap-1"><span className="size-2.5 rounded-sm bg-primary/15 ring-1 ring-inset ring-primary/40" />반차</span>
-            <span className="inline-flex items-center gap-1"><span className={cn("size-2.5 rounded-sm ring-1 ring-border", SHADED_DAY_CELL)} />주말·쉬는 요일·공휴일</span>
-            <span>날짜를 누르면 등록, 칩을 누르면 고치기</span>
-          </div>
-        </CardContent>
-      </Card>
+              }}
+            />
+            <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-4 rounded-sm bg-primary" />연차</span>
+              <span className="inline-flex items-center gap-1"><span className="h-2.5 w-4 rounded-sm border-l-2 border-primary bg-primary/10" />반차</span>
+              <span className="inline-flex items-center gap-1"><span className={cn("h-2.5 w-4 rounded-sm ring-1 ring-border", SHADED_DAY_CELL)} />주말·쉬는 요일·공휴일</span>
+              <span>날짜를 누르면 등록, 칩을 누르면 고치기</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        <YearEntryList
+          year={y}
+          ym={ym}
+          entries={yearEntries.map((e) => ({
+            id: e.id,
+            type: e.type,
+            startIso: toIsoDate(e.startDate),
+            endIso: toIsoDate(e.endDate),
+            days: e.days,
+            manualDays: e.manualDays,
+            memo: e.memo,
+          }))}
+        />
+      </div>
 
       {dialog}
     </div>

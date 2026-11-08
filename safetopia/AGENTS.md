@@ -29,11 +29,14 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - 한글 라벨에는 `break-keep`. `StatCard`는 모바일에서 아이콘을 접는다(2~4열 그리드에서 글자 자리를 먹는다).
 - 날짜 음영은 `isShadedDay`(`src/lib/calendar.ts`) 하나 — 주말+쉬는 요일+공휴일. **표시 전용이라 `leave-days.ts`의 `dayOff`(차감 판정)와 일부러 다르다.** 합치지 말 것.
 - 월 그리드 칸 음영은 `SHADED_DAY_CELL`/`OUT_OF_MONTH_CELL`(불투명 — `gap-px bg-border` 위라 반투명이면 격자선보다 어두워진다).
-- 월 캘린더는 `MonthGrid`(`src/components/month-grid.tsx`, 서버 컴포넌트). 셀 본문은 `renderDay` 슬롯.
+- 월 캘린더는 `MonthGrid`(`src/components/month-grid.tsx`, 서버 컴포넌트). 셀 본문은 `renderDay` 슬롯. 일요일·공휴일은 destructive, 토요일은 chart-2.
+- 기록 칩: 연차 = 진한 primary, 반차 = `bg-primary/10` + 왼쪽 primary 테두리. 여러 날 기록은 옆 칸이 같은 `entryId`면 띠로 잇고(주가 바뀌면 끊음),
+  이어지는 칸은 같은 내용을 `invisible`로 그려 높이를 맞춘다.
 - 셸 지오메트리 `--app-sidebar-w`(16rem) + `--app-content-w`(88rem) = 1664px 고정 쌍. 내비는 `nav-items.ts`의 `NAV_ITEMS` 한 배열.
 
 ## 화면 — 캘린더와 설정 둘뿐 (2026-10-19 최소화, 사용자 결정)
-- `/calendar`가 본 화면이다(`/`·로그인 후 여기로). 위에 **그 회차 잔여 한 줄**(이번 달이면 오늘, 아니면 그 달 말일이 속한 회차; 달 안에서 회차가 바뀌면 "3.4(수)부터 3년차" 힌트), 아래 월 달력. 홈·연차 기록 목록·월별 합계 화면은 일부러 없앴다 — 되살리지 말 것.
+- `/calendar`가 본 화면이다(`/`·로그인 후 여기로). 위에 **그 회차 잔여 한 줄**(이번 달이면 오늘, 아니면 그 달 말일이 속한 회차; 달 안에서 회차가 바뀌면 "3.4(수)부터 3년차" 힌트), 아래 월 달력, 그 아래(xl 이상은 오른쪽 20rem) **그 해(보는 달의 연도) 기록 목록**(`YearEntryList`, 2026-11-08 사용자 결정 — 그 달만은 의미 없다고 해서 연 단위로.
+  시작 달별 묶음, 보는 달 강조, 해를 걸친 기록 포함·합계는 시작일이 그 해인 기록만, 행을 누르면 그 달로 이동만, 수정 창은 행 끝 연필 버튼 `?entry=id`). 홈·별도 연차 기록 목록·월별 합계 화면은 일부러 없앴다 — 별도 화면으로 되살리지 말 것.
 - 기록 추가·수정·삭제는 **창(`EntryDialog`)**에서. 열림 상태는 URL이 갖는다: 빈 날짜 칸 → `?m=YYYY-MM&add=날짜`, 기록 칩 → `?entry=id`.
   그래서 `MonthGrid`는 서버 컴포넌트 그대로이고, 칸 본문은 평범한 `<Link>`다. 닫기 = 파라미터를 뺀 주소로 `router.replace`.
   폼 데이터(공휴일·회차별 잔여·수정 대상)는 창이 열릴 때만 만든다. Base UI Dialog는 포털이라 SSR HTML에는 안 나온다(브라우저로 확인).

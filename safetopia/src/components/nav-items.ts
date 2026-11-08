@@ -10,7 +10,7 @@ export interface NavItem {
  * 앱 셸 내비게이션의 단일 출처. 사이드바(`AppSidebar`)와 모바일 하단 탭바
  * (`BottomTabBar`)가 같은 배열을 읽으므로 항목 추가는 여기 한 곳만 고치면 된다.
  *
- * 화면은 둘뿐이다(2026-10-19 최소화) — 기록 추가·수정·삭제는 캘린더의 창에서 한다.
+ * 화면은 둘뿐이다(2026-10-19 최소화) — 기록 추가·수정·삭제는 캘린더의 창에서, 그 해 목록은 캘린더 아래에서.
  */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/calendar", label: "캘린더", icon: CalendarDays },

@@ -47,9 +47,9 @@ export function MonthGrid({
 }) {
   return (
     <>
-      <div className="grid grid-cols-7 text-center text-[11px] font-medium text-muted-foreground">
+      <div className="grid grid-cols-7 text-center text-xs font-semibold text-muted-foreground">
         {WEEKDAY_LABEL.map((w, i) => (
-          <div key={w} className={cn("py-1", i === 0 && "text-destructive/70")}>
+          <div key={w} className={cn("py-1.5", i === 0 && "text-destructive", i === 6 && "text-chart-2")}>
             {w}
           </div>
         ))}
@@ -82,9 +82,10 @@ export function MonthGrid({
               <div className="flex items-center justify-between gap-1">
                 <span
                   className={cn(
-                    "inline-flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-xs tabular-nums",
+                    "inline-flex size-7 shrink-0 items-center justify-center rounded-full font-mono text-sm tabular-nums",
                     isToday && "bg-foreground font-semibold text-background",
                     !isToday && (dow === 0 || holiday) && inMonth && "text-destructive",
+                    !isToday && dow === 6 && !holiday && inMonth && "text-chart-2",
                   )}
                 >
                   {d.getUTCDate()}
@@ -92,7 +93,7 @@ export function MonthGrid({
                 {inMonth && renderBadge?.(iso, ctx)}
               </div>
               {holiday && inMonth && (
-                <div className="mt-0.5 truncate text-[10px] text-destructive/80" title={holiday}>
+                <div className="mt-0.5 line-clamp-3 break-all text-[11px] font-medium leading-tight text-destructive sm:line-clamp-2 sm:break-keep" title={holiday}>
                   {holiday}
                 </div>
               )}
