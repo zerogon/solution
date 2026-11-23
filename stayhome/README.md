@@ -18,7 +18,7 @@
 - ✅ 스케줄러: Inngest 크론(3시간) → 리조트 팬아웃 → step 분할 크롤 · `/admin/crawl-logs`
 - ✅ 조회 UI: 월 캘린더 + 리조트/지역/지점 3축 필터 + 라이브 "최신화"
 - ✅ PWA (manifest + 자체 작성 `sw.js` + 오프라인 폴백 + 멀티 브라우저 설치 프롬프트)
-- ✅ Vercel 배포 (`stayhome-khaki.vercel.app`, `stayhome` 브랜치 push → 자동 배포)
+- ✅ Vercel 배포 (`stayhome-one.vercel.app`, `stayhome` 브랜치 push → 자동 배포)
 - ⏳ 크롤 실패 알림(`SLACK_WEBHOOK_URL` 미설정) · 웹 푸시 구독 플로우
 
 전체 설계는 `prd.md`, 작업 규약은 `CLAUDE.md` / `AGENTS.md` 참조.

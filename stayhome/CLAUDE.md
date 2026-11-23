@@ -75,6 +75,8 @@
    회귀 검사: `grep -rn "decrypt(" src/ | grep -v generated` → `run.ts` 2곳 +
    `reveal/route.ts` 2곳 + `lib/crypto.ts` 정의부. 새 호출부가 생기면 둘 중 어느
    칸인지부터 판정할 것.
+   `scripts/verify-env.ts`(계정 이전 점검)도 복호화하지만 **성공 여부만** 찍고 평문·길이를
+   내보내지 않으므로 감사 대상이 아니다 — 출력에 값이 새기 시작하면 그 판정이 뒤집힌다.
 3. `RESORT_CRED_SECRET`이 32바이트(base64 decode 후)가 아니면 `crypto.ts`가 에러를 던지도록 검증.
 4. `/api/cron/*`, `/api/inngest/*` 외 모든 라우트는 `proxy.ts`에서 세션 검증.
 5. **`ResortAccount.memo`는 암호화되지 않는다** — 평문 컬럼이고 `/admin/accounts`
@@ -105,6 +107,7 @@
 | 지점 제외 | `docs/notes/branch-exclusion.md` |
 | 스케줄링(Inngest · 백스톱 · upsert · 유령 행 · 동시성 · 예산) | `docs/notes/scheduling.md` |
 | 배포(Vercel · `/tmp` · Inngest sync) | `docs/notes/deploy.md` |
+| 다른 Vercel·Neon 계정으로 이전(런북) | `docs/notes/vercel-migration.md` |
 | 금액(요금) 수집 — 결정 1~5 | `docs/notes/pricing.md` |
 | 인원(기준·최대) 수집 | `docs/notes/occupancy.md` |
 | 수동 요금 입력 | `docs/notes/manual-rates.md` |
@@ -120,7 +123,8 @@
 - 리조트 6곳 · 67지점 운영(롯데 4 · 소노 32 · 리솜 3 · 오크밸리 2 · 한화 16 · 켄싱턴 10).
 - 정기 수집: **매일 09:00 KST 1회**(Inngest 크론 `scheduled-refresh`) + 12:00 KST Vercel Cron 백스톱.
 - 함수 리전 `icn1`(서울), Vercel Hobby(`maxDuration` 60초, 런타임 로그 미보관 → 증거는 `crawl_logs`).
-- `stayhome` 브랜치 push = 프로덕션 배포(Git 연동).
+- `stayhome` 브랜치 push = 프로덕션 배포(Git 연동). 다른 브랜치 push는 `vercel.json`의 `ignoreCommand`가
+  빌드를 건너뛴다(한 저장소에 프로젝트가 브랜치별로 있다).
 - `sw.js` `CACHE_VERSION` **v6**. 스키마는 `npm run db:push`(`prisma/migrations/` 없음).
 
 ## 조회 필터 · 지점 제외
@@ -176,7 +180,7 @@
 ## 배포 (Vercel)
 
 - 리전은 `vercel.json`의 `icn1`이다. 해외 IP에서는 롯데(Imperva)·한화(연결 거부)가 로그인하지 못한다.
-  Hobby는 리전 1개만 가능. Neon은 `us-east-1`이라 쿼리당 ~200ms.
+  Hobby는 리전 1개만 가능. Neon은 `ap-southeast-1`(싱가포르, 2026-11-23 이전 전에는 `us-east-1`로 쿼리당 ~200ms).
 - **`/tmp`(525MB)가 이 프로젝트에서 가장 먼저 바닥나는 자원이다.** 관리는 전부 `_shared/browser.ts` —
   팩 잔해 삭제, 프로필 스윕(`/proc/*/cmdline`은 NUL**과 공백 둘 다**로 자른다), 포기·고아 브라우저 회수,
   코어 덤프 삭제(나이 기준 없음), `TMP_FLOOR_MB` 미만이면 `TmpExhaustedError`(재시도 대상 아님).
@@ -185,10 +189,10 @@
 - Playwright를 쓰는 라우트(`/api/inngest`, `/api/resorts/[slug]/refresh`)는 `outputFileTracingIncludes`로
   `browsers.json`을 넣어야 한다. 빠지면 모듈 로드 500이고 `next dev`에서는 멀쩡하다.
   검증: `grep browsers.json .next/server/app/api/inngest/route.js.nft.json`.
-- 환경변수는 Sensitive라 되읽을 수 없고, 바꾸면 재배포해야 한다(`npx vercel redeploy stayhome-khaki.vercel.app`).
+- 환경변수는 Sensitive라 되읽을 수 없고, 바꾸면 재배포해야 한다(`npx vercel redeploy stayhome-one.vercel.app`).
 - `CHROMIUM_PACK_URL`의 팩 메이저는 `playwright-core/browsers.json`의 `browserVersion`과 맞춘다
   (playwright를 올릴 때 `@sparticuz/chromium-min`과 함께).
-- Inngest 앱 sync 판정: `curl -X PUT https://stayhome-khaki.vercel.app/api/inngest` →
+- Inngest 앱 sync 판정: `curl -X PUT https://stayhome-one.vercel.app/api/inngest` →
   `Successfully registered`. Deployment Protection은 Protection Bypass 시크릿으로 통과시킨다.
 
 ## 요금 · 인원 · 변형
@@ -313,7 +317,7 @@
   · 코드는 이미 배선돼 있다(`onFailure` → `notifySlack`, 그리고 윈도우 미완주 시
     `notify-incomplete`). 남은 것은 환경변수 하나다 — Slack Incoming Webhook 발급 →
     Vercel Settings → Environment Variables에 `SLACK_WEBHOOK_URL`을 Production에
-    Sensitive로 등록 → **재배포**(`npx vercel redeploy stayhome-khaki.vercel.app`).
+    Sensitive로 등록 → **재배포**(`npx vercel redeploy stayhome-one.vercel.app`).
     돌고 있는 배포에는 소급되지 않는다.
   · 중간 재시도는 통보 대상이 아니다. 알림이 오는 것은 리조트별 **최종** 실패와
     윈도우 미완주 두 가지뿐이라, 노이즈 때문에 끄게 되는 종류가 아니다.

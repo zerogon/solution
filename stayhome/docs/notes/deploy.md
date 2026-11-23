@@ -4,7 +4,8 @@
 
 # 배포 (Vercel)
 
-프로젝트는 `zerogons-projects/stayhome` (`stayhome-khaki.vercel.app`).
+프로젝트는 `zero-81de/stayhome` (`stayhome-one.vercel.app`). 2026-11-23에 `zerogons-projects/stayhome`(`stayhome-khaki.vercel.app`)에서
+옮겼다 — 절차와 도구는 `vercel-migration.md`. 아래 본문의 실측은 대부분 옛 프로젝트에서 잰 것이다.
 
 - **함수 리전은 `icn1`(서울)이다** — `vercel.json`의 `"regions": ["icn1"]`. 기본값
   `iad1`(워싱턴)에서는 **롯데와 한화가 로그인 자체를 못 한다**: 롯데는 Imperva Advanced Bot
@@ -16,10 +17,11 @@
     `icn1`(서울, ap-northeast-2)은 일반 리전 목록에 있다. 2026-08-23 이전 이 문서는
     "Vercel은 한국 리전이 없다"고 적고 있었다 — 틀렸고, 그 오기 때문에 가장 싼 선택지가
     2주 동안 검토에서 빠져 있었다.
-  · **대가는 DB 왕복이다.** Neon이 `us-east-1`이라 쿼리당 ~200ms가 붙는다(Neon은 서울·도쿄
+  · **대가는 DB 왕복이다.** (2026-11-23 이전 후 Neon은 `ap-southeast-1`(싱가포르)이라 이 대가가 크게 줄었다.
+    아래는 옛 `us-east-1` 시절의 기록이다.) Neon이 `us-east-1`이라 쿼리당 ~200ms가 붙는다(Neon은 서울·도쿄
     리전이 없고, 기존 프로젝트의 리전은 변경 불가). 반대로 리조트 사이트 호출은 전부
     한국이라 줄어든다 — 지점마다 콜을 내는 한화(16콜)는 크롤이 오히려 빨라진다.
-  · 확인은 `npx vercel inspect stayhome-khaki.vercel.app`의 람다 목록이 `[icn1]`인지.
+  · 확인은 `npx vercel inspect stayhome-one.vercel.app`의 람다 목록이 `[icn1]`인지.
     `functions`별 리전 분리는 Hobby에서 **불가능**하다(리전이 2개가 되는 순간 빌드 전에 실패).
 - **크롤 한 번이 `/tmp`를 다 쓰면 다음 크롤이 죽는다** — 2026-08-23 실측·수정.
   Vercel 함수의 `/tmp`는 525MB이고 브라우저가 거기 산다. 새 인스턴스는 513MB가 비어 있는데
@@ -120,7 +122,7 @@
 - 환경변수는 Vercel에 Sensitive로 등록돼 있어 `vercel env pull`로 **되읽을 수 없다**
   (`[SENSITIVE]`만 나온다). 값 확인은 대시보드에서.
   **이미 돌고 있는 배포에는 소급되지 않는다** — 값을 바꿨으면 재배포해야 한다
-  (`npx vercel redeploy stayhome-khaki.vercel.app`).
+  (`npx vercel redeploy stayhome-one.vercel.app`).
 - **`CHROMIUM_PACK_URL`의 팩 버전은 `playwright-core`가 기대하는 크로미움과
   맞춰야 한다.** 기준은 `node_modules/playwright-core/browsers.json`의
   `browserVersion`이고, 팩은 Sparticuz 릴리스의 같은 메이저를 쓴다
@@ -147,7 +149,7 @@ Inngest는 크론·큐·재시도를 대행하는 외부 서비스다. 우리 �
   Settings → Deployment Protection → **Protection Bypass for Automation** 시크릿을
   만들어 Inngest 설정에 넣으면 통과한다(보호를 끄지 않고 기계 하나만 통과시킨다).
   그 시크릿은 프로젝트 전 배포에 통하는 만능 열쇠이므로 저장소나 클라이언트에 두지 말 것.
-- 판정: `curl -X PUT https://stayhome-khaki.vercel.app/api/inngest`
+- 판정: `curl -X PUT https://stayhome-one.vercel.app/api/inngest`
   → `{"message":"Successfully registered","modified":true}`면 성공,
   `{"message":"Your signing key is invalid"}`면 키가 아직 옛 값이다(재배포 확인).
   서명 없는 GET이 401인 것은 정상이다.
