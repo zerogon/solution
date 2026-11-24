@@ -167,6 +167,29 @@ DB 불변식 위반 0건 (price>0 · price_kind 동반 · available=false에 요
   같은 객실유형의 엔트리들이 **서로 다른 값을 주면 붙이지 않는다**(실측 불일치 0건).
 - 요금과 달리 `available`을 보지 않는다 — 계약(`InventoryRow.occupancy`)의 비대칭이다.
 
+### 예약내역 — `/mail`의 예약 불러오기 (2026-11-24)
+
+메일 화면의 "호반리조트 예약 불러오기"가 이것을 읽는다(`resom/reservations.ts`, 러너는
+`crawlers/reservations-run.ts`, 라우트 `GET /api/mail/reservations?resort=hoban`).
+
+- 마이페이지 첫 화면(`/myPage`)은 예약 목록을 부르지 않는다 — `debug-reservations.ts RESOM`이
+  `auth/info` 하나만 기록한다. 목록은 SPA 라우트 `/myPage/myReservation`의 pinia 스토어
+  `myReservation`이 부르고, 요청 조립부는 번들(`assets/index.*.js`의 `selectRoomReservationList`)에서 읽었다.
+- **`GET {apiBase}/roomReservation/selectReservationList`** — 인증은 재고와 같은 베어러 헤더
+  (`readAuth` + `authHeaders`). 파라미터는 화면의 조건 객체 그대로:
+  `memberShip`=`auth/info`의 `member.capMemNo` · `allDataYn=Y` · `status=R` · `type=room` ·
+  `rsvStatCdList=RS`(취소내역은 `CC,NS`) · `selectedSearchMode=12` · `start`/`end`(YYYYMMDD, 체크인 기준,
+  화면 기본값 오늘~12개월−1일) · `page`/`size`. 응답은 **배열**이고 전체 건수는 `x-total-count` 헤더.
+  실측 204건 = 100+100+4, 페이지당 ~0.5초. **응답이 체크인 순이 아니라** 우리가 정렬한다.
+- 쓰는 칸 — 화면 열과 같은 것: `rsvNo`(화면 '예약번호', **4자리**; `keyRsvNo`는 내부 10자리) ·
+  `guestNm`(이용자명) · `condoNm`(리조트명 → `MAIL_RESORTS.hoban.regionMap`으로 제천/덕산/안면도) ·
+  `roomSaleName ?? rmTypeNm`(투숙객실, 예 `S30 타워 클린(레스트리)`) · `ciYmd`/`coYmd` · `rmAmt`(요금).
+- **이용자명이 회사인 예약이 대부분이다.** 실측 204건 중 165건이 회원명(회사명)과 같고, 25건은 회사명의
+  앞부분(괄호 없는 상호·약칭)이다. 사람 이름은 14건. 그래서 정규화 후 "같음 / 회사명이 이 이름으로 시작(4자 이상) /
+  이 이름이 회사명으로 시작"이면 이름을 비운다(`corporateMatcher`). 한화와 같은 운영(법인으로 잡고 나중에 사용자 지정).
+- 읽기 전용이다 — 같은 화면의 취소(`cancel/payment`)·변경·**메일 발송(`sendMail`)** 콜은 부르지 않는다.
+- ⚠️ 응답에 연락처(`rsvGuestTelNo`·`guestTelNo`)·회원번호가 있다. 선언하지 않고 버린다.
+
 ## 로컬 검증
 
 ```bash

@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardPaste, Copy, ImagePlus, Mail, RotateCcw, X } from "lucide-react";
+import { ClipboardPaste, CloudDownload, Copy, ImagePlus, Loader2, Mail, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { cn } from "@/lib/utils";
+import { cn, diffDaysIso } from "@/lib/utils";
 import { deadlineIso } from "@/lib/business-days";
 import { holidayOracle } from "@/lib/holidays-kr";
 import { HOLIDAYS_QUERY_KEY, fetchHolidays } from "@/lib/holidays-client";
@@ -18,18 +18,31 @@ import {
   isMailResortKey,
   type MailResortKey,
 } from "@/lib/mail/resorts";
+import {
+  canFetchReservations,
+  needsNameToFetch,
+  type FetchReservationsResponse,
+  type FetchedReservation,
+} from "@/lib/mail/reservation";
 import { LEAD_DAYS } from "@/components/app-shell/deadline-shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 
 /**
  * 예약확정 메일 생성기.
  *
- * 값은 **글자로** 받는다 — 리조트 예약 화면을 복사해 붙여넣으면 `parseReservationText`가
- * 칸을 채운다. 캡처 이미지는 메일에 첨부만 하고 읽지 않는다(예전의 OCR 자리).
- * 메일(.eml · 본문 복사)은 전부 이 브라우저 안에서 만들어지고 서버로 가는 것은
- * 공휴일 조회(`/api/holidays`) 하나뿐이다. 예약자 정보와 캡처는 어디에도 저장하지 않는다.
+ * 값을 채우는 길은 둘이다.
+ * 1. **예약 불러오기** — 리조트를 고르면 서버가 그 리조트 예약내역을 실제로 읽어 오고
+ *    (`/api/mail/reservations`), 목록에서 사람을 고르면 칸이 채워진다. 지원하는 리조트는
+ *    `FETCHABLE_RESORTS`(지금 한화·호반)뿐이다.
+ * 2. **붙여넣기** — 리조트 예약 화면을 복사해 붙여넣으면 `parseReservationText`가 칸을
+ *    채운다. 불러오기를 지원하지 않는 리조트와, 불러오기가 실패했을 때의 길이다.
+ *
+ * 캡처 이미지는 **선택**이다. 넣으면 메일에 첨부만 하고 읽지 않는다.
+ * 메일(.eml · 본문 복사)은 전부 이 브라우저 안에서 만들어진다. 불러온 예약 목록은 화면
+ * 상태로만 들고 있고, 예약자 정보와 캡처는 어디에도 저장하지 않는다.
  */
 
 const FIELD_IDS = [
@@ -44,7 +57,7 @@ const FIELD_IDS = [
 ] as const;
 type FieldId = (typeof FIELD_IDS)[number];
 type Fields = Record<FieldId, string>;
-/** auto = 붙여넣기로 채운 칸, miss = 붙여넣었는데 못 찾은 칸. 사람이 고치면 사라진다. */
+/** auto = 자동으로 채운 칸, miss = 자동으로 채우려 했는데 못 찾은 칸. 사람이 고치면 사라진다. */
 type Marks = Partial<Record<FieldId, "auto" | "miss">>;
 
 const EMPTY_FIELDS: Fields = {
@@ -170,6 +183,18 @@ export function MailComposer() {
   const [fixedImages, setFixedImages] = useState(loadFixedImages);
   const [logo, setLogo] = useState<string | null>(() => store.get("logo"));
   const [dragOver, setDragOver] = useState(false);
+  /** 불러온 예약 목록. 리조트를 바꾸면 비운다 — 다른 리조트의 목록이 남아 있으면 안 된다. */
+  const [fetched, setFetched] = useState<{
+    resort: MailResortKey;
+    list: FetchedReservation[];
+    at: string;
+  } | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [nameQuery, setNameQuery] = useState("");
+  /** 사람 이름이 지정된 예약만 — 법인 명의(이름 null)가 대부분이라 기본으로 숨긴다. */
+  const [peopleOnly, setPeopleOnly] = useState(true);
+  const [pickedKey, setPickedKey] = useState<string | null>(null);
   // 처음 열 때 이름이 비어 있으면 서명 칸을 펼쳐 둔다. 값으로 묶으면 이름을 치는 순간 접힌다.
   const [signatureOpen] = useState(() => !signature.name);
 
@@ -241,6 +266,76 @@ export function MailComposer() {
     setResort(key);
     store.set("lastResort", key);
   }, []);
+
+  const canFetch = canFetchReservations(resort);
+  /** 롯데처럼 사이트의 이름 검색으로 불러오는 곳 — 이름 칸이 필수이고, 결과를 화면에서 다시 거르지 않는다. */
+  const needName = needsNameToFetch(resort);
+  const fetchedList = fetched?.resort === resort ? fetched.list : null;
+  /** 법인 명의(사용자 미지정) 예약 수 — 체크박스 옆에 "N건 숨김"으로 보인다. */
+  const corporateCount = useMemo(
+    () => (fetchedList ? fetchedList.filter((r) => !r.name).length : 0),
+    [fetchedList],
+  );
+  const visibleList = useMemo(() => {
+    if (!fetchedList) return null;
+    const people = peopleOnly ? fetchedList.filter((r) => r.name) : fetchedList;
+    const q = nameQuery.replace(/\s+/g, "");
+    if (needName || !q) return people;
+    return people.filter((r) => (r.name ?? "").replace(/\s+/g, "").includes(q));
+  }, [fetchedList, nameQuery, needName, peopleOnly]);
+
+  const loadReservations = useCallback(async () => {
+    setFetching(true);
+    setFetchError(null);
+    try {
+      const q = new URLSearchParams({ resort });
+      if (needName) q.set("name", nameQuery.trim());
+      const res = await fetch(`/api/mail/reservations?${q}`, { cache: "no-store" });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(body?.message ?? body?.error ?? `HTTP ${res.status}`);
+      const data = body as FetchReservationsResponse;
+      setFetched({ resort, list: data.reservations, at: data.fetchedAt });
+      setPickedKey(null);
+    } catch (e) {
+      setFetchError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setFetching(false);
+    }
+  }, [resort, needName, nameQuery]);
+
+  /** 목록에서 고른 예약으로 칸을 **통째로** 채운다 — 고른 한 건이 출처라 이전 값을 남기지 않는다. */
+  const applyReservation = useCallback(
+    (r: FetchedReservation) => {
+      const next: Fields = {
+        name: r.name ?? "",
+        resNo: r.resNo ?? "",
+        checkin: r.checkin,
+        checkout: r.checkout,
+        price: r.price ? r.price.toLocaleString("ko-KR") : "",
+        prepay: "",
+        region: r.region ?? "",
+        roomType: r.roomType ?? "",
+      };
+      const wanted = FIELD_IDS.filter((id) => id !== "prepay" || cfg.prepay);
+      setFields(next);
+      setMarks(Object.fromEntries(wanted.map((id) => [id, next[id] ? "auto" : "miss"])) as Marks);
+      setPickedKey(r.key);
+      const missing = wanted.filter((id) => !next[id]).map((id) => FIELD_LABEL[id]);
+      setStatus(
+        missing.length
+          ? {
+              text: r.name
+                ? `채웠습니다. 비어 있는 칸(${missing.join(", ")})은 직접 넣어 주세요.`
+                : `채웠습니다. 이 예약은 아직 법인 명의라 예약자명이 없습니다 — 직접 넣어 주세요.${
+                    missing.length > 1 ? ` (그 밖에 ${missing.filter((m) => m !== "예약자명").join(", ")})` : ""
+                  }`,
+              tone: "warn",
+            }
+          : { text: "예약정보를 모두 채웠습니다.", tone: "ok" },
+      );
+    },
+    [cfg.prepay],
+  );
 
   /** 붙여넣은 글자에서 찾은 값만 덮어쓴다. 못 찾은 칸은 비어 있을 때만 표시한다. */
   const applyText = useCallback(
@@ -360,7 +455,6 @@ export function MailComposer() {
   /** 빈 칸이 있으면 물어본다. 메일에는 빈칸 표시(□□)가 그대로 나가기 때문이다. */
   const confirmMissing = (): boolean => {
     const miss: string[] = [];
-    if (!captures.length) miss.push("캡처");
     for (const id of FIELD_IDS) {
       if (id === "prepay" && !cfg.prepay) continue;
       if (!fields[id].trim()) miss.push(FIELD_LABEL[id]);
@@ -434,6 +528,7 @@ export function MailComposer() {
     setStatus(null);
     setTo("");
     setCancelManual("");
+    setPickedKey(null);
   };
 
   const fieldInput = (id: FieldId, props: React.ComponentProps<"input"> = {}) => (
@@ -452,9 +547,138 @@ export function MailComposer() {
       <div className="space-y-5">
         <Card>
           <CardHeader>
-            <CardTitle>1. 예약 화면 붙여넣기</CardTitle>
+            <CardTitle>1. 예약 불러오기</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
+            <Field label="리조트">
+              <select
+                value={resort}
+                onChange={(e) => {
+                  if (isMailResortKey(e.target.value)) pickResort(e.target.value);
+                }}
+                className={selectClass}
+              >
+                {MAIL_RESORT_KEYS.map((key) => (
+                  <option key={key} value={key}>
+                    {MAIL_RESORTS[key].label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            {canFetch ? (
+              <div className="space-y-2">
+                <Input
+                  value={nameQuery}
+                  onChange={(e) => setNameQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && needName && nameQuery.trim() && !fetching) {
+                      void loadReservations();
+                    }
+                  }}
+                  placeholder={needName ? "예약자 이름 (필수)" : "이름으로 찾기 (선택)"}
+                />
+                {needName && (
+                  <p className="text-xs text-muted-foreground">
+                    {cfg.name}는 예약이 많아 이름으로 찾아서 불러옵니다.
+                  </p>
+                )}
+                <Button
+                  className="w-full"
+                  onClick={() => void loadReservations()}
+                  disabled={fetching || (needName && !nameQuery.trim())}
+                >
+                  {fetching ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <CloudDownload className="size-4" />
+                  )}
+                  {fetching
+                    ? `${cfg.name}에 접속하는 중… (최대 1분)`
+                    : fetchedList
+                      ? "다시 불러오기"
+                      : `${cfg.name} 예약 불러오기`}
+                </Button>
+                {fetchError && (
+                  <p className="text-xs text-amber-700">
+                    불러오지 못했습니다: {fetchError}
+                    <br />
+                    다시 시도하거나 아래 붙여넣기로 채워 주세요.
+                  </p>
+                )}
+                {fetchedList && visibleList && (
+                  <div className="space-y-2">
+                    <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                      <Checkbox
+                        checked={peopleOnly}
+                        onCheckedChange={(checked) => setPeopleOnly(checked)}
+                      />
+                      사람 이름만 보기
+                      {peopleOnly && corporateCount > 0 && (
+                        <span className="text-xs font-normal text-muted-foreground">
+                          (법인 명의{" "}
+                          <span className="font-mono tabular-nums">{corporateCount}</span>건 숨김)
+                        </span>
+                      )}
+                    </label>
+                    <p className="text-xs text-muted-foreground">
+                      {needName && fetched ? "검색된 예약" : "앞으로의 예약"}{" "}
+                      <span className="font-mono tabular-nums">{fetchedList.length}</span>건
+                      {visibleList.length !== fetchedList.length && (
+                        <>
+                          {" "}
+                          중 <span className="font-mono tabular-nums">{visibleList.length}</span>건
+                        </>
+                      )}{" "}
+                      · 예약을 누르면 아래 칸이 채워집니다
+                    </p>
+                    <ul className="max-h-80 space-y-1 overflow-y-auto pr-1">
+                      {visibleList.length === 0 && (
+                        <li className="rounded-lg border border-dashed px-3 py-4 text-center text-xs text-muted-foreground">
+                          {fetchedList.length === 0
+                            ? "앞으로의 예약이 없습니다."
+                            : nameQuery && !needName
+                              ? "그 이름의 예약이 없습니다."
+                              : "이름이 지정된 예약이 없습니다. 체크를 풀면 법인 명의 예약도 보입니다."}
+                        </li>
+                      )}
+                      {visibleList.map((r) => (
+                        <li key={r.key}>
+                          <button
+                            type="button"
+                            onClick={() => applyReservation(r)}
+                            className={cn(
+                              "w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors hover:bg-muted",
+                              pickedKey === r.key && "border-primary bg-primary/5",
+                            )}
+                          >
+                            <span className="flex items-baseline justify-between gap-2">
+                              <span className={cn("font-medium", !r.name && "text-muted-foreground")}>
+                                {r.name ?? "법인 명의 (사용자 미지정)"}
+                              </span>
+                              <span className="shrink-0 font-mono text-xs tabular-nums">
+                                {fmtDot(r.checkin)} · {diffDaysIso(r.checkin, r.checkout)}박
+                              </span>
+                            </span>
+                            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                              {[r.region, r.roomType, r.status].filter(Boolean).join(" · ")}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
+                {cfg.label}는 아직 불러오기를 지원하지 않습니다. 아래에 예약 화면을 붙여넣어 주세요.
+              </p>
+            )}
+
+            <p className="pt-1 text-xs font-medium text-muted-foreground">
+              {canFetch ? "또는 예약 화면 붙여넣기 · " : "예약 화면 붙여넣기 · "}캡처 첨부(선택)
+            </p>
             <div
               role="button"
               tabIndex={0}
@@ -483,7 +707,7 @@ export function MailComposer() {
               </p>
               <p className="mt-1 text-xs">
                 <ImagePlus className="mr-1 inline size-3.5 align-text-bottom" />
-                캡처 이미지도 Ctrl+V · 끌어다 놓기 · 클릭해서 선택 (메일 첨부용, 넣은 순서대로)
+                캡처 이미지(선택)도 Ctrl+V · 끌어다 놓기 · 클릭해서 선택 (메일 첨부용, 넣은 순서대로)
               </p>
             </div>
             <input
@@ -549,26 +773,11 @@ export function MailComposer() {
           <CardHeader>
             <CardTitle>2. 예약정보 확인</CardTitle>
             <p className="text-xs text-muted-foreground">
-              <span className="rounded bg-emerald-50 px-1 text-emerald-700">초록</span> 붙여넣기로
+              <span className="rounded bg-emerald-50 px-1 text-emerald-700">초록</span> 자동으로
               채움 · <span className="rounded bg-amber-50 px-1 text-amber-700">주황</span> 확인 필요
             </p>
           </CardHeader>
           <CardContent className="space-y-3">
-            <Field label="리조트">
-              <select
-                value={resort}
-                onChange={(e) => {
-                  if (isMailResortKey(e.target.value)) pickResort(e.target.value);
-                }}
-                className={selectClass}
-              >
-                {MAIL_RESORT_KEYS.map((key) => (
-                  <option key={key} value={key}>
-                    {MAIL_RESORTS[key].label}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <div className="grid grid-cols-2 gap-3">
               {fieldInput("name")}
               {fieldInput("resNo")}
@@ -772,7 +981,7 @@ export function MailComposer() {
           />
         </Card>
         <p className="px-1 text-xs leading-relaxed text-muted-foreground">
-          <b>.eml</b> 파일을 열면 Outlook에서 캡처가 들어간 새 메일(보내기 전 상태)로 열립니다.
+          <b>.eml</b> 파일을 열면 Outlook에서 새 메일(보내기 전 상태)로 열립니다.
           받는 사람만 확인하고 보내면 됩니다. <b>본문 복사</b>는 Outlook 새 메일 본문에 Ctrl+V —
           이미지가 안 붙으면 캡처만 따로 붙여넣어 주세요.
         </p>

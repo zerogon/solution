@@ -268,7 +268,8 @@ const START_URL: Record<string, string> = {
   RESOM: "https://book.resom.co.kr/myPage",
   SONO: "https://www.sonohotelsresorts.com/reserve/room?step=sch",
   OAKVALLEY: "https://reservation.oakvalley.co.kr/frontoffice/p_entrance.jsp",
-  LOTTE: "https://resort.lottehotel.com/main/ko/reservation/accommodation",
+  LOTTE: "https://resort.lottehotel.com/main/ko/reservation/view-reservation/list",
+  KENSINGTON: "https://www.kensington.co.kr/mypage/",
 };
 
 const SESSION_TTL_MS = 6 * 3600 * 1000;
@@ -452,7 +453,7 @@ function selftest() {
 const argv = process.argv.slice(2);
 if (argv[0] === "selftest") selftest();
 else if (argv.length === 0) {
-  console.log("usage: npx tsx scripts/debug-reservations.ts selftest | <HANWHA|SONO|RESOM|OAKVALLEY|LOTTE> [--url=] [--wait=] [--show=] [--all] [--out=]");
+  console.log("usage: npx tsx scripts/debug-reservations.ts selftest | <HANWHA|SONO|RESOM|OAKVALLEY|LOTTE|KENSINGTON> [--url=] [--wait=] [--show=] [--all] [--out=]");
   process.exit(1);
 } else {
   run(argv).catch((e) => {

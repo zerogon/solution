@@ -16,7 +16,12 @@ import type { NextConfig } from "next";
  * failure mode is a route that is dead on arrival in production and fine in
  * `next dev`, and 13MB is not worth risking a second round of it.
  */
-const PLAYWRIGHT_ROUTES = ["/api/inngest", "/api/resorts/\\[slug\\]/refresh"];
+const PLAYWRIGHT_ROUTES = [
+  "/api/inngest",
+  "/api/resorts/\\[slug\\]/refresh",
+  // /mail의 "예약 불러오기" — 리조트 예약내역을 브라우저로 읽는다.
+  "/api/mail/reservations",
+];
 
 const nextConfig: NextConfig = {
   outputFileTracingIncludes: Object.fromEntries(

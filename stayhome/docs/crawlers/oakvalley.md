@@ -230,6 +230,22 @@ GET api.oakvalley.co.kr/api/v1/room?idCondo=<동 id>   ← 그 동의 객실, �
 핫 윈도우 **60/60 · 549행 · 26.5초**, `max < std` 0건, 한쪽만 있는 행 0건,
 `available` 양쪽 모두 부착(요금과 다른 점), 요금 불변식 회귀 없음.
 
+### 예약내역 — `/mail`의 예약 불러오기 (2026-11-24, `oakvalley/reservations.ts`)
+
+메일 화면(`/mail`)의 "예약 불러오기"가 읽는다 — 러너 `crawlers/reservations-run.ts`, 라우트 `GET /api/mail/reservations`. 읽기 전용이고 결과는 저장하지 않는다.
+
+- 예약확인은 `c_100.jsp` 안에 끼워 넣는 `c_701.jsp`이고, 그 스크립트가 폼 `data_param_rev_search`를
+  `POST /condo.reservation.pns?revSearch_{J|M|C}`로 보낸다. J(지정)·M(미지정)은 사람이 회원권을 고른 뒤에 정해지는데,
+  **C(사이버 아이디 기준)가 이 웹 계정의 예약 전부를 준다** — 회원권을 고르지 않고 C를 직접 부른다. 실측 25건, 1.2초.
+  (`mypage/my_reslist.jsp`는 404다. `c_handler.js`에 남은 옛 경로다.)
+- 폼에 서버 서명 `ptSignature`가 있어 URL만으로 조립할 수 없다 — 재고 크롤러처럼 `c_100.jsp`를 한 번 열어 폼 값과
+  `CERTIFICATE_IN_CYBER_ID`를 읽는다. 날짜(`IN_ARR_DATE`/`IN_DEP_DATE`)는 비우면 앞으로의 예약을 준다.
+- 쓰는 칸 — 화면 열과 같다: `RES_FOLIO`(예약번호) · `RES_NAME`(투숙자) · `RES_CALLER`(예약자 = 회사명, 25건 중 23건이
+  투숙자와 같다) · `RES_ARR`/`RES_DEP`(YYYY-MM-DD) · `RES_COMPLEX`(1101 밸리 / 2101 힐스 → "원주 밸리빌리지"/"원주 힐스빌리지") ·
+  `RES_PYNG + RES_RMDESC`(예 `25평 C25타입`) · `RES_RMRATE`(화면 '요금').
+- ⚠️ `CANCEL_YN = Y`는 "취소됨"이 아니라 **"취소할 수 있음"**이다(예약완료 25건 전부 Y). 상태는 `RES_TYPE_DESC`로 본다.
+- 📌 `RES_RMRATE`가 박수만큼의 총액인지는 실측 표본이 전부 1박이라 확인되지 않았다.
+
 ## 로컬 검증
 
 ```bash

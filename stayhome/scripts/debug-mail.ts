@@ -234,7 +234,7 @@ function golden() {
 
   const lotte = buildBody({ ...base, prepay: "", resort: MAIL_RESORTS.lotte }, { captures: [], fixed: null, logo: null });
   check("현장결제 문구", lotte.includes("(현장결제 필수)") && !lotte.includes("3. 선 결제 방법"), true);
-  check("캡처 없으면 자리 표시", lotte.includes("[예약 캡처가 여기 들어갑니다]"), true);
+  check("캡처 없으면 캡처 이미지도 자리 표시도 없음 (캡처는 선택)", lotte.includes('alt="예약 캡처"') || lotte.includes("[예약 캡처"), false);
 
   const hoban = buildBody({ ...base, resort: MAIL_RESORTS.hoban }, { captures: ["cid:cap"], fixed: "cid:guide", logo: null });
   check("호반: 회신 문구", hoban.includes("취소요청 메일 회신 부탁드립니다."), true);

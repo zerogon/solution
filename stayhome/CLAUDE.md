@@ -73,10 +73,14 @@
    기계 실행으로 불어나면, "누가 평문을 봤나"라는 이 로그의 유일한 질문이 그 아래 묻힌다.
    (주기가 3시간에서 하루 1회로 줄었어도 판단은 같다 — 기계 실행 흔적은 `CrawlLog`의 일이다.)
    회귀 검사: `grep -rn "decrypt(" src/ | grep -v generated` → `run.ts` 2곳 +
-   `reveal/route.ts` 2곳 + `lib/crypto.ts` 정의부. 새 호출부가 생기면 둘 중 어느
+   `reservations-run.ts` 2곳(메일의 예약 불러오기 — `run.ts`와 같은 칸, 평문은 폼 입력으로
+   끝난다) + `reveal/route.ts` 2곳 + `lib/crypto.ts` 정의부. 새 호출부가 생기면 둘 중 어느
    칸인지부터 판정할 것.
    `scripts/verify-env.ts`(계정 이전 점검)도 복호화하지만 **성공 여부만** 찍고 평문·길이를
    내보내지 않으므로 감사 대상이 아니다 — 출력에 값이 새기 시작하면 그 판정이 뒤집힌다.
+   **예약 불러오기의 응답(`/api/mail/reservations`)에는 구성원 이름이 들어 있다.** 저장하지 않고
+   (DB·`crawl_logs`·로그 모두 건수만), `no-store` + `sw.js`의 `shouldBypass`로 캐시도 하지 않는다.
+   메일에 안 쓰는 칸(연락처·회원번호·내부 예약번호)은 크롤러에서 버리고 응답에 싣지 않는다.
 3. `RESORT_CRED_SECRET`이 32바이트(base64 decode 후)가 아니면 `crypto.ts`가 에러를 던지도록 검증.
 4. `/api/cron/*`, `/api/inngest/*` 외 모든 라우트는 `proxy.ts`에서 세션 검증.
 5. **`ResortAccount.memo`는 암호화되지 않는다** — 평문 컬럼이고 `/admin/accounts`

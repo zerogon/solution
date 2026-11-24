@@ -356,6 +356,31 @@ GET www.hanwharesort.co.kr/irsweb/resort3/resort/rs_room.do?bp_cd=<지점>&rm_cd
 호스트의 게이트웨이 서비스 5개 중 넷은 요청이 `CORP_CD`/`CUST_NO`뿐이라 객실별로 답할 수
 있는 것이 아니고, 남은 곳은 실제 예약 단계다 — 거기는 수집 대상이 아니다.)
 
+### 예약내역 — `/mail`의 예약 불러오기 (2026-11-24)
+
+메일 화면이 예약 화면 붙여넣기 대신 사이트의 예약을 직접 읽는다(`hanwha/reservations.ts`,
+러너 `crawlers/reservations-run.ts`, 라우트 `GET /api/mail/reservations?resort=hanwha`).
+조사는 `scripts/debug-reservations.ts HANWHA`(값을 가린 기록) + 화면 스크립트 판독.
+
+- 예약확인/변경/취소 화면(`msi/0010/serviceM01.mvc` — 세션 부팅 화면과 같다)의 조회 버튼이
+  게이트웨이에 **`INTF_ID=TFO00HBSREMPRR0122`**를 보낸다. 본문은 도착일 범위
+  (`ARRV_DATE_STRT`/`END`) + `CUST_NO` + `ds_page`(`CURRENT_PAGE`/`CNT_PER_PAGE`), 응답은
+  `ds_result[]` + `ds_page[0].END_PAGE_YN`. 화면을 여는 것만으로는 이 콜이 안 나간다.
+- 화면은 조회 전에 회원 비밀번호 팝업(`serviceP13`)을 띄우지만 **서버는 요구하지 않는다**
+  (팝업 없이 바로 응답). 읽기 전용이다 — 같은 화면의 변경·취소 서비스(REMPRR2018 등)는 부르지 않는다.
+- 쓰는 칸: `INHS_CUST_NM`(사용자) · `RSRV_IDNT_NO`(화면의 '예약번호', **4자리** — 메일에 넣는 값,
+  운영자 확인) · `ARRV_DATE` + `OVNT_CNT` · `LOC_ALIAS` · `ROOM_INFO` · 요금.
+  - **사용자가 법인 명의인 예약이 대부분이다**(실측 20건 중 17건: `INHS_CUST_NM === CUST_NM`).
+    객실을 법인으로 잡아 두고 나중에 사용자를 바꾸는 운영이라, 그런 행은 이름을 비워 보낸다 —
+    회원사명을 예약자명으로 넣으면 안 된다.
+  - `LOC_ALIAS`("설악 쏘라노"·"거제 벨버디어"·"해운대")가 메일 객실지역 사전과 그대로 맞는다.
+    `ROOM_INFO`는 `"<LOC_ALIAS> / <객실> / 1실"`이라(첫 조각 = `LOC_ALIAS` 20/20) 가운데만 객실타입.
+  - 요금은 화면 스크립트의 규칙 그대로 — `ROOM_RATE_EXPSR_YN=N`이면 없음, 특가·제휴 쿠폰이면
+    `LPAY_AMT_SM`, 아니면 `ROOM_RATE_SM + ADI_SVC_AMT`.
+- 저장된 세션이면 2.9초(실측). 콜드 로그인이면 2화면 로그인이 더해진다.
+- ⚠️ 응답에 연락처·회원번호·내부 예약번호(10자리)가 있다. `ListRow`가 읽는 칸만 선언하고,
+  이름은 로그에 남기지 않는다.
+
 ## 로컬 검증
 
 ```bash

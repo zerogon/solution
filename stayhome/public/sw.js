@@ -91,6 +91,8 @@ function shouldBypass(request, url) {
   if (url.pathname.startsWith("/api/resorts")) return true;
   if (url.pathname.startsWith("/api/inngest")) return true;
   if (url.pathname.startsWith("/api/cron")) return true;
+  // 예약 불러오기 — 구성원 이름이 들어 있다. 디스크에 남기지 않는다.
+  if (url.pathname.startsWith("/api/mail")) return true;
   return false;
 }
 

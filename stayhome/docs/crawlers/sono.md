@@ -357,6 +357,20 @@ DB 불변식 위반 0건 — 예약 불가 변형에 요금 0 · 금액 ≤ 0 0 
 `BranchResultSection`이 `variantPriceSummary`로 값 하나면 그 값, 갈리면 최저가 `~`를 그린다 —
 저장하지 않으므로 DB 불변식("소노 행의 `price_kind` 0")은 그대로다.
 
+### 예약내역 — `/mail`의 예약 불러오기 (2026-11-24, `sono/reservations.ts`)
+
+메일 화면(`/mail`)의 "예약 불러오기"가 읽는다 — 러너 `crawlers/reservations-run.ts`, 라우트 `GET /api/mail/reservations`. 읽기 전용이고 결과는 저장하지 않는다.
+
+- 마이소노 '객실' 화면(`/mysono/pc/reserve/room`)은 달별 건수(`mysono/room/months`) → 날짜별 건수(`days`) →
+  목록(`details`) 순으로 부른다. 목록을 곧바로 묻는다:
+  **`GET {apiBase}/memberReservation/mysono/room/details?lang=ko&deviceType=PC&mobileAppYn=N&startYmd&endYmd&type=use&page&size`**
+  (`type=use` = 이용일 기준). 응답 `{ success, body[], pageInfo }`. 실측 3건, 2.6초.
+- 쓰는 칸: `rsvNo`(화면 '예약번호', 4자리; `keyRsvNo`는 내부 10자리) · `guestNm`(이용자) · `storeNm`(→ 붙여넣기 파서의
+  지역 규칙으로 "델피노"·"비발디파크") · `rmTypeCdNm + viewNm + cookNm`(화면 표기, 예 `골드 파크뷰 클린`) · `ciYmd`/`coYmd` · `totAmt`.
+- 이용자명이 예약자(`rsvGuestLnm`, 법인 계정이면 회사명)와 같으면 회사 명의로 보고 비운다(`_shared/guest-name.ts`).
+- **선결제 기한은 채우지 않는다.** 행의 `vactDate`는 가상계좌 입금기한이라 '추후결제'(`PAYMENT_LATER`) 예약에는 비어 있다(실측).
+- 응답에 연락처·이메일·회원번호·차량번호가 있다. 선언하지 않는다.
+
 ## 로컬 검증
 
 ```bash

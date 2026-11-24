@@ -134,9 +134,8 @@ export function buildBody(d: MailData, img: MailImages): string {
   const extra = (r.extraAfterTable ?? "").replace(/<p style="margin:0">/g, `<p style="${P}">`);
   // 호반: 스파 안내 이미지 → 스파 문구 → 예약 캡처. 그 외: 예약 캡처 → 안내 이미지 → 추가 문구.
   h += r.guideFirst ? fixedHtml + extra + capHtml : capHtml + fixedHtml + extra;
-  if (!img.captures.length) {
-    h += `<p style="${P}"><span style="background:#ffe08a">[예약 캡처가 여기 들어갑니다]</span></p>`;
-  }
+  // 캡처는 선택이다(예약 불러오기가 생긴 뒤로). 없으면 자리 표시도 남기지 않는다 —
+  // 그 표시가 메일에 그대로 나가면 빠뜨린 것처럼 읽힌다.
 
   const contactLines = [
     s.phone && `<br><span style="${G}">휴대폰: ${esc(s.phone)}</span>`,

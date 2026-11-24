@@ -289,3 +289,21 @@ from <div class="layer-wrap"> subtree intercepts pointer events`라서 "탭 셀�
 0건**(true 1,121 / false 391), 한쪽만 있는 행 0건, `max < std` 0건. 컬럼이 없던 시절에
 쓰인 기존 행이 재크롤에서 값을 얻었으므로 `DO UPDATE SET` 경로도 확인됐다. 요금 불변식
 회귀 없음(`available=false` 391행 전부 요금 없음).
+
+### 예약내역 — `/mail`의 예약 불러오기 (2026-11-24, `lotte/reservations.ts`)
+
+메일 화면(`/mail`)의 "예약 불러오기"가 읽는다 — 러너 `crawlers/reservations-run.ts`, 라우트 `GET /api/mail/reservations`. 읽기 전용이고 결과는 저장하지 않는다.
+
+- 리조트 예약조회는 `resort.lottehotel.com/main/ko/reservation/view-reservation/list` — **서버가 그린 HTML**이다
+  (`view_reservation/list.js`는 검색 폼을 GET으로 제출할 뿐). 행마다 `<input class="rsv-info" data-rsvNo … >`가 있고
+  ⚠️ **속성 이름이 원문에서는 camelCase**다(`data-rsvNo`). 브라우저 `dataset`은 소문자로 보여 줘서 처음에 놓쳤다.
+- 목록의 투숙자 성명은 사이트가 가리고(`홍**`) 금액 칸이 없다. 그래서 **상세**(`POST …/view-reservation/detail`,
+  화면의 상세 버튼과 같은 폼)를 예약마다 묻는다. 상세 글자에서 '성명'이 두 번 나오는데 첫째는 예약자(담당자),
+  둘째('투숙자 정보' 아래)가 대표 투숙자 — 메일의 예약자명이다. '예약 지점' · '투숙 객실' · '총 금액'도 여기서 읽는다.
+- ⚠️ **목록 한 페이지(10건)가 5~10초**라 1년치(실측 92건·10페이지)를 넘기면 예산(50초)을 넘는다. 엑셀 내보내기
+  (`…/excel`)는 한 번에 주지만 18초에 이름이 가려져 있고 금액이 없다. 대신 검색칸 `searchText`가 **투숙자 이름으로
+  찾아 준다**(~3초) — 그래서 롯데만 **이름을 넣어야 불러온다**(`needsNameToFetch`). 상세는 4개 동시에 ~1초.
+  실측: 이름 하나로 1건, 5.6초.
+- 취소(`CANCELED`)는 상세를 부르지 않는다(사이트도 `cancel-detail`로 따로 보낸다).
+- ⚠️ 목록 화면의 기간 필터 `<select>`에 **분양회원번호가 옵션 글자로 그대로** 있다. 조사 출력에 찍히지 않게 할 것.
+
