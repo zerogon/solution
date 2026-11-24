@@ -1,6 +1,7 @@
 import {
   CalendarSearch,
   KeyRound,
+  Mail,
   MapPin,
   ScrollText,
   Wallet,
@@ -22,10 +23,12 @@ export interface NavItem {
  */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "조회", icon: CalendarSearch },
+  { href: "/mail", label: "메일", icon: Mail },
   { href: "/admin/accounts", label: "계정", icon: KeyRound },
   { href: "/admin/properties", label: "지점", icon: MapPin },
-  // 하단 탭바(`BottomTabBar`)는 항목마다 `flex-1`이라 개수 비의존이다 — 5칸이면
-  // 390px에서 78px씩이고 아이콘 알약이 48px라 여유가 있다. 6칸부터가 위험선.
+  // 하단 탭바(`BottomTabBar`)는 항목마다 `flex-1`이라 개수 비의존이다 — 6칸이면
+  // 390px에서 65px씩이고 아이콘 알약이 48px라 아직 들어간다. 7칸(55px)부터는
+  // 라벨이 붙기 시작하므로 그때는 항목을 묶어야 한다.
   { href: "/admin/rates", label: "요금", icon: Wallet },
   { href: "/admin/crawl-logs", label: "로그", icon: ScrollText },
 ];

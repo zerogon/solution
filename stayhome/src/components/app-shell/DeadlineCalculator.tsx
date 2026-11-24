@@ -7,7 +7,8 @@ import { CalendarClock } from "lucide-react";
 
 import { todayKstIso } from "@/lib/utils";
 import { deadlineIso } from "@/lib/business-days";
-import { holidayOracle, type HolidayMap } from "@/lib/holidays-kr";
+import { holidayOracle } from "@/lib/holidays-kr";
+import { HOLIDAYS_QUERY_KEY, fetchHolidays } from "@/lib/holidays-client";
 import { Button } from "@/components/ui/button";
 import { LEAD_DAYS } from "./deadline-shared";
 
@@ -26,22 +27,6 @@ const DeadlineCalculatorBody = dynamic(
   () => import("./DeadlineCalculatorBody").then((m) => m.DeadlineCalculatorBody),
   { ssr: false },
 );
-
-type HolidayResponse = {
-  years: Record<string, HolidayMap>;
-  /** 판정 가능한 연도. **커버리지의 진실은 이쪽이지 `years`의 키가 아니다.** */
-  covered: number[];
-  stale?: boolean;
-};
-
-async function fetchHolidays(): Promise<HolidayResponse> {
-  // 파라미터가 없다 — 피드 한 문서가 모든 연도를 덮는다. 덕분에 쿼리 키가 상수가 되고
-  // 날짜를 오가며 캐시 엔트리가 늘던 일이 사라진다.
-  const res = await fetch("/api/holidays");
-  const body = await res.json();
-  if (!res.ok) throw new Error(body?.error ?? `HTTP ${res.status}`);
-  return body as HolidayResponse;
-}
 
 /**
  * `AppShell`의 `<aside>`가 `hidden … md:flex`로 쓰는 것과 **같은 경계**다.
@@ -105,7 +90,7 @@ export function DeadlineCalculator({
   const picked = active ? (override ?? todayKstIso()) : null;
 
   const { data, isPending, isError, refetch, isFetching } = useQuery({
-    queryKey: ["holidays"],
+    queryKey: HOLIDAYS_QUERY_KEY,
     queryFn: fetchHolidays,
     // ⚠️ 이 게이트를 지우면 안 된다. 키가 더 이상 연도를 필요로 하지 않는다고 없애면
     // 인증된 **모든 페이지 로드**에 요청이 하나씩 조용히 붙는다. 지금은 `picked`가
